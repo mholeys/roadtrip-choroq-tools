@@ -94,17 +94,6 @@ class CarModel:
         self.meshes = meshes
         self.textures = textures
 
-    # def fromBuffer(self, file, offset, size):
-    #     subFileOffsets = CarModel._parseOffsets(file, offset, size)
-    #     meshes = []
-    #     textures = []
-    #     for o in subFileOffsets:
-    #         # TODO: check if texture
-    #         mesh = CarMesh.fromBuffer(file, offset+o)
-    #         meshes.append(mesh)
-    #     self.meshes = meshes
-    #     self.textures = textures
-
     @staticmethod
     def _parseOffsets(file, offset, size):
         file.seek(offset, os.SEEK_SET)
@@ -116,7 +105,7 @@ class CarModel:
         return subFileOffsets
 
     @staticmethod
-    def fromBuffer(file, offset, size):
+    def fromFile(file, offset, size):
         subFileOffsets = CarModel._parseOffsets(file, offset, size)
         meshes = []
         textures = []
@@ -130,11 +119,11 @@ class CarModel:
             if magic == 0x10120406:
                 # File is a texture
                 print(f"Parsing texture @ {offset+o}")
-                textures.append(CarTexture._fromBuffer(file, offset+o))
+                textures.append(CarTexture._fromFile(file, offset+o))
             #elif magic == 0x:
             else:
                 print(f"Parsing meshes @ {offset+o}")
-                meshes += CarMesh._fromBuffer(file, offset+o)
+                meshes += CarMesh._fromFile(file, offset+o)
         return CarModel("", meshes, textures)
 
 
@@ -165,7 +154,7 @@ class CarMesh:
         return unkw0, nullF0, meshStartFlag
 
     @staticmethod
-    def _fromBuffer(file, offset, scale=50):
+    def _fromFile(file, offset, scale=50):
         offsets = CarMesh._parseOffsets(file, offset)
         meshes = []
         for o in offsets:
@@ -225,6 +214,8 @@ class CarMesh:
 
     @staticmethod
     def createFaceList(vertexCount, faceType=1):
+        # Creates a list of indices that order how to draw the 
+        # verticies in order of how to render the triangles
         faces = []
     
         if (faceType == 1):
@@ -261,6 +252,7 @@ class CarMesh:
         return faces
 
     def writeMeshToObj(self, fout):
+        # Write verticies
         for i in range(0, len(self.meshVerts)):
             vx = '{:.20f}'.format(self.meshVerts[i][0])
             vy = '{:.20f}'.format(self.meshVerts[i][1])
@@ -268,6 +260,7 @@ class CarMesh:
             fout.write("v " + vx + " " + vy + " " + vz + "\n")
         fout.write("#" + str(len(self.meshVerts)) + " vertices\n")
             
+        # Write normals
         for i in range(0, len(self.meshNormals)):
             nx = '{:.20f}'.format(self.meshNormals[i][0])
             ny = '{:.20f}'.format(self.meshNormals[i][1])
@@ -275,12 +268,14 @@ class CarMesh:
             fout.write("vn " + nx + " " + ny + " " + nz + "\n")
         fout.write("#" + str(len(self.meshUvs)) + " vertex normals\n")
         
+        # Write texture coordinates (uv)
         for i in range(0, len(self.meshUvs)):
             tu = '{:.20f}'.format(self.meshUvs[i][0])
             tv = '{:.20f}'.format(self.meshUvs[i][1])
             fout.write("vt " + tu + " " + tv + "\n")
         fout.write("#" + str(len(self.meshNormals)) + " texture vertices\n")
         
+        # Write mesh face order/list
         for i in range(0, len(self.meshFaces)):
             fx = self.meshFaces[i][0]
             fy = self.meshFaces[i][1]
@@ -291,14 +286,15 @@ class CarMesh:
 
 class CarTexture:
 
-    def __init__(self, texture = [], palette = [], size=(0,0)):
+    def __init__(self, texture = [], palette = [], size=(0,0), fixAlpha=True):
         self.width = size[0]
         self.height = size[1]
         self.texture = texture
         self.palette = palette
+        self.fixAlpha = fixAlpha
 
     @staticmethod
-    def _fromBuffer(file, offset, scale=50):
+    def _fromFile(file, offset, scale=50, fixAlpha=True):
         file.seek(offset, os.SEEK_SET)
         
         nullPad = readLong(f)
@@ -326,6 +322,8 @@ class CarTexture:
             cg = readByte(f)
             cb = readByte(f)
             ca = readByte(f)
+            if fixAlpha and ca == 0x80:
+                ca = 255
             rawPalette.append([cr, cg, cb, ca])
 
         if isNonLinear:            
@@ -344,7 +342,7 @@ class CarTexture:
                             paletteIndex += 1
         else:
             colours = rawPalette
-        return CarTexture(texture, colours, (width, height))
+        return CarTexture(texture, colours, (width, height), fixAlpha)
     
     def writeTextureToPNG(self, path):
         cList = []
@@ -392,7 +390,7 @@ with open("../Q00.BIN", "rb") as f:
     fileSize = f.tell()
     print(f"Reading file of {fileSize} bytes")
     f.seek(0, os.SEEK_SET)
-    car = CarModel.fromBuffer(f, 0, fileSize)
+    car = CarModel.fromFile(f, 0, fileSize)
     for i,mesh in enumerate(car.meshes):
         with open(f"out/Q00.bin-{i}.obj", "w") as fout:
             mesh.writeMeshToObj(fout)
