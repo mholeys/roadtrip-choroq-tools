@@ -85,7 +85,7 @@
 import io
 import os
 import struct
-from PIL import Image, ImagePalette
+from PIL import Image, ImagePalette, ImageOps
 
 class CarModel:
 
@@ -154,7 +154,7 @@ class CarMesh:
         return unkw0, nullF0, meshStartFlag
 
     @staticmethod
-    def _fromFile(file, offset, scale=50):
+    def _fromFile(file, offset, scale=1):
         offsets = CarMesh._parseOffsets(file, offset)
         meshes = []
         for o in offsets:
@@ -193,7 +193,7 @@ class CarMesh:
                     verts.append((vx * scale, vy * scale, vz * scale))
                     normals.append((nx, ny, nz))
                     colours.append(c)
-                    uvs.append((tu, tv, 0))
+                    uvs.append((tu, 1-tv, 0))
                 unkw3 = readShort(file)
                 unkw4 = readShort(file)
                 # Add faces
@@ -220,7 +220,7 @@ class CarMesh:
         faces = []
     
         if (faceType == 1):
-            startDirection = 1
+            startDirection = -1
             x = 0
             a = 0
             b = 0
@@ -295,7 +295,7 @@ class CarTexture:
         self.fixAlpha = fixAlpha
 
     @staticmethod
-    def _fromFile(file, offset, scale=50, fixAlpha=True):
+    def _fromFile(file, offset, fixAlpha=True):
         file.seek(offset, os.SEEK_SET)
         
         nullPad = readLong(f)
@@ -345,7 +345,7 @@ class CarTexture:
             colours = rawPalette
         return CarTexture(texture, colours, (width, height), fixAlpha)
     
-    def writeTextureToPNG(self, path):
+    def writeTextureToPNG(self, path, flipX=False, flipY=False):
         cList = []
         for c in self.palette:
             cList.append(c[0])
@@ -357,6 +357,10 @@ class CarTexture:
         palette.mode = "RGBA"
         image.palette = palette
         rgbd = image.convert("RGBA")
+        if flipX:
+            rgbd = ImageOps.mirror(rgbd)
+        if flipY:
+            rgbd = ImageOps.flip(rgbd)
         rgbd.save(path, "PNG")
 
     def writePaletteToPNG(self, path):
