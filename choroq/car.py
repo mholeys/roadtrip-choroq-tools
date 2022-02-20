@@ -390,16 +390,16 @@ def readXYZ(f):
 
 
 
-with open("../Q00.BIN", "rb") as f:
-    f.seek(0, os.SEEK_END)
-    fileSize = f.tell()
-    print(f"Reading file of {fileSize} bytes")
-    f.seek(0, os.SEEK_SET)
-    car = CarModel.fromFile(f, 0, fileSize)
-    for i,mesh in enumerate(car.meshes):
-        with open(f"out/Q00.bin-{i}.obj", "w") as fout:
-            mesh.writeMeshToObj(fout)
-    for i,tex in enumerate(car.textures):
-        tex.writeTextureToPNG(f"out/Q00.bin-{i}.png")
-        tex.writePaletteToPNG(f"out/Q00.bin-{i}-p.png")
+#with open("../Q02.BIN", "rb") as f:
+#    f.seek(0, os.SEEK_END)
+#    fileSize = f.tell()
+#    print(f"Reading file of {fileSize} bytes")
+#    f.seek(0, os.SEEK_SET)
+#    car = CarModel.fromFile(f, 0, fileSize)
+#    for i,mesh in enumerate(car.meshes):
+#        with open(f"out/Q00.bin-{i}.obj", "w") as fout:
+#            mesh.writeMeshToObj(fout)
+#    for i,tex in enumerate(car.textures):
+#        tex.writeTextureToPNG(f"out/Q00.bin-{i}.png")
+#        tex.writePaletteToPNG(f"out/Q00.bin-{i}-p.png")
         
