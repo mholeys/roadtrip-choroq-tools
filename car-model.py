@@ -209,7 +209,8 @@ class CarMesh:
                 meshNormals += normals
                 # See if there are more verticies we need to read
                 meshFlag = readLong(file)
-            meshes.append(CarMesh(meshVertCount, meshVerts, meshNormals, meshUvs, meshFaces, meshColours))
+            if (meshVertCount > 0):
+                meshes.append(CarMesh(meshVertCount, meshVerts, meshNormals, meshUvs, meshFaces, meshColours))
         return meshes
 
     @staticmethod
@@ -397,3 +398,4 @@ with open("../Q00.BIN", "rb") as f:
     for i,tex in enumerate(car.textures):
         tex.writeTextureToPNG(f"out/Q00.bin-{i}.png")
         tex.writePaletteToPNG(f"out/Q00.bin-{i}-p.png")
+        
