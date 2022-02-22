@@ -1,6 +1,6 @@
 
 # Class for holding car model data, and extracting it from a Qxx.BIN file
-# Based on the format used in the game RoadTrip Adventure (UK/EU), aka ChoroQ HG 2 (JP) or RoadTrip (US) for the Sony Playstation 2 (PS2)
+# Based on the format used in the game RoadTrip Adventure (UK/EU), aka ChoroQ HG 2 (JP) or Everywhere RoadTrip (US) for the Sony Playstation 2 (PS2)
 # Information was gathered from multiple sources:
 # - Most key mesh information was found https://forum.xentax.com/viewtopic.php?t=17567
 #   The initial offset table info provided by Acewell (XeNTaX.com forums)
@@ -84,8 +84,9 @@
 
 import io
 import os
-import struct
-from PIL import Image, ImagePalette, ImageOps
+import math
+from choroq.texture import Texture
+import choroq.read_utils as U
 
 class CarModel:
 
@@ -98,9 +99,9 @@ class CarModel:
     def _parseOffsets(file, offset, size):
         file.seek(offset, os.SEEK_SET)
         subFileOffsets = []
-        o = 0
-        while o != size:
-            o = readLong(file)
+        o = 1
+        while o != size and  o != 0:
+            o = U.readLong(file)
             subFileOffsets.append(o)
         return subFileOffsets
 
@@ -110,19 +111,19 @@ class CarModel:
         meshes = []
         textures = []
         for o in subFileOffsets:
-            if (o == size):
+            if (o == size or o == 0):
                 # At end of file
                 break
-            f.seek(offset+o, os.SEEK_SET)
-            magic = readLong(f)
-            f.seek(offset+o, os.SEEK_SET)
-            if magic == 0x10120406:
-                # File is a texture
-                print(f"Parsing texture @ {offset+o}")
-                textures.append(CarTexture._fromFile(file, offset+o))
+            file.seek(offset+o, os.SEEK_SET)
+            magic = U.readLong(file)
+            file.seek(offset+o, os.SEEK_SET)
+            if magic & 0x10120006 > 0:
+                # File is possibly a texture
+                #print(f"Parsing texture @ {offset+o}")
+                textures.append(Texture._fromFile(file, offset+o))
             #elif magic == 0x:
             else:
-                print(f"Parsing meshes @ {offset+o}")
+                #print(f"Parsing meshes @ {offset+o}")
                 meshes += CarMesh._fromFile(file, offset+o)
         return CarModel("", meshes, textures)
 
@@ -140,15 +141,15 @@ class CarMesh:
     @staticmethod
     def _parseOffsets(file, offset):
         file.seek(offset, os.SEEK_SET)
-        offset1 = readLong(file)
-        offset2 = readLong(file)
+        offset1 = U.readLong(file)
+        offset2 = U.readLong(file)
         return 16, offset1, offset2
 
     @staticmethod
     def _parseHeader(file):
-        unkw0 = readLong(file)
-        nullF0 = readLong(file)
-        meshStartFlag = readLong(file)
+        unkw0 = U.readLong(file)
+        nullF0 = U.readLong(file)
+        meshStartFlag = U.readLong(file)
         if meshStartFlag != 0x01000101:
             print(f"Mesh's start flag is different {meshStartFlag} from usual, continuing")
         return unkw0, nullF0, meshStartFlag
@@ -161,7 +162,7 @@ class CarMesh:
             file.seek(o + offset, os.SEEK_SET)
             header = CarMesh._parseHeader(file)
             # Read mesh
-            meshFlag  = readLong(file)
+            meshFlag  = U.readLong(file)
 
             meshVerts = []
             meshNormals = []
@@ -177,25 +178,25 @@ class CarMesh:
                 normals = []
                 faces = []
                 colours = []
-                vertCount = readByte(file)
-                unkw1 = readByte(file)
-                zeroF1 = readShort(file)
+                vertCount = U.readByte(file)
+                unkw1 = U.readByte(file)
+                zeroF1 = U.readShort(file)
                 # Skip 16 bytes as we dont know what they are used for
                 file.seek(0x10, os.SEEK_CUR)
 
                 for x in range(0, vertCount):
-                    vx, vy, vz = readXYZ(file)
-                    nx, ny, nz = readXYZ(file)
-                    cr, cg, cb = readXYZ(file)
-                    tu, tv, unkw2 = readXYZ(file)
+                    vx, vy, vz = U.readXYZ(file)
+                    nx, ny, nz = U.readXYZ(file)
+                    cr, cg, cb = U.readXYZ(file)
+                    tu, tv, unkw2 = U.readXYZ(file)
                     
-                    c = (cr, cg, cb, 0) # Convert to RGBA
+                    c = (cr, cg, cb, 255) # Convert to RGBA
                     verts.append((vx * scale, vy * scale, vz * scale))
                     normals.append((nx, ny, nz))
                     colours.append(c)
                     uvs.append((tu, 1-tv, 0))
-                unkw3 = readShort(file)
-                unkw4 = readShort(file)
+                unkw3 = U.readShort(file)
+                unkw4 = U.readShort(file)
                 # Add faces
                 faces = CarMesh.createFaceList(vertCount)
                 for i in range(0, len(faces)):
@@ -208,7 +209,7 @@ class CarMesh:
                 meshColours += colours
                 meshNormals += normals
                 # See if there are more verticies we need to read
-                meshFlag = readLong(file)
+                meshFlag = U.readLong(file)
             if (meshVertCount > 0):
                 meshes.append(CarMesh(meshVertCount, meshVerts, meshNormals, meshUvs, meshFaces, meshColours))
         return meshes
@@ -285,121 +286,54 @@ class CarMesh:
             fout.write(f"f {fx}/{fx}/{fx} {fy}/{fy}/{fy} {fz}/{fz}/{fz}\n")
         fout.write("#" + str(len(self.meshFaces)) + " faces\n")
 
-class CarTexture:
+    def writeMeshToPly(self, fout):
+        # Write header
+        fout.write("ply\n")
+        fout.write("format ascii 1.0\n")
+        fout.write(f"element vertex {len(self.meshVerts)}\n")
+        fout.write("property float x\n")
+        fout.write("property float y\n")
+        fout.write("property float z\n")
+        fout.write("property float nx\n")
+        fout.write("property float ny\n")
+        fout.write("property float nz\n")
+        fout.write("property uchar red\n")
+        fout.write("property uchar green\n")
+        fout.write("property uchar blue\n")
+        fout.write("property uchar alpha\n")
+        fout.write(f"element face {len(self.meshFaces)}\n")
+        fout.write("property list uint8 int vertex_index\n")
+        fout.write(f"element texture {len(self.meshUvs)}\n")
+        fout.write("property list uint8 float texcoord\n")
+        fout.write("end_header\n")
 
-    def __init__(self, texture = [], palette = [], size=(0,0), fixAlpha=True):
-        self.width = size[0]
-        self.height = size[1]
-        self.texture = texture
-        self.palette = palette
-        self.fixAlpha = fixAlpha
+        # Write verticies, colours, normals
+        for i in range(0, len(self.meshVerts)):
+            vx = '{:.20f}'.format(self.meshVerts[i][0])
+            vy = '{:.20f}'.format(self.meshVerts[i][1])
+            vz = '{:.20f}'.format(self.meshVerts[i][2])
 
-    @staticmethod
-    def _fromFile(file, offset, fixAlpha=True):
-        file.seek(offset, os.SEEK_SET)
+            cr = '{:d}'.format(math.trunc(self.meshColours[i][0]))
+            cg = '{:d}'.format(math.trunc(self.meshColours[i][1]))
+            cb = '{:d}'.format(math.trunc(self.meshColours[i][2]))
+            ca = '{:d}'.format(math.trunc(self.meshColours[i][3]))
+
+            nx = '{:.20f}'.format(self.meshNormals[i][0])
+            ny = '{:.20f}'.format(self.meshNormals[i][1])
+            nz = '{:.20f}'.format(self.meshNormals[i][2])
+            fout.write(f"{vx} {vy} {vz} {nx} {ny} {nz} {cr} {cg} {cb} {ca}\n")
         
-        nullPad = readLong(f)
-        unkn1 = readShort(f)
-        # TODO: find way to determine size
-        #file.seek(offset+0x34, os.SEEK_SET)
-        #length = readLong(f)
-        file.seek(offset+0x70, os.SEEK_SET)
-        width = 128
-        height = 128
-        length = width*height
-        texture = f.read(length)
-        colours = []
-        # Skip header all values have unknown use atm
-        f.seek(112, os.SEEK_CUR)
+        # Write mesh face order/list
+        for i in range(0, len(self.meshFaces)):
+            fx = self.meshFaces[i][0]-1
+            fy = self.meshFaces[i][1]-1
+            fz = self.meshFaces[i][2]-1
+            
+            fout.write(f"4 {fx} {fy} {fz}\n")
 
-        # So far all palettes have been nonlinear but need to find
-        # if all files are non Linear before ruling out option
-        isNonLinear = True
-
-        thisPaletteSize = 256
-        rawPalette = []
-        for i in range(0, thisPaletteSize):
-            cr = readByte(f)
-            cg = readByte(f)
-            cb = readByte(f)
-            ca = readByte(f)
-            if fixAlpha and ca == 0x80:
-                ca = 255
-            rawPalette.append([cr, cg, cb, ca])
-
-        if isNonLinear:            
-            numParts = (int) (thisPaletteSize / 32)
-            numBlocks = 2
-            numStripes = 2
-            numColours = 8
-
-            paletteIndex = 0
-            for part in range(0, numParts):
-                for block in range(0, numBlocks):
-                    for stripe in range(0, numStripes):
-                        for c in range(0, numColours):
-                            rawInd = part * numColours * numStripes * numBlocks + block * numColours + stripe * numStripes * numColours + c
-                            colours.append(rawPalette[rawInd])
-                            paletteIndex += 1
-        else:
-            colours = rawPalette
-        return CarTexture(texture, colours, (width, height), fixAlpha)
-    
-    def writeTextureToPNG(self, path, flipX=False, flipY=False):
-        cList = []
-        for c in self.palette:
-            cList.append(c[0])
-            cList.append(c[1])
-            cList.append(c[2])
-            cList.append(c[3])
-        image = Image.frombytes('P', (128,128), self.texture, 'raw', 'P')
-        palette = ImagePalette.raw("RGBA", bytes(cList))
-        palette.mode = "RGBA"
-        image.palette = palette
-        rgbd = image.convert("RGBA")
-        if flipX:
-            rgbd = ImageOps.mirror(rgbd)
-        if flipY:
-            rgbd = ImageOps.flip(rgbd)
-        rgbd.save(path, "PNG")
-
-    def writePaletteToPNG(self, path):
-        cList = []
-        for c in self.palette:
-            cList.append(c[0])
-            cList.append(c[1])
-            cList.append(c[2])
-            cList.append(c[3])
-        image = Image.frombytes('RGBA', (16,16), bytes(cList), 'raw', 'RGBA')
-        image.save(path, "PNG")
-
-def readFloat(f):
-    return struct.unpack('<f', f.read(4))[0]
-    
-def readLong(f):
-    return int.from_bytes(f.read(4), byteorder='little')
-    
-def readShort(f):
-    return int.from_bytes(f.read(2), byteorder='little')
-
-def readByte(f):
-    return int.from_bytes(f.read(1), byteorder='little')
-
-def readXYZ(f):
-    return (readFloat(f), readFloat(f), readFloat(f))
-
-
-
-#with open("../Q02.BIN", "rb") as f:
-#    f.seek(0, os.SEEK_END)
-#    fileSize = f.tell()
-#    print(f"Reading file of {fileSize} bytes")
-#    f.seek(0, os.SEEK_SET)
-#    car = CarModel.fromFile(f, 0, fileSize)
-#    for i,mesh in enumerate(car.meshes):
-#        with open(f"out/Q00.bin-{i}.obj", "w") as fout:
-#            mesh.writeMeshToObj(fout)
-#    for i,tex in enumerate(car.textures):
-#        tex.writeTextureToPNG(f"out/Q00.bin-{i}.png")
-#        tex.writePaletteToPNG(f"out/Q00.bin-{i}-p.png")
+        # Write texture coordinates (uv)
+        for i in range(0, len(self.meshUvs)):
+            tu = '{:.10f}'.format(self.meshUvs[i][0])
+            tv = '{:.10f}'.format(self.meshUvs[i][1])
+            fout.write(f"2 {tu} {tv}\n")
         
