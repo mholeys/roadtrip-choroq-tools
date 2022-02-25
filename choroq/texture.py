@@ -24,24 +24,140 @@ class Texture:
 
     @staticmethod
     def _parseTextureHeader(file, offset):
-        unkn0 = U.readByte(file)
-        length = U.readByte(file) * 4096 # Not always
-        unkn1 = U.readByte(file)
+        typeF = U.readByte(file) - 0x6
+        print(f"TextType: {typeF}")
+        firstLength = U.readByte(file) * 4096
+        print(f"Initial length {firstLength}")
+        unkn1 = U.readByte(file) # Could be 64 = odd sizes
+        print(f"Unknown1: {unkn1}")
         unkn2 = U.readByte(file)
 
         nullPad = U.readLong(file)
         unkn3 = U.readShort(file)
+        
+        #This block is old block
+        # # byte 0x44(68) seems to hold height directly, but would not be enough for 640
+        # # Height also spills into next byte when 640 but second byte is uselss for rest?
+        # file.seek(offset+0x44, os.SEEK_SET)
+        # height = U.readByte(file)
+        # print(f"Initial Height: {height}")
+        # if height == 0:
+        #     print("file has no height at 0x44")
 
-        # TODO: find way to determine size
-        #length = width*height
+        # # byte 0x35(53) might hold the width/2 for some files, may depend on the 0xX6 bit of the header
+        # # or the byte proceeding it, 
+        # # NOT TRUE this is probably a lookup table or dependent on value not the value
+        # file.seek(offset+0x35, os.SEEK_SET)
+        # widthF = U.readByte(file) * 2        #(int) (length/height)       #= 
+        # print(f"Initial Width: {widthF}")
+        # if widthF == 0:
+        #     print("file has no width at 0x35")
+        # width = widthF
+        # # 0x40(64) seems to be width ?
+        # file.seek(offset+0x40, os.SEEK_SET)
+        # width2 = U.readByte(file)
+        # print(f"Second width: {width2}")
+        # if width2 == 0:
+        #     print("file has no width at 0x40")
+        # if widthF < width2:
+        #     print(f"0x40 width {width2} different from 0x35 width {widthF}")
+        #     if width2 != 0:
+        #         width = width2
+        # print(f"Set Width: {width}")
+        # print(f"Set Height: {height}")
+        #This block is old block
+
+        
+
         file.seek(offset+0x35, os.SEEK_SET)
-        height = U.readByte(file) * 2
-        #        file.seek(offset+0x20, os.SEEK_SET)
-        width = (int) (length/height)       #= U.readByte(file) * 2
-        file.seek(offset+0x70, os.SEEK_SET)
-        #print(f"Texture size: {width}x{height}px {length}bytes")
+        sizeTable = U.readByte(file)
+        
+        if sizeTable == 0:
+            print("could mean 16x16 or anything?, will attempt to guess")
 
-        return width, height, length
+        if sizeTable == 8:
+            print("assuming texture is 32x64")
+            width = 32
+            height = 64
+        elif sizeTable == 16:
+            print("assuming texture is 64x64")
+            width = 64
+            height = 64
+        elif sizeTable == 32:
+            print("assuming texture is 64x128")
+            width = 64
+            height = 128
+        elif sizeTable == 64:
+            print("assuming texture is 128x128")
+            width = 128
+            height = 128
+        elif sizeTable == 192:
+            print("assuming texture is 640x384")
+            width = 640
+            height = 384
+        else:
+            print("Did not determine width/height by means above (see code)")
+            file.seek(offset+0x44, os.SEEK_SET)
+            height = U.readByte(file)
+            file.seek(offset+0x35, os.SEEK_SET)
+            width = U.readByte(file) * 2
+            if width == 0:
+                file.seek(offset+0x40, os.SEEK_SET)
+                width = U.readByte(file)
+
+        # typeF could be bit depth?
+        # 0  = 8bpp
+        # 32 = 4bpp
+        # 64 = 4bypp
+        # 128 = ?
+        bpp = 8
+        #if typeF == 32:
+        #    print("File is 4 bpp")
+        #    bpp = 4
+        #    width = width * 2
+        
+        # #This block is part of old block
+        # # byte 0x61(97) holds the length/4096, but is (so far) the same as byte 0x1(1)
+        # # This may be a fall back or, allocation size for 0x1, and read length for 0x61 (same for now)
+        # file.seek(offset+0x61, os.SEEK_SET)
+        # length = U.readByte(file) * 4096 # Smallest texture might be 64x64 hence 4096 or in 4k chunks?
+        # if firstLength != length:
+        #     print(f"FirstTexLen({firstLength}) vs {length}")
+        #     length = firstLength
+        
+        # if width * height != length:
+        #     if width == width2 or width == widthF:
+        #         # Then adjust height
+        #         print(f"Adjusted height")
+        #         height = (int) (length / width)
+        #     else:
+        #         # Adjust width
+        #         print(f"Adjusted width")
+        #         width = (int)(length / height)
+        # #This block is part of old block
+        # #try:
+        # #    width = (int)(length / height)
+        # #    print(f"calculated width as {width} from {height}/{length}")
+        # #except:
+        # #    width = 128
+        # #    height = 128
+        # #    length = width * height
+        #This block is part of old block
+
+        # Some files have multiple palettes!!
+        # After first palette there is 02 00 87 70 
+        # and sometimes this is followed by 00s
+        # But the header of 02 00 87 70 is only short, maybe 48 bytes
+        # 
+
+        length = width * height
+
+
+        # Skip to past header
+        file.seek(offset+0x70, os.SEEK_SET)
+        print(f"Texture size: {width}x{height}px {length}bytes")
+
+        return width, height, length, bpp
     
     @staticmethod
     def _parsePaletteHeader(file, offset):
@@ -50,40 +166,108 @@ class Texture:
         #header = file.read(112)
         
         fB = U.readByte(file) #  Often 0xX6 where x could be something
-        colourSize = (fB & 0xF0) >> 4
-
-        nullB = U.readByte(file)
-
-        thisPaletteSize = U.readByte(file)+1 # This might not be really the number of colours
-        #print(f"numC{thisPaletteSize} fp:{file.tell()}")
-        # Assumed, as no information on the palette header yet
-        numberOfPalettes = 1
+        
         # So far all palettes have been nonlinear but need to find
         # if all files are non Linear before ruling out option
         isNonLinear = True
-        psize = 16,16
-        #print(f"Palette size: {psize[0]}x{psize[1]}px colourSize: {colourSize} numColours: {thisPaletteSize}")
+        
+        # This is old block
+        # colourSize = (fB & 0xF0) >> 4
+        # if colourSize == 0:
+        #     print(f"ColourSize = {colourSize} perhaps should be {fB - 6}")
+        #     if fB - 6 == 8 or fB - 6 == 16:
+        #         colourSize = fB - 6
+        #     if colourSize <= 0:
+        #         print(f"ColourSize is unknown @ fB:{fB}")
 
-        file.seek(offset+112, os.SEEK_SET)
+        # thisPaletteSize = 256
+        # psize = 16,16
+        # numberOfPalettes = 1
+
+        # # If ARGB 1555 then:
+        # if colourSize == 2:
+        #     thisPaletteSize = 16
+        #     psize = 4,4
+        #     isNonLinear = False
+        # This is old block
+
+
+
+        thisPaletteSize = 256
+        psize = 16,16
+        # This is unknown, for now:
+        numberOfPalettes = 1
+        isNonLinear = False
+
+        colourSize = fB - 6
+        headerByteSize = 112 #  Usual header size
+
+        if colourSize == 64:
+            # ARGB 888 format
+            thisPaletteSize = 256
+            psize = 16,16
+            numberOfPalettes = 1
+            isNonLinear = True
+            pass
+        elif colourSize == 32:
+            # BGRA 5551 format
+            thisPaletteSize = 16
+            psize = 4,4
+            numberOfPalettes = 1
+            isNonLinear = True
+            pass
+        elif colourSize == 16:
+            print(f"found a palette that is of type 16 @ {file.tell()} stopping")
+            exit(1)
+            pass
+        elif colourSize == 8:
+            # 128 bytes, format unknown
+            print("Decoding as small 5551 file")
+            # Override colour size for now
+            colourSize = 32 
+            thisPaletteSize = 64
+            psize = 8,8
+            numberOfPalettes = 1
+            isNonLinear = True
+        elif colourSize == -4:
+            # Header is 02 00 87 70 and is only 48 bytes long?
+            # or        02 00 40 70
+            # no idea what this is, unless its an extra palette, or lighting info
+            # so going to skip
+            colourSize = 64
+            psize = 32,32
+            thisPaletteSize = 1028 # This is just a guess, just to move to next
+            numberOfPalettes = 1
+            isNonLinear = True
+            headerByteSize = 48
+
+
+
+        nullB = U.readByte(file)
+
+        #print(f"numC{thisPaletteSize} fp:{file.tell()}")
+        # Assumed, as no information on the palette header yet
+        
+        
+        
+        
+        print(f"Palette size: {psize[0]}x{psize[1]}px colourSize: {colourSize} numColours: {thisPaletteSize}")
+
+        
+        file.seek(offset+headerByteSize, os.SEEK_SET)
         return isNonLinear, colourSize, thisPaletteSize, numberOfPalettes, psize
 
-    @staticmethod
-    def _fromFile(file, offset, fixAlpha=True):
-        file.seek(offset, os.SEEK_SET)
-        width, height, length = Texture._parseTextureHeader(file, offset)
-        headerLength = 0x70
+    def _paletteFromFile(file, length, offset, fixAlpha=True):
+        isNonLinear, colourSize, thisPaletteSize, numberOfPalettes, psize = Texture._parsePaletteHeader(file, offset)
 
-        # Read texture data in
-        texture = file.read(length)
+        print(file.tell())
 
-        isNonLinear, colourSize, thisPaletteSize, numberOfPalettes, psize = Texture._parsePaletteHeader(file, offset + length + headerLength)
-        
         colours = []
 
         rawPalette = []
 
         # read colours in
-        if colourSize == 4:
+        if colourSize == 64:
             # 32BBP ARGB
             for i in range(0, thisPaletteSize):
                 cr = U.readByte(file)
@@ -94,13 +278,14 @@ class Texture:
                     ca = 255
                 rawPalette.append([cr, cg, cb, ca])
         elif colourSize == 3:
+            # Never been seen
             #24BPP RGB
             for i in range(0, thisPaletteSize):
                 cr = U.readByte(file)
                 cg = U.readByte(file)
                 cb = U.readByte(file)
                 rawPalette.append([cr, cg, cb, 255])
-        elif colourSize == 2:
+        elif colourSize == 32:
             #16BIT Little Endian RGBA 5551 format
             for i in range(0, thisPaletteSize):
                 c = U.readShort(file)
@@ -139,6 +324,34 @@ class Texture:
         else:
             colours = rawPalette
         #print(f"Number of colours read: {len(colours)}")
+        return colours, psize
+
+    @staticmethod
+    def _readTexture(file, length, bpp=8):
+        texture = 0
+        if bpp == 8:
+            texture = file.read(length)
+        elif bpp == 4:
+            textData = []
+            for i in range(0, length):
+                b = file.read(length)
+
+                texData.append(b & 0xF)
+                texData.append((b >> 4) & 0xF)
+            texture = bytes(texData)
+        return texture
+
+    @staticmethod
+    def _fromFile(file, offset, fixAlpha=True):
+        file.seek(offset, os.SEEK_SET)
+        width, height, length, bpp = Texture._parseTextureHeader(file, offset)
+        headerLength = 0x70
+
+        # Read texture data in
+        texture = Texture._readTexture(file, length, bpp)
+
+
+        colours, psize = Texture._paletteFromFile(file, length, offset + length + headerLength, fixAlpha)
         return Texture(texture, colours, (width, height), psize, fixAlpha)
     
     def writeTextureToPNG(self, path, flipX=False, flipY=False, usepalette=True):
@@ -171,6 +384,8 @@ class Texture:
             cList.append(c[1])
             cList.append(c[2])
             cList.append(c[3])
+        print(f"paletteLen = {len(cList)} should be {self.pwidth},{self.pheight} {len(self.palette)} len {len(bytes(cList))}")
+
         image = Image.frombytes('RGBA', (self.pwidth, self.pheight), bytes(cList), 'raw', 'RGBA')
         image.save(path, "PNG")
 
