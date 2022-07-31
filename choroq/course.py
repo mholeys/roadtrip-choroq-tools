@@ -41,14 +41,16 @@
 # If not then end of this mesh start next mesh from offset list
 #
 # File 3: 
-# Looks like array of floats?
+# Looks like array of floats? could be colors, or maybe 
+# texture mapping info, on how to link texture x to model y
 # Does not look like mesh data as does not contain 0x6c018000
+# Does contain float, float, float, 1 groups after 0x610 for c00
 # TODO:
 #
 # File 4: 
-# Looks like array of floats, probably mesh data as contains 0x6c018000
-# Could be mini map preview in race selection main menu
-# TODO: 
+# After testing this is the mini map, used for showing player position 
+# on the blue track ring overlay. It can be parsed as a car mesh class 
+# using as is and will produce the map
 
 import io
 import os
