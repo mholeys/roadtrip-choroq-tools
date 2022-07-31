@@ -303,10 +303,12 @@ class CarMesh:
         fout.write("property uchar green\n")
         fout.write("property uchar blue\n")
         fout.write("property uchar alpha\n")
+        fout.write("property float s\n")
+        fout.write("property float t\n")
         fout.write(f"element face {len(self.meshFaces)}\n")
         fout.write("property list uint8 int vertex_index\n")
-        fout.write(f"element texture {len(self.meshUvs)}\n")
-        fout.write("property list uint8 float texcoord\n")
+        #fout.write(f"element texture {len(self.meshUvs)}\n")
+        #fout.write("property list uint8 float texcoord\n")
         fout.write("end_header\n")
 
         # Write verticies, colours, normals
@@ -323,7 +325,11 @@ class CarMesh:
             nx = '{:.20f}'.format(self.meshNormals[i][0])
             ny = '{:.20f}'.format(self.meshNormals[i][1])
             nz = '{:.20f}'.format(self.meshNormals[i][2])
-            fout.write(f"{vx} {vy} {vz} {nx} {ny} {nz} {cr} {cg} {cb} {ca}\n")
+
+            tu = '{:.10f}'.format(self.meshUvs[i][0])
+            tv = '{:.10f}'.format(self.meshUvs[i][1])
+
+            fout.write(f"{vx} {vy} {vz} {nx} {ny} {nz} {cr} {cg} {cb} {ca} {tu} {tv}\n")
         
         # Write mesh face order/list
         for i in range(0, len(self.meshFaces)):
@@ -334,8 +340,8 @@ class CarMesh:
             fout.write(f"4 {fx} {fy} {fz}\n")
 
         # Write texture coordinates (uv)
-        for i in range(0, len(self.meshUvs)):
-            tu = '{:.10f}'.format(self.meshUvs[i][0])
-            tv = '{:.10f}'.format(self.meshUvs[i][1])
-            fout.write(f"2 {tu} {tv}\n")
+        #for i in range(0, len(self.meshUvs)):
+        #    tu = '{:.10f}'.format(self.meshUvs[i][0])
+        #    tv = '{:.10f}'.format(self.meshUvs[i][1])
+        #    fout.write(f"2 {tu} {tv}\n")
         

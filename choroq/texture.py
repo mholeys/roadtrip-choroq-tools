@@ -67,11 +67,20 @@ class Texture:
         # print(f"Set Height: {height}")
         #This block is old block
 
+        if typeF == 0 or typeF == 128:
+            # Usual file format?
+            pass
         
-
         file.seek(offset+0x35, os.SEEK_SET)
         sizeTable = U.readByte(file)
-        
+
+        if typeF == 64:
+            # File might not be usual size
+            sizeTable = 0
+
+
+        print(f"Sizetable is {sizeTable}")
+
         if sizeTable == 0:
             print("could mean 16x16 or anything?, will attempt to guess")
 
@@ -87,6 +96,7 @@ class Texture:
             print("assuming texture is 64x128")
             width = 64
             height = 128
+            # Some of these are actually 128x64 so perhaps there is a flag to swap them?
         elif sizeTable == 64:
             print("assuming texture is 128x128")
             width = 128
@@ -101,9 +111,24 @@ class Texture:
             height = U.readByte(file)
             file.seek(offset+0x35, os.SEEK_SET)
             width = U.readByte(file) * 2
+
+            
+            if typeF == 64:
+                width = width * 2
+            elif firstLength != 0 and width * height != firstLength:
+                width = (int) (firstLength / height)
             if width == 0:
                 file.seek(offset+0x40, os.SEEK_SET)
                 width = U.readByte(file)
+        
+        if typeF == 16:
+            width = 16
+            height = 16
+
+        if typeF == 32:
+            print(f"{width}x{height}")
+            #height = (int)(height / 2 )
+            
 
         # typeF could be bit depth?
         # 0  = 8bpp
@@ -260,7 +285,7 @@ class Texture:
     def _paletteFromFile(file, length, offset, fixAlpha=True):
         isNonLinear, colourSize, thisPaletteSize, numberOfPalettes, psize = Texture._parsePaletteHeader(file, offset)
 
-        print(file.tell())
+        print(f"Reading palette at {file.tell()}")
 
         colours = []
 

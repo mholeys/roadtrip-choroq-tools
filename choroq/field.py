@@ -19,11 +19,22 @@ class FieldMesh:
         self.meshColours     = meshColours
 
     @staticmethod
-    def _parseOffsets(file, offset):
+    def _parseOffsets(file, offset, size):
         file.seek(offset, os.SEEK_SET)
-        offset1 = U.readLong(file)
-        offset2 = U.readLong(file)
-        return 16, offset1, offset2
+        # Read in the offset table from the field.sub2 file
+        offsets = []
+        lastO = 0
+        o = 1
+        #offsets.append() # First offset seems to be 256?
+        while o > lastO:
+            lastO = o
+            o = U.readLong(file)
+            if o < lastO:
+                # Force DO-WHILE behaviour
+                break
+            offsets.append(o)
+        print(offsets)
+        return offsets[3:4]
 
     @staticmethod
     def _parseHeader(file):
@@ -35,15 +46,21 @@ class FieldMesh:
         return unkw0, nullF0, meshStartFlag
 
     @staticmethod
-    def _fromFile(file, offset, scale=1):
-        offsets = FieldMesh._parseOffsets(file, offset)
+    def _fromFile(file, offset, size, scale=1):
+        offsets = FieldMesh._parseOffsets(file, offset, size)
+        print(f"Field offset table: {len(offsets)}:{offsets}")
         meshes = []
         for o in offsets:
+            if file.tell() > o + offset:
+                # Skip offsets what we may have already hit
+                print(f"Skipping offset, at {o}, as already counted")
+                continue
             file.seek(o + offset, os.SEEK_SET)
-            print(f"Reading mesh from {file.tell()}")
+            print(f"Reading mesh from {o} ({file.tell()})")
             header = FieldMesh._parseHeader(file)
             # Read mesh
             meshFlag  = U.readLong(file)
+            print(f"meshFlag {meshFlag}")
 
             meshVerts = []
             meshNormals = []
@@ -53,7 +70,13 @@ class FieldMesh:
             meshVertCount = 0
 
             # Read chunk of verticies
-            while meshFlag == 0x6c018000:
+            while meshFlag == 0x68048192 or meshFlag == 0x6c018000:
+                if meshFlag == 0x68048192:
+                    #uknX = U.readFloat(file)
+                    #uknY = U.readFloat(file)
+                    #unknowns.append(uknX)
+                    #unknowns.append(uknY)
+                    file.seek(64, os.SEEK_CUR)
                 verts = [] 
                 uvs = []
                 normals = []
@@ -62,8 +85,10 @@ class FieldMesh:
                 vertCount = U.readByte(file)
                 unkw1 = U.readByte(file)
                 zeroF1 = U.readShort(file)
+
                 # Skip 16 bytes as we dont know what they are used for
                 file.seek(0x10, os.SEEK_CUR)
+                print(f"Verts: {vertCount} ~@ {file.tell() - offset}")
 
                 for x in range(0, vertCount):
                     vx, vy, vz = U.readXYZ(file)
@@ -91,7 +116,15 @@ class FieldMesh:
                 meshNormals += normals
                 # See if there are more verticies we need to read
                 meshFlag = U.readLong(file)
+                print(f"nextMesh flag? {meshFlag}")
+
+                #us = ""
+                #for u in unknowns:
+                #    us = us + ' {:.20f}'.format(u)
+                #print(f"Read x unknowns {us} {file.tell() - offset}")
+                print(f"Read {vertCount}")
             if (meshVertCount > 0):
+                print(f"Read {meshVertCount}")
                 meshes.append(FieldMesh(meshVertCount, meshVerts, meshNormals, meshUvs, meshFaces, meshColours))
         return meshes
 
