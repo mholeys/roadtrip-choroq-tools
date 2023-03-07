@@ -26,6 +26,7 @@ class Texture:
     def _parseTextureHeader(file, offset):
         typeF = U.readByte(file) - 0x6
         print(f"TextType: {typeF}")
+        
         firstLength = U.readByte(file) * 4096
         print(f"Initial length {firstLength}")
         unkn1 = U.readByte(file) # Could be 64 = odd sizes
@@ -70,72 +71,122 @@ class Texture:
         if typeF == 0 or typeF == 128:
             # Usual file format?
             pass
+
+        bpp = 8
         
-        file.seek(offset+0x35, os.SEEK_SET)
-        sizeTable = U.readByte(file)
-
-        if typeF == 64:
-            # File might not be usual size
-            sizeTable = 0
-
-
-        print(f"Sizetable is {sizeTable}")
-
-        if sizeTable == 0:
-            print("could mean 16x16 or anything?, will attempt to guess")
-
-        if sizeTable == 8:
-            print("assuming texture is 32x64")
-            width = 32
-            height = 64
-        elif sizeTable == 16:
-            print("assuming texture is 64x64")
-            width = 64
-            height = 64
-        elif sizeTable == 32:
-            print("assuming texture is 64x128")
-            width = 64
-            height = 128
-            # Some of these are actually 128x64 so perhaps there is a flag to swap them?
-        elif sizeTable == 64:
-            print("assuming texture is 128x128")
-            width = 128
-            height = 128
-        elif sizeTable == 192:
-            print("assuming texture is 640x384")
-            width = 640
-            height = 384
-        else:
-            print("Did not determine width/height by means above (see code)")
+        oldWay = True
+        if not oldWay:
+            # Theory:
+            file.seek(offset+0x35, os.SEEK_SET)
+            length = U.readLong(file)
             file.seek(offset+0x44, os.SEEK_SET)
             height = U.readByte(file)
+            file.seek(offset+0x46, os.SEEK_SET)
+            width = U.readByte(file)
+            bpp = 8 / ((width*height) / length)
+        else:
+            # 0x35 is probably a long which is the length of the data in the file, no *4096 needed
             file.seek(offset+0x35, os.SEEK_SET)
-            width = U.readByte(file) * 2
+            sizeTable = U.readByte(file)
 
-            
             if typeF == 64:
-                width = width * 2
-            elif firstLength != 0 and width * height != firstLength:
-                width = (int) (firstLength / height)
-            if width == 0:
-                file.seek(offset+0x40, os.SEEK_SET)
+                # File might not be usual size
+                sizeTable = 0
+
+            file.seek(offset+21, os.SEEK_SET)
+            bitDepthFlag = U.readByte(file)
+            print(f"BitDepthFlag {hex(bitDepthFlag)}")
+
+            if bitDepthFlag == 0xB4:
+                bpp = 4
+
+
+            print(f"Sizetable is {sizeTable}")
+
+            if sizeTable == 0:
+                print("could mean 16x16 or anything?, will attempt to guess")
+
+            if sizeTable == 8:
+                print("assuming texture is 32x64")
+                width = 32
+                height = 64
+                if bpp == 4:
+                    width = int(width * 2)
+            elif sizeTable == 16:
+                print("assuming texture is 64x64")
+                width = 64
+                height = 64
+                if bpp == 4:
+                    width = int(width * 2)
+            elif sizeTable == 32:
+                print("assuming texture is 64x128")
+                width = 64
+                height = 128
+                if bpp == 4:
+                    width = int(width * 2)
+            elif sizeTable == 64:
+                print("assuming texture is 128x128")
+                width = 128
+                height = 128
+            elif sizeTable == 128:
+                # Example Meter0 Under ITEM
+                print("assuming texture is 256x128")
+                width = 256
+                height = 128
+                if bpp == 4:
+                    width = 256
+                    height = 256
+            elif sizeTable == 192:
+                print("assuming texture is 640x384")
+                width = 640
+                height = 384
+            elif sizeTable == 184:
+                print("assuming texture is 256x184 quickpic")
+                width = 256
+                height = 184
+            else:
+                print("Did not determine width/height by means above (see code)")
+                file.seek(offset+0x44, os.SEEK_SET) 
+                height = U.readByte(file)
+                file.seek(offset+0x35, os.SEEK_SET)
                 width = U.readByte(file)
-        
-        if typeF == 16:
-            width = 16
-            height = 16
+                if bpp == 8:
+                    width = width * 2
+                print(f"1st {width}x{height}")
 
-        if typeF == 32:
-            print(f"{width}x{height}")
-            #height = (int)(height / 2 )
+                if typeF == 64:
+                    width = width * 2
+                    print(f"2 {width}")
+                elif typeF == 32:
+                    width = height
+                    height = 16
+                    print(f"3 {width}x{height}")
+                elif firstLength != 0 and width * height != firstLength:
+                    if height == 0: # <- Temp fix
+                        height = 32
+                    width = (int) (firstLength / height)
+                    print(f"4 {width}x{height}")
+                if width == 0:
+                    file.seek(offset+0x40, os.SEEK_SET)
+                    width = U.readByte(file)
+                    print(f"5 {width}x{height}")
             
+            if typeF == 16:
+                width = 16
+                height = 16
 
-        # typeF could be bit depth?
+            if typeF == 32:
+                print(f"{width}x{height}")
+                #height = (int)(height / 2 )
+                
+
+        # typeF is not bit depth
+        # 
         # 0  = 8bpp
         # 32 = 4bpp
         # 64 = 4bypp
         # 128 = ?
-        bpp = 8
+        #bpp = 8
         #if typeF == 32:
         #    print("File is 4 bpp")
         #    bpp = 4
@@ -176,7 +227,10 @@ class Texture:
         # 
 
         length = width * height
-
+        if bpp == 4:
+            print("Texture is 4bpp")
+            # width = int(width * 2)
+            length = length >> 1
 
         # Skip to past header
         file.seek(offset+0x70, os.SEEK_SET)
@@ -189,6 +243,8 @@ class Texture:
         # Skip header all values have unknown use atm
         #file.seek(112, os.SEEK_CUR)
         #header = file.read(112)
+
+        print(f"parse header at {offset} {file.tell()}")
         
         fB = U.readByte(file) #  Often 0xX6 where x could be something
         
@@ -246,14 +302,13 @@ class Texture:
             exit(1)
             pass
         elif colourSize == 8:
-            # 128 bytes, format unknown
-            print("Decoding as small 5551 file")
-            # Override colour size for now
-            colourSize = 32 
-            thisPaletteSize = 64
-            psize = 8,8
+            # 128 bytes, format is RGBA 32 bit
+            # means 32 colors? but mapped to 256 somehow
+            thisPaletteSize = 32
+            psize = 8,4
             numberOfPalettes = 1
             isNonLinear = True
+            print(f"found a palette that is of type 8 @ {file.tell()}")
         elif colourSize == -4:
             # Header is 02 00 87 70 and is only 48 bytes long?
             # or        02 00 40 70
@@ -282,6 +337,25 @@ class Texture:
         file.seek(offset+headerByteSize, os.SEEK_SET)
         return isNonLinear, colourSize, thisPaletteSize, numberOfPalettes, psize
 
+    @staticmethod
+    def _unswizzle(palette, size):
+        colours = []
+        numParts = (int) (size / 32)
+        numBlocks = 2
+        numStripes = 2
+        numColours = 8
+
+        paletteIndex = 0
+        for part in range(0, numParts):
+            for block in range(0, numBlocks):
+                for stripe in range(0, numStripes):
+                    for c in range(0, numColours):
+                        rawInd = part * numColours * numStripes * numBlocks + block * numColours + stripe * numStripes * numColours + c
+                        colours.append(palette[rawInd])
+                        paletteIndex += 1
+        return colours
+
+    @staticmethod
     def _paletteFromFile(file, length, offset, fixAlpha=True):
         isNonLinear, colourSize, thisPaletteSize, numberOfPalettes, psize = Texture._parsePaletteHeader(file, offset)
 
@@ -330,24 +404,113 @@ class Texture:
                      ca])
             #rawPalette.reverse()
             #isNonLinear = True
+        elif colourSize == 8:
+            # This is not perfect
+            # 32BBP RGBA
+            rawData = []
+            print(f"at end of read palette loop: {file.tell()}")
+            for i in range(0, thisPaletteSize):
+                cr = U.readByte(file)
+                cg = U.readByte(file)
+                cb = U.readByte(file)
+                ca = U.readByte(file)
+                if fixAlpha and ca == 0x80:
+                    ca = 255
+                if fixAlpha and ca <= 0x80:
+                    ca = (ca + 0xF0) & 0xFF
+                rawData.append([cr, cg, cb, ca])
+            rawData = Texture._unswizzle(rawData, thisPaletteSize)
+            print(f"at end of read palette loop: {file.tell()}")
+
+            # Repeat colours to test if 0-255 = 0-32 map?
+            for i in range(0, thisPaletteSize):
+                for r in range(16): #int(255 / thisPaletteSize)
+                    rawPalette.append(rawData[i])
+
+            thisPaletteSize = 256
+            psize = 16,16
+
+            # # Attempt 2
+            # # 32BBP RGBA
+            # rawColours = []
+            # halfPalette = []
+            # editingColours = []
+            # for i in range(0, thisPaletteSize):
+            #     cr = U.readByte(file)
+            #     cg = U.readByte(file)
+            #     cb = U.readByte(file)
+            #     ca = U.readByte(file)
+            #     halfPalette.append([cr, cg, cb, ca])
+            
+            # Texture._unswizzle(halfPalette, thisPaletteSize)
+            # for i, (cr, cg, cb, ca) in enumerate(halfPalette):
+            #     if i < thisPaletteSize / 2:
+            #         if fixAlpha and ca == 0x80:
+            #             ca = 255
+            #         if fixAlpha and ca <= 0x80:
+            #             ca = (ca + 0xF0) & 0xFF
+            #         rawColours.append([cr, cg, cb, ca])
+            #     else:
+            #         editingColours.append([cr, cg, cb, ca])
+            # for i in range(0, int(thisPaletteSize/2)):
+            #     sign = -1
+            #     c = rawColours[i]
+            #     for e in editingColours:
+            #         if e == [0, 0, 0, 0]:
+            #             sign = 1
+            #         rawPalette.append(
+            #             [
+            #                 (c[0] + sign*e[0]) & 0xFF,
+            #                 (c[1] + sign*e[1]) & 0xFF,
+            #                 (c[2] + sign*e[2]) & 0xFF,
+            #                 (c[3] + sign*e[3]) & 0xFF
+            #             ])
+            # thisPaletteSize = 256
+            # psize = 16,16
+            # isNonLinear = False
+
+
+            # Attempt to use other colours (>16th), not right 
+            # # 32BBP RGBA
+            # # Blending attempt
+            # rawColours = []
+            # editingColours = []
+            # for i in range(0, thisPaletteSize):
+            #     cr = U.readByte(file)
+            #     cg = U.readByte(file)
+            #     cb = U.readByte(file)
+            #     ca = U.readByte(file)
+            #     if fixAlpha and ca == 0x80:
+            #         ca = 255
+            #     if fixAlpha and ca <= 0x80:
+            #         ca = (ca + 0xF0) & 0xFF
+            #     if i < thisPaletteSize/2:
+            #         rawColours.append([cr, cg, cb, ca])
+            #     else:
+            #         editingColours.append([cr, cg, cb, ca])
+            #
+            #
+            # for i in range(0, int(thisPaletteSize/2)):
+            #     c = rawColours[i]
+            #     for e in editingColours:
+            #         rawPalette.append(
+            #             [
+            #                 (c[0] + e[0]) & 0xFF,
+            #                 (c[1] + e[1]) & 0xFF,
+            #                 (c[2] + e[2]) & 0xFF,
+            #                 (c[3] + e[3]) & 0xFF
+            #             ])
+            # thisPaletteSize = 256
+            # psize = 16,16
+            print(F"Finished palette at {file.tell()}")
+            
 
 
         if isNonLinear:            
-            numParts = (int) (thisPaletteSize / 32)
-            numBlocks = 2
-            numStripes = 2
-            numColours = 8
-
-            paletteIndex = 0
-            for part in range(0, numParts):
-                for block in range(0, numBlocks):
-                    for stripe in range(0, numStripes):
-                        for c in range(0, numColours):
-                            rawInd = part * numColours * numStripes * numBlocks + block * numColours + stripe * numStripes * numColours + c
-                            colours.append(rawPalette[rawInd])
-                            paletteIndex += 1
+            colours = Texture._unswizzle(rawPalette, thisPaletteSize)
         else:
             colours = rawPalette
+            
         #print(f"Number of colours read: {len(colours)}")
         return colours, psize
 
@@ -357,12 +520,12 @@ class Texture:
         if bpp == 8:
             texture = file.read(length)
         elif bpp == 4:
-            textData = []
-            for i in range(0, length):
-                b = file.read(length)
+            texData = []
+            for i in range(0, int(length)):
+                b = U.readByte(file)
 
-                texData.append(b & 0xF)
-                texData.append((b >> 4) & 0xF)
+                texData.append((b & 0xF) * 17)
+                texData.append(((b >> 4) & 0xF) * 17)
             texture = bytes(texData)
         return texture
 
@@ -370,11 +533,13 @@ class Texture:
     def _fromFile(file, offset, fixAlpha=True):
         file.seek(offset, os.SEEK_SET)
         width, height, length, bpp = Texture._parseTextureHeader(file, offset)
+        # byteLength = int(length / (8/bpp))
         headerLength = 0x70
+
+        # print(f"TextureByteLen {byteLength}")
 
         # Read texture data in
         texture = Texture._readTexture(file, length, bpp)
-
 
         colours, psize = Texture._paletteFromFile(file, length, offset + length + headerLength, fixAlpha)
         return Texture(texture, colours, (width, height), psize, fixAlpha)
@@ -409,7 +574,9 @@ class Texture:
             cList.append(c[1])
             cList.append(c[2])
             cList.append(c[3])
-        print(f"paletteLen = {len(cList)} should be {self.pwidth},{self.pheight} {len(self.palette)} len {len(bytes(cList))}")
+        
+        if self.pwidth * self.pheight != self.palette:
+            print(f"paletteLen = {len(cList)} should be {self.pwidth},{self.pheight} {len(self.palette)} len {len(bytes(cList))}")
 
         image = Image.frombytes('RGBA', (self.pwidth, self.pheight), bytes(cList), 'raw', 'RGBA')
         image.save(path, "PNG")

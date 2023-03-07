@@ -28,27 +28,23 @@
 # The first two longs in the file represent the starting possitions for meshes in this file
 # The offsets are as follows (16, <long0>, <long1>)
 # There are two or more other values in the header, yet to be decoded TODO:
-# 16 is the size of header, and so is the first "offset"
-#
-#
+# 16 is the size of header, and so the first offset is always 16
 # [Mesh]
-# First long seems to be a value of [6C018000] meaning that there is another set of verticies following this one (MeshFlag)
+# First long seems to be a value of XX XX 00 10 where XX are unknown meaning
 # Second long is always null/[00000000] probably to match up with other file headers like the textures
 # Third long is always [01 01 00 01] possibly a version or bitMask
-#
+# There is then a long of [00 80 01 6C] (MeshFlag) which is used to determine if there is more data 
 # [MeshData]
 # After these starts the actual mesh data for the models
-# First of which is a long with the value of [00 80 01 6C]
-#  this may be the mesh's real file start or an identifier for mesh's
-#  TODO: Finish
+# First of which is a long with the value of [06 80 00 00]
 # 
 # Next Byte contains the number of verticies
-# Followed by 128/0x80
+# Followed by 128/0x80 or sometimes 64/0x40
 # Followed by 0000
 # e.g:
 # [AA][BB][CCCC]
 #  AA = vertex count
-#  BB = 0x80
+#  BB = 0x80/0x40
 #  CC = 0x0000
 # 
 # [Unknown]
@@ -79,7 +75,6 @@
 #
 # [Face format]
 # The faces are not actually stored in the file, and are statically calculated
-# See <> TODO: references
 
 
 import io
