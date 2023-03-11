@@ -80,6 +80,7 @@
 import io
 import os
 import math
+from choroq.amesh import AMesh
 from choroq.texture import Texture
 import choroq.read_utils as U
 
@@ -124,7 +125,7 @@ class CarModel:
         return CarModel("", meshes, textures)
 
 
-class CarMesh:
+class CarMesh(AMesh):
 
     def __init__(self, meshVertCount, meshVerts, meshNormals, meshUvs, meshFaces, meshColours):
         self.meshVertCount   = meshVertCount
@@ -211,44 +212,16 @@ class CarMesh:
                 meshes.append(CarMesh(meshVertCount, meshVerts, meshNormals, meshUvs, meshFaces, meshColours))
         return meshes
 
-    @staticmethod
-    def createFaceList(vertexCount, faceType=1):
-        # Creates a list of indices that order how to draw the 
-        # verticies in order of how to render the triangles
-        faces = []
-    
-        if (faceType == 1):
-            startDirection = -1
-            x = 0
-            a = 0
-            b = 0
+    def writeMeshToDBG(self, fout):
+        self.writeMeshToObj(fout)
+        fout.write("#" + str(len(self.meshColours)) + " colours R/G/B/A\n")
+        for i in range(0, len(self.meshFaces)):
+            cr = '{:d}'.format(math.trunc(self.meshColours[i][0]))
+            cg = '{:d}'.format(math.trunc(self.meshColours[i][1]))
+            cb = '{:d}'.format(math.trunc(self.meshColours[i][2]))
+            ca = '{:d}'.format(math.trunc(self.meshColours[i][3]))
             
-            f1 = a + 1
-            f2 = b + 1
-            faceDirection = startDirection
-            while (x < vertexCount):
-                x += 1
-                
-                f3 = x
-                faceDirection *= -1
-                if (f1 != f2) and (f2 != f3) and (f3 != f1):
-                    if (faceDirection > 0):
-                        faces.append((f1, f2, f3))
-                    else:
-                        faces.append((f1, f3, f2))
-                f1 = f2
-                f2 = f3
-        if (faceType == 0):
-            a = 0
-            b = 0
-            c = 0
-            
-            for x in range(0, vertexCount, 3):
-                a = x
-                b = x+1
-                c = x+2
-                faces.append((a, b, c))
-        return faces
+            fout.write(f"c {cr} {cg} {cb} {ca}\n")
 
     def writeMeshToObj(self, fout):
         # Write verticies
@@ -333,10 +306,4 @@ class CarMesh:
             fz = self.meshFaces[i][2]-1
             
             fout.write(f"4 {fx} {fy} {fz}\n")
-
-        # Write texture coordinates (uv)
-        #for i in range(0, len(self.meshUvs)):
-        #    tu = '{:.10f}'.format(self.meshUvs[i][0])
-        #    tv = '{:.10f}'.format(self.meshUvs[i][1])
-        #    fout.write(f"2 {tu} {tv}\n")
         

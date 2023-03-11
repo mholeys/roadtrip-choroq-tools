@@ -5,8 +5,8 @@
 #   Contains 4 sub files
 #     - Textures
 #     - Models
-#     - ?
-#     - ?
+#     - ? Has unknown info in start but second chunk is a mesh (usually the road)
+#     - Overlay map
 
 # Textures:
 #
@@ -29,10 +29,10 @@
 # 16 bytes of unknown
 # Then the rest of the data is verticies:
 #    vertex  x, y, z (floats)
-#    normals x, y, z
-#    unknown x, y, z set
-#    unknown x, y, z set
-#    uv(w)   u, v, w set
+#    normals x, y, z (floats)
+#    colours r, g, b set (int a float)
+#    unknown x, y, z set (floats)
+#    uv(w)   u, v, w set (floats)
 # a unknown long
 # 
 # If at this point there is the mesh continue flag: 0x6c018000
@@ -49,24 +49,27 @@
 # TODO:
 #
 # File 4: 
-# After testing this is the mini map, used for showing player position 
+# This is the mini map, used for showing player position 
 # on the blue track ring overlay. It can be parsed as like a car mesh, 
 # using the CarMesh class as is and will produce the map
 
 import io
 import os
 import math
+from choroq.amesh import AMesh
 from choroq.texture import Texture
-from choroq.car import CarMesh
+from choroq.car import CarModel, CarMesh
 import choroq.read_utils as U
 
 class CourseModel:
 
-    def __init__(self, name, meshes = [], textures = [], mapMeshes = []):
+    def __init__(self, name, meshes = [], textures = [], colliders = [], mapMeshes = [], extras = []):
         self.name = name
         self.meshes = meshes
+        self.colliders = colliders
         self.mapMeshes = mapMeshes
         self.textures = textures
+        self.extras = extras
 
     @staticmethod
     def _parseOffsets(file, offset, size):
@@ -88,7 +91,9 @@ class CourseModel:
         print(f"Got subfiles: {subFileOffsets}")
         meshes = []
         textures = []
+        colliders = [] # Unsure of use of this, but is either road surface related or collider
         mapMeshes = [] # Holds ui overlay map
+        extras = [] # Holds car like format extras (for actions)
         for oi, o in enumerate(subFileOffsets):
             if (o == size or o == 0):
                 # At end of file
@@ -99,9 +104,12 @@ class CourseModel:
             print(f"offset {offset + o} magic :{magic}")
             
             if CourseModel.matchesTextureMagic(magic):
+                # File is possibly a texture
+
+                # pass
                 textureMax = 0
                 # TODO: parse more than 1 texture
-                # File is possibly a texture
+                
                 print(f"Parsing texture @ {offset+o} {magic & 0x10120006} {magic & 0x10400006}")
                 textures.append(Texture._fromFile(file, offset+o))
                 nextTextureOffset = file.tell()
@@ -122,75 +130,86 @@ class CourseModel:
                     print(f"nextTexture {nextTexture}")
                 print(file.tell())
                 
-            # elif magic == 0x190:
-            #     # Subfile is meshes/models
-            #     print(f"Parsing meshes at {offset+o}")
-            #     U.readLong(file) # Skip magic
-            #     # Parse list
-            #     meshOffsets = []
-            #     meshO = 1
-            #     while meshO != 0:
-            #         meshO = U.readLong(file)
-            #         meshOffsets.append(meshO)
-            #     # Parse each mesh
-            #     print(meshOffsets)
-            #     print(len(meshOffsets))
-            #     for mi,mo in enumerate(meshOffsets):
-            #         print(f"reading mesh {len(meshes)} at {offset+o+mo} {offset} {o} {mo}")
-            #         meshes += CourseMesh._fromFile(file, offset+o+mo)
+            elif magic == 0x190:
+                pass
+                # Subfile is meshes/models
+                print(f"Parsing meshes at {offset+o}")
+                # Parse mesh offset list, 0 == end of list
+                meshOffsets = []
+                meshOffsets.append(U.readLong(file))
+                while meshOffsets[-1] != 0:
+                    meshOffsets.append(U.readLong(file))
+                # Parse each mesh
+                print(meshOffsets)
+                print(len(meshOffsets))
+                for mi,mo in enumerate(meshOffsets):
+                    #print(f"reading mesh {len(meshes)} at {offset+o+mo} {offset} {o} {mo}")
+                    meshes += CourseMesh._fromFile(file, offset+o+mo)
                     
-            #         # hasExtraMesh = True
-            #         # outerContinue = False
-            #         # while hasExtraMesh:
-            #         #     # Check if there is another mesh(es) after this one
-            #         #     # without being in the offset list
-            #         #     #file.seek(12, os.SEEK_CUR) # Unknown bytes
-            #         #     startingPos = file.tell()
+                    # hasExtraMesh = True
+                    # outerContinue = False
+                    # while hasExtraMesh:
+                    #     # Check if there is another mesh(es) after this one
+                    #     # without being in the offset list
+                    #     #file.seek(12, os.SEEK_CUR) # Unknown bytes
+                    #     startingPos = file.tell()
 
-            #         #     for skipV in range(0, 64):
-            #         #         U.readLong(file)
-            #         #         nextOffset = file.tell()
-            #         #         print(f"Looking for extra mesh: {nextOffset}")
-            #         #         outerContinue = False
-            #         #         if mi+1 < len(meshOffsets) and meshOffsets[mi+1] == nextOffset:
-            #         #             file.seek(startingPos, os.SEEK_SET) # Jump back to where we were
-            #         #             print(f"Next in list")
-            #         #             hasExtraMesh = False
-            #         #             outerContinue = True # Next pos is in the list
-            #         #             break
+                    #     for skipV in range(0, 64):
+                    #         U.readLong(file)
+                    #         nextOffset = file.tell()
+                    #         print(f"Looking for extra mesh: {nextOffset}")
+                    #         outerContinue = False
+                    #         if mi+1 < len(meshOffsets) and meshOffsets[mi+1] == nextOffset:
+                    #             file.seek(startingPos, os.SEEK_SET) # Jump back to where we were
+                    #             print(f"Next in list")
+                    #             hasExtraMesh = False
+                    #             outerContinue = True # Next pos is in the list
+                    #             break
 
-            #         #         # Current pos is no the next item in the list
-            #         #         # and so may be a missed mesh
+                    #         # Current pos is no the next item in the list
+                    #         # and so may be a missed mesh
 
-            #         #         headerTest = U.readLong(file) # See if the header matches ????????
-            #         #         print(f"Long: {headerTest & 0x10000000} @ {file.tell()}")
-            #         #         if headerTest & 0x10000000 >= 0x10000000:
-            #         #             hasExtraMesh = True
-            #         #         else:
-            #         #             hasExtraMesh = False
-            #         #         file.seek(startingPos, os.SEEK_SET)
-            #         #         if hasExtraMesh:
-            #         #             print(f"reading extra mesh at {nextOffset} {file.tell()}")
-            #         #             meshes += CourseMesh._fromFile(file, nextOffset)
+                    #         headerTest = U.readLong(file) # See if the header matches ????????
+                    #         print(f"Long: {headerTest & 0x10000000} @ {file.tell()}")
+                    #         if headerTest & 0x10000000 >= 0x10000000:
+                    #             hasExtraMesh = True
+                    #         else:
+                    #             hasExtraMesh = False
+                    #         file.seek(startingPos, os.SEEK_SET)
+                    #         if hasExtraMesh:
+                    #             print(f"reading extra mesh at {nextOffset} {file.tell()}")
+                    #             meshes += CourseMesh._fromFile(file, nextOffset)
                             
-            #         #     # Break outer for loop from inner
-            #         #     if outerContinue:
-            #         #             continue
-            # elif oi == 2: # 3rd Subfile
-            #     pass
-            # elif oi >= 3: # 4th Subfile
-            #     # Holds the map for showing the player position, vs others on the hud
-            #     # Might be other sub files, in ACTIONs
-            #     mapMeshes += CarMesh._fromFile(file, offset+o)
+                    #     # Break outer for loop from inner
+                    #     if outerContinue:
+                    #             continue
+            elif oi == 2: # 3rd Subfile
+                colliders.append(CourseCollider.fromFile(file, offset+o))
+            elif oi >= 3: # 4th Subfile
+                # Holds the map for showing the player position, vs others on the hud
+                # Might be other sub files, that hold moving object, e.g. doors
+                file.seek(offset+o+8, os.SEEK_SET)
+                if U.readLong(file) == 0x1000101:
+                    file.seek(os.SEEK_SET, offset+o)
+                    # No header, probably just a mesh
+                    mapMeshes += CarMesh._fromFile(file, offset+o)
+                else:
+                    # First bit is offset table as usual
+                    file.seek(offset+o, os.SEEK_SET)
+                    extra = CarModel.fromFile(file, offset+o, subFileOffsets[oi+1] - o)
+                    if oi == 4:
+                        mapMeshes += extra.meshes
+                    else:
+                        extras.append(extra)
 
 
             # TODO: parse subfile 3 & 4
         print(f"Got {len(meshes)} meshes")
-        return CourseModel("", meshes, textures, mapMeshes)
+        return CourseModel("", meshes, textures, colliders, mapMeshes, extras)
 
-class CourseMesh:
+class CourseMesh(AMesh):
 
-    def __init__(self, meshVertCount, meshVerts, meshNormals, meshUvs, meshFaces, meshColours, meshExtras):
+    def __init__(self, meshVertCount = [], meshVerts = [], meshNormals = [], meshUvs = [], meshFaces = [], meshColours = [], meshExtras = []):
         self.meshVertCount   = meshVertCount
         self.meshVerts       = meshVerts
         self.meshNormals     = meshNormals
@@ -217,14 +236,22 @@ class CourseMesh:
             if sanityCheckFlag & 0x8003 >= 0x8003:
                 # If this is missing then dont skip header, as its probably missing
                 # print("Skipping full header")
-                file.seek(44, os.SEEK_CUR) # Skip rest of unknown header
+                headBytes = ""
+                for a in range(0, 44):
+                    val = U.readByte(file)
+                    if val < 0x10:
+                        headBytes += f"0{hex(val)[2:4].upper()} "
+                    else:
+                        headBytes += f"{hex(val)[2:4].upper()} "
+                print(headBytes)
+                #file.seek(44, os.SEEK_CUR) # Skip rest of unknown header
             else:
                 print(f"Sanity check failed {file.tell()}")
         return unkw0, nullF0, meshStartFlag
     
     @staticmethod
     def _parseSubHeader(file):
-        print(f"Parsing sub head {file.tell()}")
+        # print(f"Parsing sub head {file.tell()}")
         shortHeaderType = U.readLong(file)
         skip = 44
         if shortHeaderType == 0x68058192:
@@ -234,13 +261,30 @@ class CourseMesh:
         if sanityCheckFlag & 0x8003 == 0x8003:
             # If this is missing then dont skip header, as its probably missing
             # print("Skipping full header")
-            file.seek(44, os.SEEK_CUR) # Skip rest of unknown header
+            # file.seek(44, os.SEEK_CUR) # Skip rest of unknown header
+            headBytes = ""
+            for a in range(0, 44):
+                val = U.readByte(file)
+                if val < 0x10:
+                    headBytes += f"0{hex(val)[2:4].upper()} "
+                else:
+                    headBytes += f"{hex(val)[2:4].upper()} "
+            print(f"{headBytes} {file.tell()}")
         elif sanityCheckFlag & 0x8004 == 0x8004:
             # If this is missing then dont skip header, as its probably missing
             # print("Skipping full header")
-            file.seek(skip, os.SEEK_CUR) # Skip rest of unknown header
+            # file.seek(skip, os.SEEK_CUR) # Skip rest of unknown header
+            headBytes = ""
+            for a in range(0, skip):
+                val = U.readByte(file)
+                if val < 0x10:
+                    headBytes += f"0{hex(val)[2:4].upper()} "
+                else:
+                    headBytes += f"{hex(val)[2:4].upper()} "
+            print(f"{headBytes} {file.tell()}")
         else:
-            print(f"Sanity check failed {file.tell()}")
+            print(f"SUBSanity check failed {file.tell()}")
+
         return 0, 0, 0x01000101
 
     @staticmethod
@@ -252,10 +296,11 @@ class CourseMesh:
         else:
             header = CourseMesh._parseHeader(file)
         if header[2] != 0x01000101:
-            print("Skipping mesh as no mesh marker")
+            # print("Skipping mesh, no mesh marker")
             return meshes
+
         # Read mesh
-        meshFlag  = U.readLong(file)
+        meshFlag = U.readLong(file)
 
         meshVerts = []
         meshNormals = []
@@ -266,7 +311,7 @@ class CourseMesh:
         meshVertCount = 0
 
         hasExtraMesh = True
-        # print(f"reading mesh at {file.tell()}")
+        
         # Read chunk of verticies
         while meshFlag == 0x6c018000:
             verts = [] 
@@ -310,75 +355,53 @@ class CourseMesh:
             meshColours += colours
             meshNormals += normals
             meshExtras += extras
-            # See if there are more verticies we need to read
-            meshFlag = U.readLong(file)
 
-            if subFile == 0 and meshFlag != 0x6c018000 and meshFlag & 0x68048192 >= 0x68048192: # Have seen 68058192
+            # See if there are more verticies/meshes we need to read
+            meshFlag = U.readLong(file)
+            isSubfile = subFile == 0
+            isNewMesh = meshFlag == 0x6c018000
+            isSubFlag = meshFlag & 0x68048192 >= 0x68048192 # Have seen 68058192
+            if subFile or isNewMesh:
+                # Process the next chunk as normal, and not as extras
+                continue
+
+            subFileCount = 0
+
+            # There is more data to be parsed for this chunk, treating as sub file
+            if isSubFlag: 
+                # Check for end of extras section/start of new mesh
                 while meshFlag != 0x6c018000 and meshFlag & 0x68048192 >= 0x68048192:
-                    # Contains another mesh? that is missing the first 3 longs of the usual header
-                    # Seemingly more files/more data, could be way to seperate different materials for textures
-                    print(f"Extras found @ {file.tell()}")
+                    # Contains another ?mesh? that is missing the first 3 longs of the usual header
+                    # Seemingly more files/more data, could be a way to seperate different materials for textures
+                    
                     if meshFlag == 0x68058192:
                         # Skip 
                         #file.seek(68, os.SEEK_CUR) # Skip second "header"
-                        print(f"Entering sub2 load {subFile}")
+                        # print(f"Entering sub2 load {subFile}")
                         meshes += CourseMesh._fromFile(file, file.tell()-4, scale, subFile+1)
-                        print(f"Exiting sub2 load {subFile}")
+                        subFileCount += 1
+                        # print(f"Exiting sub2 load {subFile}")
                     elif meshFlag == 0x68048192:
                         # Skip 
                         #file.seek(52, os.SEEK_CUR) # Skip second "header"
-                        print(f"Entering sub1 load {subFile}")
+                        # print(f"Entering sub1 load {subFile}")
                         meshes += CourseMesh._fromFile(file, file.tell()-4, scale, subFile+1)
-                        print(f"Exiting sub1 load {subFile}")
+                        subFileCount += 1
+                        # print(f"Exiting sub1 load {subFile}")
+                    else:
+                        print(f"SubMesh with different flag {meshFlag} @ {file.tell()}")
                     file.seek(-4, os.SEEK_CUR)
                     meshFlag = U.readLong(file)
                     
                 meshFlag = 0x6c018000 # Force reading as mesh
+                print(subFileCount)
 
             
         if meshVertCount > 0:
             meshes.append(CourseMesh(meshVertCount, meshVerts, meshNormals, meshUvs, meshFaces, meshColours, meshExtras))
-            print(f"reading mesh at {offset} done {file.tell()}")
+            # print(f"reading mesh at {offset} done {file.tell()}")
+        # print(f"len {file.tell()-offset}")
         return meshes
-
-    @staticmethod
-    def createFaceList(vertexCount, faceType=1):
-        # Creates a list of indices that order how to draw the 
-        # verticies in order of how to render the triangles
-        faces = []
-    
-        if (faceType == 1):
-            startDirection = -1
-            x = 0
-            a = 0
-            b = 0
-            
-            f1 = a + 1
-            f2 = b + 1
-            faceDirection = startDirection
-            while (x < vertexCount):
-                x += 1
-                
-                f3 = x
-                faceDirection *= -1
-                if (f1 != f2) and (f2 != f3) and (f3 != f1):
-                    if (faceDirection > 0):
-                        faces.append((f1, f2, f3))
-                    else:
-                        faces.append((f1, f3, f2))
-                f1 = f2
-                f2 = f3
-        if (faceType == 0):
-            a = 0
-            b = 0
-            c = 0
-            
-            for x in range(0, vertexCount, 3):
-                a = x
-                b = x+1
-                c = x+2
-                faces.append((a, b, c))
-        return faces
 
     def writeMeshToObj(self, fout):
         # Write verticies
@@ -473,10 +496,206 @@ class CourseMesh:
             fz = self.meshFaces[i][2]-1
             
             fout.write(f"4 {fx} {fy} {fz}\n")
-
-        # Write texture coordinates (uv)
-        #for i in range(0, len(self.meshUvs)):
-        #    tu = '{:.10f}'.format(self.meshUvs[i][0])
-        #    tv = '{:.10f}'.format(self.meshUvs[i][1])
-        #    fout.write(f"2 {tu} {tv}\n")
         
+    def writeMeshToDBG(self, fout):
+        for i in range(0, len(self.meshVerts)):
+            vx = '{:.20f}'.format(self.meshVerts[i][0])
+            vy = '{:.20f}'.format(self.meshVerts[i][1])
+            vz = '{:.20f}'.format(self.meshVerts[i][2])
+            fout.write("v " + vx + " " + vy + " " + vz + "\n")
+            nx = '{:.20f}'.format(self.meshNormals[i][0])
+            ny = '{:.20f}'.format(self.meshNormals[i][1])
+            nz = '{:.20f}'.format(self.meshNormals[i][2])
+            fout.write("vn " + nx + " " + ny + " " + nz + "\n")
+            tu = '{:.20f}'.format(self.meshUvs[i][0])
+            tv = '{:.20f}'.format(self.meshUvs[i][1])
+            tw = '{:.20f}'.format(self.meshUvs[i][2])
+            fout.write(f"vt {tu} {tv} {tw}\n")
+            cr = '{:d}'.format(math.trunc(self.meshColours[i][0]))
+            cg = '{:d}'.format(math.trunc(self.meshColours[i][1]))
+            cb = '{:d}'.format(math.trunc(self.meshColours[i][2]))
+            ca = '{:d}'.format(math.trunc(self.meshColours[i][3]))
+            fout.write(f"c {cr} {cg} {cb} {ca}\n")
+            ex = self.meshExtras[i][0]
+            ey = self.meshExtras[i][1]
+            ez = self.meshExtras[i][2]
+            fout.write(f"e {ex} {ey} {ez}\n")
+
+        for i in range(0, len(self.meshFaces)):
+            fx = self.meshFaces[i][0]
+            fy = self.meshFaces[i][1]
+            fz = self.meshFaces[i][2]
+            fout.write(f"f {fx} {fy} {fz}\n")
+
+        fout.write("#" + str(len(self.meshVerts)) + " vertices\n")            
+        fout.write("#" + str(len(self.meshUvs)) + " vertex normals\n")            
+        fout.write("#" + str(len(self.meshNormals)) + " texture vertices\n")
+        fout.write("#" + str(len(self.meshExtras)) + " texture vertices\n")
+        fout.write("#" + str(len(self.meshFaces)) + " faces\n")
+        
+
+class CourseCollider(AMesh):
+
+    def __init__(self, meshVertCount = [], meshVerts = [], meshNormals = [], meshFaces = []):
+        self.meshVertCount   = meshVertCount
+        self.meshVerts       = meshVerts
+        self.meshNormals     = meshNormals
+        self.meshFaces       = meshFaces
+
+    @staticmethod
+    def fromFile(file, offset):
+        file.seek(offset, os.SEEK_SET)
+
+        # Read in offset table and unknown table of shorts
+        offsets = []
+        for i in range(0, int(1024/4)):
+            offsets.append(U.readLong(file))
+
+        shortsTable = []
+        for i in range(0, int(512/2)):
+            shortsTable.append(U.readShort(file))
+
+        meshes = []
+        scale = 1
+        
+        # Read the mesh data between this offset and the next
+        for oi,o in enumerate(offsets[:-1]):
+            file.seek(offset + o, os.SEEK_SET)
+
+            meshVerts = []
+            meshNormals = []
+            meshUvs = []
+            meshFaces = []
+            meshColours = []
+            meshVertCount = 0
+        
+            hasMore = True
+            while hasMore:
+
+                if file.tell() >= offset+offsets[oi+1]:
+                    hasMore = False
+                    break
+                vertCount = U.readByte(file)
+                
+                if U.readByte(file) != 0x80:
+                    hasMore = False
+                    file.seek(-1, os.SEEK_CUR)
+                    print(f"probably at wrong position {file.tell()}")
+                    break
+                U.readShort(file) # always 0000
+                # Skip 12 (todo workout)
+                file.seek(12, os.SEEK_CUR)
+
+                verts = [] 
+                uvs = []
+                normals = []
+                faces = []
+
+                # Read in verticies
+                for x in range(0, vertCount):
+                    vx, vy, vz = U.readXYZ(file)
+                    vw = U.readLong(file) # 1.0f
+                    verts.append((vx * scale, vy * scale, vz * scale))
+
+                # Read in normals
+                if vertCount <= 40 and vertCount >= 3:
+                    for n in range(vertCount - 2):
+                        normals.append(U.readXYZ(file))
+                        U.readLong(file) # 1.0f
+
+                faces = CourseCollider.createFaceList(vertCount)
+                for i in range(0, len(faces)):
+                    vertices = faces[i]
+                    meshFaces.append((vertices[0] + meshVertCount, vertices[1] + meshVertCount, vertices[2] + meshVertCount))
+                
+                meshVertCount += len(verts)
+                meshVerts += verts
+                meshNormals += normals
+        return CourseCollider(meshVertCount, meshVerts, meshNormals, meshFaces)
+
+    def writeMeshToObj(self, fout):
+        # Write verticies
+        for i in range(0, len(self.meshVerts)):
+            vx = '{:.20f}'.format(self.meshVerts[i][0])
+            vy = '{:.20f}'.format(self.meshVerts[i][1])
+            vz = '{:.20f}'.format(self.meshVerts[i][2])
+            fout.write("v " + vx + " " + vy + " " + vz + "\n")
+        fout.write("#" + str(len(self.meshVerts)) + " vertices\n")
+            
+        # Write normals
+        for i in range(0, len(self.meshNormals)):
+            nx = '{:.20f}'.format(self.meshNormals[i][0])
+            ny = '{:.20f}'.format(self.meshNormals[i][1])
+            nz = '{:.20f}'.format(self.meshNormals[i][2])
+            fout.write("vn " + nx + " " + ny + " " + nz + "\n")
+        fout.write("#" + str(len(self.meshUvs)) + " vertex normals\n")
+        
+        # Write mesh face order/list
+        for i in range(0, len(self.meshFaces)):
+            fx = self.meshFaces[i][0]
+            fy = self.meshFaces[i][1]
+            fz = self.meshFaces[i][2]
+            
+            fout.write(f"f {fx}/{fx}/{fx} {fy}/{fy}/{fy} {fz}/{fz}/{fz}\n")
+        fout.write("#" + str(len(self.meshFaces)) + " faces\n")
+
+    def writeMeshToPly(self, fout):
+        # Write header
+        fout.write("ply\n")
+        fout.write("format ascii 1.0\n")
+        fout.write(f"element vertex {len(self.meshVerts)}\n")
+        fout.write("property float x\n")
+        fout.write("property float y\n")
+        fout.write("property float z\n")
+        fout.write("property float nx\n")
+        fout.write("property float ny\n")
+        fout.write("property float nz\n")
+        fout.write(f"element face {len(self.meshFaces)}\n")
+        fout.write("property list uint8 int vertex_index\n")
+        fout.write("end_header\n")
+
+        # Write verticies, normals
+        for i in range(0, len(self.meshVerts)):
+            vx = '{:.20f}'.format(self.meshVerts[i][0])
+            vy = '{:.20f}'.format(self.meshVerts[i][1])
+            vz = '{:.20f}'.format(self.meshVerts[i][2])
+
+            nx = '{:.20f}'.format(self.meshNormals[i][0])
+            ny = '{:.20f}'.format(self.meshNormals[i][1])
+            nz = '{:.20f}'.format(self.meshNormals[i][2])
+
+            fout.write(f"{vx} {vy} {vz} {nx} {ny} {nz}\n")
+        
+        # Write mesh face order/list
+        for i in range(0, len(self.meshFaces)):
+            fx = self.meshFaces[i][0]-1
+            fy = self.meshFaces[i][1]-1
+            fz = self.meshFaces[i][2]-1
+            
+            fout.write(f"4 {fx} {fy} {fz}\n")
+        
+    def writeMeshToDBG(self, fout):
+        for i in range(0, len(self.meshVerts)):
+            vx = '{:.20f}'.format(self.meshVerts[i][0])
+            vy = '{:.20f}'.format(self.meshVerts[i][1])
+            vz = '{:.20f}'.format(self.meshVerts[i][2])
+            fout.write("v " + vx + " " + vy + " " + vz + "\n")
+            nx = '{:.20f}'.format(self.meshNormals[i][0])
+            ny = '{:.20f}'.format(self.meshNormals[i][1])
+            nz = '{:.20f}'.format(self.meshNormals[i][2])
+            fout.write("vn " + nx + " " + ny + " " + nz + "\n")
+            
+            # ex = self.meshExtras[i][0]
+            # ey = self.meshExtras[i][1]
+            # ez = self.meshExtras[i][2]
+            # fout.write(f"e {ex} {ey} {ez}\n")
+
+        for i in range(0, len(self.meshFaces)):
+            fx = self.meshFaces[i][0]
+            fy = self.meshFaces[i][1]
+            fz = self.meshFaces[i][2]
+            fout.write(f"f {fx} {fy} {fz}\n")
+
+        fout.write("#" + str(len(self.meshVerts)) + " vertices\n")      
+        fout.write("#" + str(len(self.meshNormals)) + " texture vertices\n")
+        fout.write("#" + str(len(self.meshFaces)) + " faces\n")
