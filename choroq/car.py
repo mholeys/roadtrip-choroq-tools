@@ -189,7 +189,7 @@ class CarMesh(AMesh):
                     tu, tv, unkw2 = U.readXYZ(file)
                     
                     c = (cr, cg, cb, 255) # Convert to RGBA
-                    verts.append((vx * scale, vy * scale, vz * scale))
+                    verts.append((vx * -scale, vy * scale, vz * scale))
                     normals.append((nx, ny, nz))
                     colours.append(c)
                     uvs.append((tu, 1-tv, 0))
@@ -238,14 +238,14 @@ class CarMesh(AMesh):
             ny = '{:.20f}'.format(self.meshNormals[i][1])
             nz = '{:.20f}'.format(self.meshNormals[i][2])
             fout.write("vn " + nx + " " + ny + " " + nz + "\n")
-        fout.write("#" + str(len(self.meshUvs)) + " vertex normals\n")
+        fout.write("#" + str(len(self.meshNormals)) + " vertex normals\n")
         
         # Write texture coordinates (uv)
         for i in range(0, len(self.meshUvs)):
             tu = '{:.20f}'.format(self.meshUvs[i][0])
             tv = '{:.20f}'.format(self.meshUvs[i][1])
             fout.write("vt " + tu + " " + tv + "\n")
-        fout.write("#" + str(len(self.meshNormals)) + " texture vertices\n")
+        fout.write("#" + str(len(self.meshUvs)) + " texture vertices\n")
         
         # Write mesh face order/list
         for i in range(0, len(self.meshFaces)):

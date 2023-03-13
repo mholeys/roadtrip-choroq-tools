@@ -14,3 +14,8 @@ def readByte(f):
 
 def readXYZ(f):
     return (readFloat(f), readFloat(f), readFloat(f))
+
+def remove_duplicates(seq):
+    seen = set()
+    seen_add = seen.add
+    return [x for x in seq if not (x in seen or seen_add(x))]

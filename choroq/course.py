@@ -5,8 +5,8 @@
 #   Contains 4 sub files
 #     - Textures
 #     - Models
-#     - ? Has unknown info in start but second chunk is a mesh (usually the road)
-#     - Overlay map
+#     - Possibly a collision mesh, as is usually just the roads
+#     - Overlay map, or number of extra meshes such as doors/barrels
 
 # Textures:
 #
@@ -49,9 +49,11 @@
 # TODO:
 #
 # File 4: 
-# This is the mini map, used for showing player position 
+# This is often the mini map, used for showing player position 
 # on the blue track ring overlay. It can be parsed as like a car mesh, 
 # using the CarMesh class as is and will produce the map
+# There may be more than 1 file from here onwards, usually holding 
+# movable items such as doors, chests or barrels.
 
 import io
 import os
@@ -184,7 +186,7 @@ class CourseModel:
                     #     if outerContinue:
                     #             continue
             elif oi == 2: # 3rd Subfile
-                colliders.append(CourseCollider.fromFile(file, offset+o))
+                colliders += CourseCollider.fromFile(file, offset+o)
             elif oi >= 3: # 4th Subfile
                 # Holds the map for showing the player position, vs others on the hud
                 # Might be other sub files, that hold moving object, e.g. doors
@@ -336,7 +338,7 @@ class CourseMesh(AMesh):
                 tu, tv, tw = U.readXYZ(file)
                 
                 c = (cr, cg, cb, 255) # Convert to RGBA
-                verts.append((vx * scale, vy * scale, vz * scale))
+                verts.append((vx * -scale, vy * scale, vz * scale))
                 normals.append((nx, ny, nz))
                 colours.append(c)
                 extras.append((fx, fy, fz))
@@ -418,14 +420,14 @@ class CourseMesh(AMesh):
             ny = '{:.20f}'.format(self.meshNormals[i][1])
             nz = '{:.20f}'.format(self.meshNormals[i][2])
             fout.write("vn " + nx + " " + ny + " " + nz + "\n")
-        fout.write("#" + str(len(self.meshUvs)) + " vertex normals\n")
+        fout.write("#" + str(len(self.meshNormals)) + " vertex normals\n")
         
         # Write texture coordinates (uv)
         for i in range(0, len(self.meshUvs)):
             tu = '{:.20f}'.format(self.meshUvs[i][0])
             tv = '{:.20f}'.format(self.meshUvs[i][1])
             fout.write("vt " + tu + " " + tv + "\n")
-        fout.write("#" + str(len(self.meshNormals)) + " texture vertices\n")
+        fout.write("#" + str(len(self.meshUvs)) + " texture vertices\n")
         
         # Write mesh face order/list
         for i in range(0, len(self.meshFaces)):
@@ -528,8 +530,8 @@ class CourseMesh(AMesh):
             fout.write(f"f {fx} {fy} {fz}\n")
 
         fout.write("#" + str(len(self.meshVerts)) + " vertices\n")            
-        fout.write("#" + str(len(self.meshUvs)) + " vertex normals\n")            
-        fout.write("#" + str(len(self.meshNormals)) + " texture vertices\n")
+        fout.write("#" + str(len(self.meshNormals)) + " vertex normals\n")            
+        fout.write("#" + str(len(self.meshUvs)) + " texture vertices\n")
         fout.write("#" + str(len(self.meshExtras)) + " texture vertices\n")
         fout.write("#" + str(len(self.meshFaces)) + " faces\n")
         
@@ -550,14 +552,25 @@ class CourseCollider(AMesh):
         offsets = []
         for i in range(0, int(1024/4)):
             offsets.append(U.readLong(file))
+        # offsets = U.remove_duplicates(offsets)
 
         shortsTable = []
         for i in range(0, int(512/2)):
             shortsTable.append(U.readShort(file))
 
-        meshes = []
+        while offsets[-1] == offsets[-2]:
+            # Remove all duplicate ending offsets
+            offsets = offsets[:-1]
+
+        # This might be colours
+        lastOffset = U.readLong(file) # Last offset is just before the first offset's data
+        lastSize = U.readLong(file) # This is the number of floats to read
+
+        colliders = []
         scale = 1
         
+        totalVerts = 0
+
         # Read the mesh data between this offset and the next
         for oi,o in enumerate(offsets[:-1]):
             file.seek(offset + o, os.SEEK_SET)
@@ -572,7 +585,7 @@ class CourseCollider(AMesh):
             hasMore = True
             while hasMore:
 
-                if file.tell() >= offset+offsets[oi+1]:
+                if file.tell() > offset+offsets[oi+1]:
                     hasMore = False
                     break
                 vertCount = U.readByte(file)
@@ -580,30 +593,14 @@ class CourseCollider(AMesh):
                 if U.readByte(file) != 0x80:
                     hasMore = False
                     file.seek(-1, os.SEEK_CUR)
-                    print(f"probably at wrong position {file.tell()}")
+                    print(f"probably at wrong position {file.tell()} {oi} {o}")
                     break
                 U.readShort(file) # always 0000
                 # Skip 12 (todo workout)
                 file.seek(12, os.SEEK_CUR)
 
-                verts = [] 
-                uvs = []
-                normals = []
-                faces = []
-
-                # Read in verticies
-                for x in range(0, vertCount):
-                    vx, vy, vz = U.readXYZ(file)
-                    vw = U.readLong(file) # 1.0f
-                    verts.append((vx * scale, vy * scale, vz * scale))
-
-                # Read in normals
-                if vertCount <= 40 and vertCount >= 3:
-                    for n in range(vertCount - 2):
-                        normals.append(U.readXYZ(file))
-                        U.readLong(file) # 1.0f
-
-                faces = CourseCollider.createFaceList(vertCount)
+                verts, normals, faces = CourseCollider.parseChunk(file, vertCount, scale)
+                
                 for i in range(0, len(faces)):
                     vertices = faces[i]
                     meshFaces.append((vertices[0] + meshVertCount, vertices[1] + meshVertCount, vertices[2] + meshVertCount))
@@ -611,7 +608,66 @@ class CourseCollider(AMesh):
                 meshVertCount += len(verts)
                 meshVerts += verts
                 meshNormals += normals
-        return CourseCollider(meshVertCount, meshVerts, meshNormals, meshFaces)
+
+                totalVerts += len(verts)
+
+            colliders.append(CourseCollider(meshVertCount, meshVerts, meshNormals, meshFaces))
+
+            meshVerts = []
+            meshNormals = []
+            meshUvs = []
+            meshFaces = []
+            meshColours = []
+            meshVertCount = 0
+
+        
+        # Process the last chunk, x,y,z,y2 forman and re-uses x/y for doing posts/towers
+        file.seek(offset + lastOffset, os.SEEK_SET)
+        postVerticies = []
+        for i in range(int(lastSize)):
+            x = U.readFloat(file)
+            y = U.readFloat(file)
+            z = U.readFloat(file)
+            y2 = U.readFloat(file)
+            postVerticies.append((x, y, z)) # Upper post
+            postVerticies.append((x, y2, z)) # Lower post
+            
+        faces = CourseCollider.createFaceList(len(postVerticies))
+        for i in range(0, len(faces)):
+            vertices = faces[i]
+            meshFaces.append((vertices[0] + meshVertCount, vertices[1] + meshVertCount, vertices[2] + meshVertCount))
+        colliders.append(CourseCollider(len(postVerticies), postVerticies, [], meshFaces))
+
+
+        
+        # meshVertCount += len(verts)
+        # meshVerts += verts
+        # meshNormals += normals
+
+        # colliders.append(CourseCollider(meshVertCount, meshVerts, meshNormals, meshFaces))
+
+        return colliders
+
+    @staticmethod
+    def parseChunk(file, vertCount, scale):
+        verts = []
+        normals = []
+        faces = []
+
+        # Read in verticies
+        for x in range(0, vertCount):
+            vx, vy, vz = U.readXYZ(file)
+            vw = U.readLong(file) # 1.0f
+            verts.append((vx * -scale, vy * scale, vz * scale))
+
+        # Read in normals
+        if vertCount <= 40 and vertCount >= 3:
+            for n in range(vertCount-2):
+                normals.append(U.readXYZ(file))
+                U.readLong(file) # 1.0f
+
+        faces = CourseCollider.createFaceList(vertCount)
+        return verts, normals, faces
 
     def writeMeshToObj(self, fout):
         # Write verticies
@@ -628,7 +684,7 @@ class CourseCollider(AMesh):
             ny = '{:.20f}'.format(self.meshNormals[i][1])
             nz = '{:.20f}'.format(self.meshNormals[i][2])
             fout.write("vn " + nx + " " + ny + " " + nz + "\n")
-        fout.write("#" + str(len(self.meshUvs)) + " vertex normals\n")
+        fout.write("#" + str(len(self.meshNormals)) + " vertex normals\n")
         
         # Write mesh face order/list
         for i in range(0, len(self.meshFaces)):
@@ -636,7 +692,7 @@ class CourseCollider(AMesh):
             fy = self.meshFaces[i][1]
             fz = self.meshFaces[i][2]
             
-            fout.write(f"f {fx}/{fx}/{fx} {fy}/{fy}/{fy} {fz}/{fz}/{fz}\n")
+            fout.write(f"f {fx} {fy} {fz}\n")
         fout.write("#" + str(len(self.meshFaces)) + " faces\n")
 
     def writeMeshToPly(self, fout):
