@@ -15,11 +15,10 @@
 # Models:
 # Magic: 90 01 00 00
 # Followed by a offset list of models/meshes
-# !Not all meshes are in the list, and are probably sub models/meshes to split up for texture mapping!
+# !Not all meshes are in the list, and are probably sub models/meshes to split up for texture mapping
 # Some models/meshes in the list end up being:
 #    00 00 00 10 00 00 00 00 01 01 00 01 00 00 00 00 00 00 00 60 00 00 00 00 00 00 00 00 00 00 00 00
 #  Unknown reason for this "empty" version
-# Speculation: the first offset is not in the file and is fixed at x, possibly @400
 # offset list ends with 0s not eof offset
 # 
 # Each mesh is then as follows:
@@ -132,15 +131,26 @@ class CourseModel:
                     print(f"nextTexture {nextTexture}")
                 print(file.tell())
                 
-            elif magic == 0x190:
+            elif oi == 1:
+                continue
                 pass
                 # Subfile is meshes/models
                 print(f"Parsing meshes at {offset+o}")
-                # Parse mesh offset list, 0 == end of list
+                # Parse mesh offset list
                 meshOffsets = []
-                meshOffsets.append(U.readLong(file))
-                while meshOffsets[-1] != 0:
-                    meshOffsets.append(U.readLong(file))
+                nextOffset = U.readLong(file)
+                meshOffsets.append(nextOffset)
+                nextOffset = U.readLong(file)
+                while nextOffset >= meshOffsets[-1]:
+                    meshOffsets.append(nextOffset)
+                    nextOffset = U.readLong(file)
+                # Go back as this is not an offset
+                file.seek(-4, os.SEEK_CUR)
+
+                shorts = []
+                for j in range(65):
+                    shorts.append(U.readShort(file))
+
                 # Parse each mesh
                 print(meshOffsets)
                 print(len(meshOffsets))
@@ -186,8 +196,10 @@ class CourseModel:
                     #     if outerContinue:
                     #             continue
             elif oi == 2: # 3rd Subfile
+                continue
                 colliders += CourseCollider.fromFile(file, offset+o)
             elif oi >= 3: # 4th Subfile
+                continue
                 # Holds the map for showing the player position, vs others on the hud
                 # Might be other sub files, that hold moving object, e.g. doors
                 file.seek(offset+o+8, os.SEEK_SET)
@@ -205,7 +217,6 @@ class CourseModel:
                         extras.append(extra)
 
 
-            # TODO: parse subfile 3 & 4
         print(f"Got {len(meshes)} meshes")
         return CourseModel("", meshes, textures, colliders, mapMeshes, extras)
 
@@ -226,10 +237,11 @@ class CourseMesh(AMesh):
         nullF0 = U.readLong(file)
         meshStartFlag = U.readLong(file)
         if meshStartFlag != 0x01000101:
-            print(f"Mesh's start flag is different {meshStartFlag} from usual, continuing")
+            pass
+            #print(f"Mesh's start flag is different {meshStartFlag} from usual, continuing")
         unkw1 = U.readLong(file)
         if unkw1 == 0x6C018000:
-            print(f"Got data marker {file.tell()}")
+            #print(f"Got data marker {file.tell()}")
             # Odd version, just has data with very short header
             file.seek(-4, os.SEEK_CUR)
         else:
@@ -245,7 +257,7 @@ class CourseMesh(AMesh):
                         headBytes += f"0{hex(val)[2:4].upper()} "
                     else:
                         headBytes += f"{hex(val)[2:4].upper()} "
-                print(headBytes)
+                #print(headBytes)
                 #file.seek(44, os.SEEK_CUR) # Skip rest of unknown header
             else:
                 print(f"Sanity check failed {file.tell()}")
@@ -271,7 +283,7 @@ class CourseMesh(AMesh):
                     headBytes += f"0{hex(val)[2:4].upper()} "
                 else:
                     headBytes += f"{hex(val)[2:4].upper()} "
-            print(f"{headBytes} {file.tell()}")
+            #print(f"{headBytes} {file.tell()}")
         elif sanityCheckFlag & 0x8004 == 0x8004:
             # If this is missing then dont skip header, as its probably missing
             # print("Skipping full header")
@@ -283,7 +295,7 @@ class CourseMesh(AMesh):
                     headBytes += f"0{hex(val)[2:4].upper()} "
                 else:
                     headBytes += f"{hex(val)[2:4].upper()} "
-            print(f"{headBytes} {file.tell()}")
+            #print(f"{headBytes} {file.tell()}")
         else:
             print(f"SUBSanity check failed {file.tell()}")
 
