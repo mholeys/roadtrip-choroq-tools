@@ -212,7 +212,7 @@ class CarMesh(AMesh):
                 meshes.append(CarMesh(meshVertCount, meshVerts, meshNormals, meshUvs, meshFaces, meshColours))
         return meshes
 
-    def writeMeshToDBG(self, fout):
+    def writeMeshToDBG(self, fout, startIndex = 0):
         self.writeMeshToObj(fout)
         fout.write("#" + str(len(self.meshColours)) + " colours R/G/B/A\n")
         for i in range(0, len(self.meshFaces)):
@@ -222,8 +222,10 @@ class CarMesh(AMesh):
             ca = '{:d}'.format(math.trunc(self.meshColours[i][3]))
             
             fout.write(f"c {cr} {cg} {cb} {ca}\n")
+        
+        return len(self.meshVerts)
 
-    def writeMeshToObj(self, fout):
+    def writeMeshToObj(self, fout, startIndex = 0):
         # Write verticies
         for i in range(0, len(self.meshVerts)):
             vx = '{:.20f}'.format(self.meshVerts[i][0])
@@ -249,14 +251,52 @@ class CarMesh(AMesh):
         
         # Write mesh face order/list
         for i in range(0, len(self.meshFaces)):
-            fx = self.meshFaces[i][0]
-            fy = self.meshFaces[i][1]
-            fz = self.meshFaces[i][2]
+            fx = self.meshFaces[i][0] + startIndex
+            fy = self.meshFaces[i][1] + startIndex
+            fz = self.meshFaces[i][2] + startIndex
             
             fout.write(f"f {fx}/{fx}/{fx} {fy}/{fy}/{fy} {fz}/{fz}/{fz}\n")
         fout.write("#" + str(len(self.meshFaces)) + " faces\n")
+    
+        return len(self.meshVerts)
 
-    def writeMeshToPly(self, fout):
+    def writeMeshToComb(self, fout, startIndex = 0):
+        fout.write(f"vertex_count {len(self.meshVerts)}\n")
+        fout.write(f"face_count {len(self.meshFaces)}\n")
+        fout.write("end_header\n")
+
+        # Write verticies, colours, normals
+        for i in range(0, len(self.meshVerts)):
+            vx = '{:.20f}'.format(self.meshVerts[i][0])
+            vy = '{:.20f}'.format(self.meshVerts[i][1])
+            vz = '{:.20f}'.format(self.meshVerts[i][2])
+
+            cr = '{:d}'.format(math.trunc(self.meshColours[i][0]))
+            cg = '{:d}'.format(math.trunc(self.meshColours[i][1]))
+            cb = '{:d}'.format(math.trunc(self.meshColours[i][2]))
+            ca = '{:d}'.format(math.trunc(self.meshColours[i][3]))
+
+            nx = '{:.20f}'.format(self.meshNormals[i][0])
+            ny = '{:.20f}'.format(self.meshNormals[i][1])
+            nz = '{:.20f}'.format(self.meshNormals[i][2])
+
+            tu = '{:.10f}'.format(self.meshUvs[i][0])
+            tv = '{:.10f}'.format(self.meshUvs[i][1])
+
+            fout.write(f"{vx} {vy} {vz} {nx} {ny} {nz} {cr} {cg} {cb} {ca} {tu} {tv}\n")
+        
+        # Write mesh face order/list
+        for i in range(0, len(self.meshFaces)):
+            fx = self.meshFaces[i][0]-1 + startIndex
+            fy = self.meshFaces[i][1]-1 + startIndex
+            fz = self.meshFaces[i][2]-1 + startIndex
+            
+            fout.write(f"4 {fx} {fy} {fz}\n")
+        
+        return len(self.meshVerts)
+
+
+    def writeMeshToPly(self, fout, startIndex = 0):
         # Write header
         fout.write("ply\n")
         fout.write("format ascii 1.0\n")
@@ -301,9 +341,11 @@ class CarMesh(AMesh):
         
         # Write mesh face order/list
         for i in range(0, len(self.meshFaces)):
-            fx = self.meshFaces[i][0]-1
-            fy = self.meshFaces[i][1]-1
-            fz = self.meshFaces[i][2]-1
+            fx = self.meshFaces[i][0]-1 + startIndex
+            fy = self.meshFaces[i][1]-1 + startIndex
+            fz = self.meshFaces[i][2]-1 + startIndex
             
             fout.write(f"4 {fx} {fy} {fz}\n")
+
+        return len(self.meshVerts)
         

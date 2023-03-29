@@ -6,14 +6,21 @@ class AMesh(ABC):
     # The format includes Verticies, Vertex Normals, 
     # Texture coords and Faces
     @abstractmethod
-    def writeMeshToObj(self, fout):
+    def writeMeshToObj(self, fout, startIndex = 0):
         pass
 
-    # Creates OBJ file, of the meshes in custom format to include colours
+    # Custom file format for use in importing into unity
+    # Based on the ply format, but without any compatability, and no header.
+    # Needed in order to store all meshes in single file
+    @abstractmethod
+    def writeMeshToComb(self, fout, startIndex = 0):
+        pass
+
+    # Creates PLY file, of the meshes in custom format to include colours
     # The format includes Verticies, Vertex Normals, 
     # Vertex colours, Texture coords and Faces
     @abstractmethod
-    def writeMeshToPly(self, fout):
+    def writeMeshToPly(self, fout, startIndex = 0):
         pass
 
     # Creates a file with all available data from the file, usually in an
@@ -22,18 +29,20 @@ class AMesh(ABC):
     # This may match the OBJ file if everything is understood 
     # (Data may be missing in obj format)
     @abstractmethod
-    def writeMeshToDBG(self, fout):
+    def writeMeshToDBG(self, fout, startIndex = 0):
         pass
 
-    def writeMeshToType(self, type, fout):
+    def writeMeshToType(self, type, fout, startIndex = 0):
         type = type.lower()
         if type == "dbg":
-            self.writeMeshToDBG(fout)
+            return self.writeMeshToDBG(fout, startIndex)
         elif type == "obj":
-            self.writeMeshToObj(fout)
+            return self.writeMeshToObj(fout, startIndex)
+        elif type == "comb":
+            return self.writeMeshToComb(fout, startIndex)
         else:
             # Default to ply
-            self.writeMeshToPly(fout)
+            return self.writeMeshToPly(fout, startIndex)
     
 
     # Creates a list of indices that order how to draw the 
