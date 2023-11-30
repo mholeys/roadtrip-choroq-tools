@@ -160,6 +160,7 @@ class Course():
     def _parsePart(file, scale):        
         dataType = U.readLong(file)
         if dataType == 0x6C018000:
+            print(f"READING \"MESH\" AT {file.tell()-4}")
             # This is mesh data
             verts = [] 
             uvs = []
@@ -170,17 +171,55 @@ class Course():
             vertCount = U.readByte(file)
             unkw1 = U.readByte(file)
             zeroF1 = U.readShort(file)
-            # Skip 16 bytes as we dont know what they are used for
-            file.seek(0x10, os.SEEK_CUR)
+            # Skip 12 bytes as we dont know what they are used for
+            file.seek(0xC, os.SEEK_CUR)
+            meshFormatVar = U.readLong(file)
+
+            # in groups of three floats
+            meshDataLength = (meshFormatVar & 0x00FF0000) >> 16
+            # Convert to number of bytes
+            meshDataLength = meshDataLength * 3 * 4 
+
+            numberOfExtra = 0
+            # Most mesh data is 60 bytes long per vertex
+            # eqiv to 5 * 3 floats per vertex
+            if meshDataLength != 60 * vertCount:
+                # Mesh data is different size to usual
+                # more or less bytes per vertex
+                # This is used for billboards (e.g trees)
+                numberOfExtra = int((meshDataLength - vertCount * 60) / 4)
+                print(f"Found unknown mesh format {meshFormatVar} {file.tell()} {meshDataLength / vertCount}")
+                print(f"Number of extra bytes {numberOfExtra}")
+                if numberOfExtra < 0:
+                    print(f"Found unknown smaller mesh format {numberOfExtra}")
+                    exit(51)
+
+            xOffset = 0
+            yOffset = 0
+            zOffset = 0
+            if numberOfExtra == 3: 
+                # This is a billboard, and uses a preset x,y,z before rest of data
+                # Starting position
+                xOffset = U.readFloat(file)
+                yOffset = U.readFloat(file)
+                zOffset = U.readFloat(file)
+            elif numberOfExtra != 0:
+                print(f"Offset theory doesnt work {numberOfExtra} != 3")
+                exit(50)
+
             for x in range(0, vertCount):
                 vx, vy, vz = U.readXYZ(file)
+                if numberOfExtra == 3:
+                    vx += xOffset
+                    vy += yOffset
+                    vz += zOffset
 
                 fx, fy, fz = U.readXYZ(file) # possibly emission info (light)
                 nx, ny, nz = U.readXYZ(file) # Are normals 
                 cr, cg, cb = U.readXYZ(file) # Are colours
                 tu, tv, tw = U.readXYZ(file) # Are texture coords
+
                 if fx > 255 or fy > 255 or fz > 255:
-                    sys.stdout = sys.__stdout__
                     print("Found value > 255")
                     print(f"{fx} {fy} {fz}")
                     print(f"{nx} {ny} {nz}")
@@ -193,7 +232,8 @@ class Course():
                 colours.append(c)
                 extras.append((fx, fy, fz))
                 uvs.append((tu, 1-tv, tw))
-            unkw3 = U.readShort(file) # 0x0008
+            
+            unkw3 = U.readShort(file) # 0x0008 not when numberOfExtra != 0
             unkw4 = U.readShort(file) # 0x1500
 
             faces = CourseMesh.createFaceList(vertCount)
@@ -202,40 +242,89 @@ class Course():
 
             return "mesh", mesh
         elif dataType & 0xFF00FFFF == 0x68008192: 
+            # Data section is labelled as DATA as I dont know what it is
+            data = []
+            data.append(dataType)
             # Unknown data type/use
             subType = (dataType & 0x00FF0000) >> 16 # Seen 04 and 05
 
             count = U.readByte(file) # Think length is count*3*4 bytes
-            U.readByte(file) # always 80
-            U.readShort(file) # always 0000
+            const80 = U.readByte(file) # always 80
+            constNull = U.readShort(file) # always 0000
+            data.append((count & 0xFF) | ((const80 & 0xFF) << 8) | ((constNull & 0xFFFF) << 16))
             unknown1 = U.readLong(file) # Usually 0x10000000
             unknown2 = U.readLong(file) # Usually 0x0000000E
+            data.append(unknown1)
+            data.append(unknown2)
             
             # Think data starts at this point
-            data = []
             for x in range(count):
                 d1 = U.readLong(file)
                 d2 = U.readLong(file)
                 d3 = U.readLong(file)
-                data.append((d1, d2, d3))
+                data.append(d1)
+                data.append(d2)
+                data.append(d3)
+
             return "data", data
         else:
             print(f"Found new data type {dataType} {file.tell()}")
             return "err", []
 
-    def _parseExtraPart(file, offset):
-        # Parse special end file, that contains x, y1, z, y2
-        # re-uses x/y for doing posts/towers
-        postVerticies = []
-        for i in range(int(lastSize)):
-            x = U.readFloat(file)
-            y = U.readFloat(file)
-            z = U.readFloat(file)
-            y2 = U.readFloat(file)
-            postVerticies.append((x, y, z)) # Upper post
-            postVerticies.append((x, y2, z)) # Lower post
-        
+    def _parseChunk(file, offset, count, scale):
+        # Read chunk header
+        file.seek(offset, os.SEEK_SET)
 
+        print(f"Reading chunk @ {file.tell()} {offset}")
+        unknown0 = U.readLong(file)
+        nullF0 = U.readLong(file)
+        meshStartFlag = U.readLong(file)
+        if meshStartFlag != 0x01000101:
+            print(f"Mesh's start flag is different {meshStartFlag} @{file.tell()}")
+            exit(2)
+
+        meshes = []
+        data = []
+
+        nextDataType = U.readLong(file)
+        file.seek(-4, os.SEEK_CUR)
+        while nextDataType & 0xFF000000 > 0x60000000:
+            dataType, result = Course._parsePart(file, scale)
+            if dataType == "mesh":
+                meshes.append(result)
+            elif dataType == "data":
+                data.append(result)
+            else:
+                print(f"ERR")
+                print(f"z{z}, x{x} Got {len(meshes)} meshses")
+                print(f"z{z}, x{x} Got {len(data)} data")
+                print(f"{file.tell()}")
+                print(f"last {nextDataType}")
+                exit(2)
+            nextDataType = U.readLong(file)
+            # Unusual cases
+            if nextDataType == 0:
+                # where theres a gap in the data
+                file.seek(8, os.SEEK_CUR)
+                meshTest = U.readLong(file)
+                if meshTest == 0x01000101:
+                    nextDataType = U.readLong(file)
+                    file.seek(-4, os.SEEK_CUR)
+                    print(f"Special case @ {file.tell()}")
+            elif nextDataType == 0x3F666666: 
+                # Unusual case, with special marker
+                # Data seems to continue?
+                file.seek(-4, os.SEEK_CUR)
+            else:
+                file.seek(-4, os.SEEK_CUR)
+            
+        print(f"Last dataType {nextDataType}")
+        print(f"shorts {len(meshes)} == {count}: {len(meshes) == count}")
+        if len(meshes) != count:
+            print("Got different lengths")
+            # exit(22)
+        print(f"Done chunks @ {file.tell()}")
+        return (meshes, data)
             
     @staticmethod
     def _fromFile(file, offset, scale=1):
@@ -248,7 +337,6 @@ class Course():
             for x in range(0, 8):
                 chunkOffsets.append(U.readLong(file))
         extraOffset = U.readLong(file)
-        chunkOffsets.append(extraOffset)
 
         # Number of sub files/meshes in chunk
         # This is not used in this script
@@ -256,7 +344,6 @@ class Course():
         for j in range(64):
             shorts.append(U.readShort(file))
         extraShort = U.readShort(file)
-        shorts.append(extraShort)
 
         print(f"Read end of table @ {file.tell()}")
         print(f"Reading Chunks from {offset+chunkOffsets[0]}")
@@ -264,64 +351,19 @@ class Course():
         for z in range(0, 8):
             zRow = []
             xLimit = 8
-            if z == 7:
-                # Used to process the extra bit at the end that is not in a chunk
-                xLimit = 9
             for x in range(0, xLimit):
                 index = x + z * 8
-                print(f"reading chunk {index} z{z} x{x}")
-                meshes = []
-                data = []
-                
-                # Read chunk header
-                file.seek(offset+chunkOffsets[index], os.SEEK_SET)
-                print(f"Reading chunk @ {file.tell()} {offset}+{chunkOffsets[index]}")
-                unknown0 = U.readLong(file)
-                nullF0 = U.readLong(file)
-                meshStartFlag = U.readLong(file)
-                if meshStartFlag != 0x01000101:
-                    print(f"Mesh's start flag is different {meshStartFlag} @{file.tell()}")
-                    exit(2)
-
-                nextDataType = U.readLong(file)
-                file.seek(-4, os.SEEK_CUR)
-                while nextDataType & 0xFF000000 > 0x60000000:
-                    dataType, result = Course._parsePart(file, scale)
-                    if dataType == "mesh":
-                        meshes.append(result)
-                    elif dataType == "data":
-                        data.append(result)
-                    else:
-                        print(f"ERR")
-                        print(f"z{z}, x{x} Got {len(meshes)} meshses")
-                        print(f"z{z}, x{x} Got {len(data)} data")
-                        print(f"{file.tell()}")
-                        print(f"last {nextDataType}")
-                        exit(2)
-                    nextDataType = U.readLong(file)
-                    # Unusual case where theres a gap in the data and a 
-                    if nextDataType == 0:
-                        file.seek(8, os.SEEK_CUR)
-                        meshTest = U.readLong(file)
-                        if meshTest == 0x01000101:
-                            nextDataType = U.readLong(file)
-                            file.seek(-4, os.SEEK_CUR)
-                            print(f"Special case @ {file.tell()}")
-                    else:
-                        file.seek(-4, os.SEEK_CUR)
-                    
-                    
-                chunk = (meshes, data)
+                print(f"Reading chunk {index} z{z} x{x}")
+                chunk = Course._parseChunk(file, offset+chunkOffsets[index], shorts[index], scale)
                 zRow.append(chunk)
-                print(f"z{z}, x{x} Got {len(meshes)} meshses")
-                print(f"z{z}, x{x} Got {len(data)} data")
-                print(f"{file.tell()}")
-                print(f"last {nextDataType}")
-                # exit(1)
-                print(f"shorts {len(meshes)} == {shorts[index]}: {len(meshes) == shorts[index]}")
             chunks.append(zRow)
-
-        # TODO: invstigate rest/extra offset
+        
+        # Process the extra part of the course
+        # This is usually used in fields to hold the windows
+        # This allows the windows to light up at night
+        print(f"extraOffset {offset+extraOffset} {extraOffset} {extraShort} but at @ {file.tell()}")
+        extraChunk = Course._parseChunk(file, offset+extraOffset, extraShort, scale)
+        chunks.append([extraChunk])
 
         return Course(chunks, chunkOffsets, shorts)
 

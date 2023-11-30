@@ -24,6 +24,10 @@ The course and field files contain multiple sub-files:
   - This is the level data, which holds all the details on the model shape
   - I think the extra vertex data contains information about lighting
   - The models offsets are listed at the start of this sub-file
+  - After the last chunk, there is another group of models
+    - This holds the water mesh (top layer) for rivers
+    - This holds windows for fields (to light up at night)
+    - And billboards, which use a slightly modified layout for the mesh structure, with x/y/z starting points before the usual format
 - Possibly a collision mesh, as is usually just the roads
   - I am unsure on the use of these files, I would suspect it has something to do with physics or collisions, I suspect this allows the game to treat different surfaces with different grip
   - The course files seem to only use this to hold a copy of the road
