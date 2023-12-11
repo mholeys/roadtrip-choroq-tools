@@ -28,15 +28,15 @@ class Texture:
         print(f"TextType: {typeF}")
         
         imageFormat = U.readByte(file)
-        unkn1 = U.readByte(file) # Could be 64 = odd sizes
+        unkn1 = U.BreadByte(file) # Could be 64 = odd sizes
         if unkn1 == 0xFF:
             # This is a palette
             return 0,0,0,0
         print(f"Unknown1: {unkn1}")
-        unkn2 = U.readByte(file)
+        unkn2 = U.BreadByte(file)
 
-        nullPad = U.readLong(file)
-        unkn3 = U.readShort(file)
+        nullPad = U.BreadLong(file)
+        unkn3 = U.BreadShort(file)
 
         if typeF == 0 or typeF == 128:
             # Usual file format
@@ -204,7 +204,7 @@ class Texture:
         
         fB = U.readByte(file) #  Often 0xX6 where x could be something
 
-        U.readByte(file)
+        U.BreadByte(file)
         ffCheck = U.readByte(file)
         if ffCheck & 0xFF != 0xFF:
             # This is not a palette, image probably doesn't use one
@@ -230,7 +230,7 @@ class Texture:
         if endLong == 0x60:
             thisPaletteSize = thisPaletteSize >> 1
 
-        nullB = U.readByte(file)
+        nullB = U.BreadByte(file)
 
         print(f"Palette size: {psize[0]}x{psize[1]}px colourSize: {colourSize} numColours: {thisPaletteSize}")
         
@@ -341,9 +341,9 @@ class Texture:
     def _readTexture(file, length, bpp=8):
         texture = 0
         if bpp == 24:
-            texture = file.read(length)
+            texture = U.read(file, length)
         elif bpp == 8:
-            texture = file.read(length)
+            texture = U.read(file, length)
         elif bpp == 4:
             texData = []
             for i in range(0, int(length)):

@@ -98,7 +98,7 @@ class CourseModel:
                 # At end of file
                 break
             file.seek(offset+o, os.SEEK_SET)
-            magic = U.readLong(file)
+            magic = U.BreadLong(file)
             file.seek(offset+o, os.SEEK_SET)
             print(f"offset {offset + o} magic :{magic}")
             
@@ -157,7 +157,7 @@ class Course():
         self.shorts = shorts
 
     @staticmethod
-    def _parsePart(file, scale):        
+    def _parsePart(file, scale):
         dataType = U.readLong(file)
         if dataType == 0x6C018000:
             print(f"READING \"MESH\" AT {file.tell()-4}")
@@ -169,8 +169,8 @@ class Course():
             colours = []
             extras = []
             vertCount = U.readByte(file)
-            unkw1 = U.readByte(file)
-            zeroF1 = U.readShort(file)
+            unkw1 = U.BreadByte(file)
+            zeroF1 = U.BreadShort(file)
             # Skip 12 bytes as we dont know what they are used for
             file.seek(0xC, os.SEEK_CUR)
             meshFormatVar = U.readLong(file)
@@ -215,7 +215,13 @@ class Course():
                     vz += zOffset
 
                 fx, fy, fz = U.readXYZ(file) # possibly emission info (light)
-                nx, ny, nz = U.readXYZ(file) # Are normals 
+                # I suspect there is no real time lighting for world meshes and so no normals
+                # Writing to normals for easy parsing
+                nx = opacity = U.readFloat(file) # 1 = opaque, 0 = see through (mostly like watery, used for rivers?)
+                ny = U.readFloat(file) # Unknown # Theses are usually ~100f 70-120 ish
+                nz = U.readFloat(file) # Unknown
+                
+                # Red and green work, unsure on blue, probably blue works fine
                 cr, cg, cb = U.readXYZ(file) # Are colours
                 tu, tv, tw = U.readXYZ(file) # Are texture coords
 
@@ -226,15 +232,15 @@ class Course():
                     print(f"{cr} {cg} {cb}")
                     # exit(1)
                 
-                c = (cr, cg, cb, 255) # Convert to RGBA
+                c = (cr, cg, cb, 255 * opacity) # Convert to RGBA
                 verts.append((vx * scale, vy * scale, vz * scale))
                 normals.append((nx, ny, nz))
                 colours.append(c)
                 extras.append((fx, fy, fz))
                 uvs.append((tu, 1-tv, tw))
             
-            unkw3 = U.readShort(file) # 0x0008 not when numberOfExtra != 0
-            unkw4 = U.readShort(file) # 0x1500
+            unkw3 = U.BreadShort(file) # 0x0008 not when numberOfExtra != 0
+            unkw4 = U.BreadShort(file) # 0x1500
 
             faces = CourseMesh.createFaceList(vertCount)
 
@@ -243,46 +249,102 @@ class Course():
             return "mesh", mesh
         elif dataType & 0xFF00FFFF == 0x68008192: 
             # Data section is labelled as DATA as I dont know what it is
+            # it usually contains texture info, and other unknown data
             data = []
-            data.append(dataType)
             # Unknown data type/use
             subType = (dataType & 0x00FF0000) >> 16 # Seen 04 and 05
 
             count = U.readByte(file) # Think length is count*3*4 bytes
-            const80 = U.readByte(file) # always 80
-            constNull = U.readShort(file) # always 0000
-            data.append((count & 0xFF) | ((const80 & 0xFF) << 8) | ((constNull & 0xFFFF) << 16))
-            unknown1 = U.readLong(file) # Usually 0x10000000
-            unknown2 = U.readLong(file) # Usually 0x0000000E
-            data.append(unknown1)
-            data.append(unknown2)
+            const80 = U.BreadByte(file) # always 80
+            constNull = U.BreadShort(file) # always 0000
+            unknown1 = U.BreadLong(file) # Usually 0x10000000
+            unknown2 = U.BreadLong(file) # Usually 0x0000000E
             
-            # Think data starts at this point
-            for x in range(count):
-                d1 = U.readLong(file)
-                d2 = U.readLong(file)
-                d3 = U.readLong(file)
-                data.append(d1)
-                data.append(d2)
-                data.append(d3)
+            if count >= 3:
+                U.BreadLong(file)
+                U.BreadLong(file)
+                U.BreadLong(file)
+
+                # Texture reference is here, unsure how it wokrs
+                # I think this could be a texture load register for GIF or similar
+
+                # Seems to be texture reference, changes texture
+                textureReferenceFirst = U.readLong(file)
+                # Seems to relate to colours/CLUT?, texture stays roughly the same
+                textureReferenceSecond = U.readLong(file)
+                unknown4 = U.readLong(file) # Always 7 so far
+                if unknown4 != 7:
+                    print(f"Found new unknown4 texture reference @ {file.tell()}")
+
+                textureType = U.readLong(file)
+
+                data.append(textureReferenceFirst)
+                data.append(textureReferenceSecond) 
+                data.append(textureType)
+
+                # Following is what works so far
+                if textureType == 0:
+                    pass
+                elif textureType == 1:
+                    pass
+                elif textureType == 4:
+                    # Non transparent texture
+                    pass
+                elif textureType == 5:
+                    # Transparent texture
+                    pass
+                else:
+                    # Unknown variation
+                    print(F"Found new data texture reference type @ {file.tell()-4}")
+                    exit(60)
+
+                U.BreadLong(file) # 0 Always
+                U.BreadLong(file) # 9 Always
+
+                if count > 3:
+                    for x in range(count-3):
+                        d1 = U.BreadLong(file)
+                        d2 = U.BreadLong(file)
+                        d3 = U.BreadLong(file)
+                        # data.append(d1)
+                        # data.append(d2)
+                        # data.append(d3)
+
+            else:
+                print(f"New mesh \"Data\" type @ {file.tell()} 03 probably should be at this address")
+                for x in range(count):
+                    d1 = U.BreadLong(file)
+                    d2 = U.BreadLong(file)
+                    d3 = U.BreadLong(file)
+                    data.append(d1)
+                    data.append(d2)
+                    data.append(d3)
+                exit(61)
 
             return "data", data
         else:
             print(f"Found new data type {dataType} {file.tell()}")
             return "err", []
 
+
+    currentDataIndex = 0
+
+    @staticmethod
     def _parseChunk(file, offset, count, scale):
         # Read chunk header
         file.seek(offset, os.SEEK_SET)
 
         print(f"Reading chunk @ {file.tell()} {offset}")
-        unknown0 = U.readLong(file)
-        nullF0 = U.readLong(file)
+        unknown0 = U.BreadLong(file)
+        nullF0 = U.BreadLong(file)
         meshStartFlag = U.readLong(file)
         if meshStartFlag != 0x01000101:
             print(f"Mesh's start flag is different {meshStartFlag} @{file.tell()}")
             exit(2)
 
+        meshesByData = {}
+        currentMeshes = []
+        currentData = None
         meshes = []
         data = []
 
@@ -291,8 +353,13 @@ class Course():
         while nextDataType & 0xFF000000 > 0x60000000:
             dataType, result = Course._parsePart(file, scale)
             if dataType == "mesh":
+                currentMeshes.append(result)
                 meshes.append(result)
             elif dataType == "data":
+                meshesByData[Course.currentDataIndex] = (result, currentMeshes)
+                currentMeshes = []
+                currentData = result
+                Course.currentDataIndex += 1
                 data.append(result)
             else:
                 print(f"ERR")
@@ -324,7 +391,7 @@ class Course():
             print("Got different lengths")
             # exit(22)
         print(f"Done chunks @ {file.tell()}")
-        return (meshes, data)
+        return ((meshes, data), meshesByData)
             
     @staticmethod
     def _fromFile(file, offset, scale=1):
@@ -388,6 +455,7 @@ class CourseMesh(AMesh):
             fout.write("v " + vx + " " + vy + " " + vz + "\n")
         fout.write("#" + str(len(self.meshVerts)) + " vertices\n")
             
+        # Course meshes have no normals, but swapped with other data
         # Write normals
         for i in range(0, len(self.meshNormals)):
             nx = '{:.20f}'.format(self.meshNormals[i][0])
@@ -429,6 +497,10 @@ class CourseMesh(AMesh):
             cb = '{:d}'.format(math.trunc(self.meshColours[i][2]))
             ca = '{:d}'.format(math.trunc(self.meshColours[i][3]))
 
+            ex = '{:.20f}'.format(self.meshExtras[i][0])
+            ey = '{:.20f}'.format(self.meshExtras[i][1])
+            ez = '{:.20f}'.format(self.meshExtras[i][2])
+
             nx = '{:.20f}'.format(self.meshNormals[i][0])
             ny = '{:.20f}'.format(self.meshNormals[i][1])
             nz = '{:.20f}'.format(self.meshNormals[i][2])
@@ -436,7 +508,7 @@ class CourseMesh(AMesh):
             tu = '{:.10f}'.format(self.meshUvs[i][0])
             tv = '{:.10f}'.format(self.meshUvs[i][1])
 
-            fout.write(f"{vx} {vy} {vz} {nx} {ny} {nz} {cr} {cg} {cb} {ca} {tu} {tv}\n")
+            fout.write(f"{vx} {vy} {vz} {ex} {ey} {ez} {nx} {ny} {nz} {cr} {cg} {cb} {ca} {tu} {tv}\n")
         
         # Write mesh face order/list
         for i in range(0, len(self.meshFaces)):
@@ -492,6 +564,7 @@ class CourseMesh(AMesh):
             cb = '{:d}'.format(math.trunc(self.meshColours[i][2]))
             ca = '{:d}'.format(math.trunc(self.meshColours[i][3]))
 
+            # Normals are not here, this is different data
             nx = '{:.20f}'.format(self.meshNormals[i][0])
             ny = '{:.20f}'.format(self.meshNormals[i][1])
             nz = '{:.20f}'.format(self.meshNormals[i][2])
@@ -518,6 +591,7 @@ class CourseMesh(AMesh):
             vy = '{:.20f}'.format(self.meshVerts[i][1])
             vz = '{:.20f}'.format(self.meshVerts[i][2])
             fout.write("v " + vx + " " + vy + " " + vz + "\n")
+            # Normals are not here, this is different data
             nx = '{:.20f}'.format(self.meshNormals[i][0])
             ny = '{:.20f}'.format(self.meshNormals[i][1])
             nz = '{:.20f}'.format(self.meshNormals[i][2])
@@ -626,8 +700,8 @@ class CourseCollider(AMesh):
                 while count < shorts[index]:
                     print(f"Reading collider chunk {z} {x} {index} from: {file.tell()}")
                     vertCount = U.readByte(file)
-                    U.readByte(file) # always 0x80
-                    U.readShort(file) # always 0x0000
+                    U.BreadByte(file) # always 0x80
+                    U.BreadShort(file) # always 0x0000
                     # Skip 12 (todo workout)
                     file.seek(12, os.SEEK_CUR)
 
@@ -644,6 +718,8 @@ class CourseCollider(AMesh):
                     totalVerts += len(verts)
                     count += 1
                 print(f"Got {meshVertCount} {count} vs {shorts[index]}")
+                if count != shorts[index]:
+                    print(f"Number of colliders read is different")
                 colliders.append(CourseCollider(meshVertCount, meshVerts, meshNormals, meshFaces))
         
         file.seek(offset + lastOffset, os.SEEK_SET)
@@ -677,14 +753,14 @@ class CourseCollider(AMesh):
         # Read in verticies
         for x in range(0, vertCount):
             vx, vy, vz = U.readXYZ(file)
-            vw = U.readLong(file) # 1.0f
+            vw = U.BreadLong(file) # 1.0f
             verts.append((vx * scale, vy * scale, vz * scale))
 
         # Read in normals
         if vertCount <= 40 and vertCount >= 3:
             for n in range(vertCount-2):
                 normals.append(U.readXYZ(file))
-                U.readLong(file) # 1.0f
+                U.BreadLong(file) # 1.0f
             
             normals.append(normals[-1])
             normals.append(normals[-1])
