@@ -70,6 +70,7 @@ class Texture:
             else:
                 print(f"Found new bpp check value {bppCheckRaw}")
                 exit(1)
+            print(f"BPP {bppCheckRaw}")
 
             file.seek(offset+0x44, os.SEEK_SET)
             height = U.readShort(file) & 0xFFF ## Think 12 bits for height of texture
@@ -88,6 +89,9 @@ class Texture:
                     length = width * height
 
                     print(f"FIXED ODD CASE reading texture w:{width} h:{height} l:{length} {bpp}")
+                elif width == 640 and height == 384:
+                    length = int(width * height * (bpp/8))
+                    print(f"Image header has been read wrong, assuming full screen image")
                 else:
                     # Image stats do not match what we would expect
                     print(f"Image header has been read wrong")

@@ -49,11 +49,10 @@ class AMesh(ABC):
     # verticies in order of how to render the triangles
     # Credit due to killercracker https://forum.xentax.com/viewtopic.php?t=17567
     @staticmethod
-    def createFaceList(vertexCount, faceType=1):
+    def createFaceList(vertexCount, faceType=1, startDirection=-1):
         faces = []
-    
-        if (faceType == 1):
-            startDirection = -1
+
+        if faceType == 1:
             x = 0
             a = 0
             b = 0
@@ -73,7 +72,49 @@ class AMesh(ABC):
                         faces.append((f1, f3, f2))
                 f1 = f2
                 f2 = f3
-        if (faceType == 0):
+        if faceType == 2:
+            x = 0
+            a = 0
+            b = 0
+            
+            f1 = a + 1
+            f2 = b + 1
+            faceDirection = startDirection
+            while (x < vertexCount + 2):
+                x += 1
+                
+                f3 = x
+                if f3 > vertexCount:
+                    f3 = x % vertexCount
+                print(f"F3: {f3} x{x} vc{vertexCount}")
+                faceDirection *= -1
+                if (f1 != f2) and (f2 != f3) and (f3 != f1):
+                    if (faceDirection > 0):
+                        faces.append((f1, f2, f3))
+                    else:
+                        faces.append((f1, f3, f2))
+                f1 = f2
+                f2 = f3
+        elif faceType == 3:
+            # Do faces on both sides
+            x = 0
+            a = 0
+            b = 0
+            
+            f1 = a + 1
+            f2 = b + 1
+            faceDirection = startDirection
+            while (x < vertexCount):
+                x += 1
+                
+                f3 = x
+                faceDirection *= -1
+                if (f1 != f2) and (f2 != f3) and (f3 != f1):
+                    faces.append((f1, f2, f3))
+                    faces.append((f1, f3, f2))
+                f1 = f2
+                f2 = f3
+        elif faceType == 0:
             a = 0
             b = 0
             c = 0
@@ -82,5 +123,5 @@ class AMesh(ABC):
                 a = x
                 b = x+1
                 c = x+2
-                faces.append((a, b, c))
+                faces.append((a+1, b+1, c+1))
         return faces

@@ -7,7 +7,6 @@ class Coverage:
     @staticmethod
     def markByte(position):
         if not Coverage.enabled:
-            exit(1)
             return
         count = 0
         if position in Coverage.byteCoverage:

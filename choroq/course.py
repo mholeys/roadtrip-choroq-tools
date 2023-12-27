@@ -62,10 +62,11 @@ import choroq.read_utils as U
 
 class CourseModel:
 
-    def __init__(self, name, meshes = [], textures = [], colliders = [], mapMeshes = [], extras = []):
+    def __init__(self, name, meshes = [], textures = [], colliders = [], postColliders = [], mapMeshes = [], extras = []):
         self.name = name
         self.meshes = meshes
         self.colliders = colliders
+        self.postColliders = postColliders
         self.mapMeshes = mapMeshes
         self.textures = textures
         self.extras = extras
@@ -90,7 +91,8 @@ class CourseModel:
         print(f"Got subfiles: {subFileOffsets}")
         meshes = []
         textures = []
-        colliders = [] # Unsure of use of this, but is either road surface related or collider
+        colliders = [] 
+        postColliders = [] # 4 point colliders, used for things like walls and fence posts
         mapMeshes = [] # Holds ui overlay map
         extras = [] # Holds car like format extras (for actions)
         for oi, o in enumerate(subFileOffsets):
@@ -106,6 +108,7 @@ class CourseModel:
                 textureCount = 0
                 
                 print(f"Parsing texture @ {offset+o} {magic & 0x10120006} {magic & 0x10400006}")
+                print(f"Reading texture {textureCount}")
                 textures.append(Texture._fromFile(file, offset+o))
                 nextTextureOffset = file.tell()
                 nextTexture = U.readLong(file)
@@ -116,6 +119,7 @@ class CourseModel:
 
                 while CourseModel.matchesTextureMagic(nextTexture):
                     textureCount += 1
+                    print(f"Reading texture {textureCount}")
                     textures.append(Texture._fromFile(file, nextTextureOffset))
                     nextTextureOffset = file.tell()
                     nextTexture = U.readLong(file)
@@ -127,7 +131,9 @@ class CourseModel:
             elif oi == 1:
                 meshes.append(Course._fromFile(file, offset+o))
             elif oi == 2: # 3rd Subfile
-                colliders += CourseCollider.fromFile(file, offset+o)
+                cols, postCols = CourseCollider.fromFile(file, offset+o)
+                colliders += cols
+                postColliders += postCols
             elif oi >= 3: # 4th Subfile
                 # Holds the map for showing the player position, vs others on the hud
                 # Might be other sub files, that hold moving object, e.g. doors
@@ -147,7 +153,7 @@ class CourseModel:
 
 
         print(f"Got {len(meshes)} meshes")
-        return CourseModel("", meshes, textures, colliders, mapMeshes, extras)
+        return CourseModel("", meshes, textures, colliders, postColliders, mapMeshes, extras)
 
 class Course():
 
@@ -157,7 +163,7 @@ class Course():
         self.shorts = shorts
 
     @staticmethod
-    def _parsePart(file, scale):
+    def _parsePart(file, chunkIndex, scale):
         dataType = U.readLong(file)
         if dataType == 0x6C018000:
             print(f"READING \"MESH\" AT {file.tell()-4}")
@@ -214,15 +220,23 @@ class Course():
                     vy += yOffset
                     vz += zOffset
 
-                fx, fy, fz = U.readXYZ(file) # possibly emission info (light)
+                # Day time baked lighting data/colours
+                # This is used in the day time, and scaled down as night approaches
+                fx, fy, fz = U.readXYZ(file) 
+
                 # I suspect there is no real time lighting for world meshes and so no normals
                 # Writing to normals for easy parsing
-                nx = opacity = U.readFloat(file) # 1 = opaque, 0 = see through (mostly like watery, used for rivers?)
+                nx = opacity = U.readFloat(file) # 1 = opaque, 0 = see through (mostly, like watery probably used for rivers?)
+
+                # I think these relate to lighting (unsure on what they are)
+                # Probably extra data to go with the day/night lighting
                 ny = U.readFloat(file) # Unknown # Theses are usually ~100f 70-120 ish
                 nz = U.readFloat(file) # Unknown
                 
-                # Red and green work, unsure on blue, probably blue works fine
-                cr, cg, cb = U.readXYZ(file) # Are colours
+                # Night time baked lighting data/colours
+                # This is used at the Night time, and scaled down as day approaches
+                cr, cg, cb = U.readXYZ(file) 
+
                 tu, tv, tw = U.readXYZ(file) # Are texture coords
 
                 if fx > 255 or fy > 255 or fz > 255:
@@ -242,7 +256,11 @@ class Course():
             unkw3 = U.BreadShort(file) # 0x0008 not when numberOfExtra != 0
             unkw4 = U.BreadShort(file) # 0x1500
 
-            faces = CourseMesh.createFaceList(vertCount)
+            if chunkIndex == 65: 
+                # This is double sided
+                faces = CourseMesh.createFaceList(vertCount, 3)
+            else:
+                faces = CourseMesh.createFaceList(vertCount)
 
             mesh = CourseMesh(len(verts), verts, normals, uvs, faces, colours, extras)
 
@@ -261,9 +279,12 @@ class Course():
             unknown2 = U.BreadLong(file) # Usually 0x0000000E
             
             if count >= 3:
-                U.BreadLong(file)
-                U.BreadLong(file)
-                U.BreadLong(file)
+                d1 = U.BreadLong(file)
+                d2 = U.BreadLong(file)
+                d3 = U.BreadLong(file)
+                # data.append(d1)
+                # data.append(d2)
+                # data.append(d3)
 
                 # Texture reference is here, unsure how it wokrs
                 # I think this could be a texture load register for GIF or similar
@@ -322,6 +343,84 @@ class Course():
                 exit(61)
 
             return "data", data
+        elif dataType == 0x6C028192: 
+            # Seen in ChoroQ HG 3 files, unsure of use probably data section
+            data = []
+            # Unknown data type/use
+            subType = (dataType & 0x00FF0000) >> 16 # Seen 02
+
+            count = U.readByte(file) # Think length is count*3*4 bytes
+            const80 = U.BreadByte(file) # always 80
+            constNull = U.BreadShort(file) # always 0000
+            unknown1 = U.BreadLong(file) # Usually 0x10000000
+            unknown2 = U.BreadLong(file) # Usually 0x0000000E
+
+            U.BreadLong(file) # 0
+            U.BreadLong(file) # FFFFFF00
+
+            print(f"Found CHQ3 type {dataType} {file.tell()}")
+
+            for i in range(count):
+                U.BreadXYZ(file)
+            
+            U.BreadLong(file)
+            return "data", None
+        elif dataType & 0xFF00FF00 == 0x68008000:
+            # Seen in ChoroQ HG 3 files
+            print(f"READING \"HG3 MESH\" AT {file.tell()-4}")
+            # This is mesh data
+            verts = [] 
+            uvs = []
+            normals = []
+            faces = []
+            colours = []
+            extras = []
+            vertCount = U.readByte(file)
+            unkw1 = U.BreadByte(file)
+            zeroF1 = U.BreadShort(file)
+            # Skip 12 bytes as we dont know what they are used for
+            file.seek(0xC, os.SEEK_CUR)
+            meshFormatVar = U.readLong(file)
+
+            # Extra unknown
+            unkw2 = U.BreadLong(file)
+
+            for x in range(0, vertCount):
+                vx, vy, vz = U.readXYZ(file)
+
+                # Baked lighting data/colours?
+                cr, cg, cb = U.readXYZ(file) 
+                tu, tv, tw = U.readXYZ(file) # Are texture coords
+
+                fx, fy, fz = (0, 0, 0)
+                nx, ny, nz = (0, 0, 0)
+
+                if fx > 255 or fy > 255 or fz > 255:
+                    print("Found value > 255")
+                    print(f"{fx} {fy} {fz}")
+                    print(f"{nx} {ny} {nz}")
+                    print(f"{cr} {cg} {cb}")
+                    # exit(1)
+                
+                c = (cr, cg, cb, 255) # Convert to RGBA
+                verts.append((vx * scale, vy * scale, vz * scale))
+                normals.append((nx, ny, nz))
+                colours.append(c)
+                extras.append((fx, fy, fz))
+                uvs.append((tu, 1-tv, tw))
+            
+            unkw3 = U.BreadShort(file) # 0x0008 not when numberOfExtra != 0
+            unkw4 = U.BreadShort(file) # 0x1500
+
+            if chunkIndex == 65: 
+                # This is double sided
+                faces = CourseMesh.createFaceList(vertCount, 3)
+            else:
+                faces = CourseMesh.createFaceList(vertCount)
+
+            mesh = CourseMesh(len(verts), verts, normals, uvs, faces, colours, extras)
+
+            return "mesh", mesh
         else:
             print(f"Found new data type {dataType} {file.tell()}")
             return "err", []
@@ -330,7 +429,7 @@ class Course():
     currentDataIndex = 0
 
     @staticmethod
-    def _parseChunk(file, offset, count, scale):
+    def _parseChunk(file, offset, count, index, scale):
         # Read chunk header
         file.seek(offset, os.SEEK_SET)
 
@@ -342,29 +441,34 @@ class Course():
             print(f"Mesh's start flag is different {meshStartFlag} @{file.tell()}")
             exit(2)
 
-        meshesByData = {}
-        currentMeshes = []
-        currentData = None
-        meshes = []
-        data = []
+        meshesByData = {} # To hold each set of meshes with its "data" index
+        currentMeshes = [] # All meshes read for this current "data"
+        currentData = [] # The current "data" chunk that was last read, or empty for the first
+        meshes = [] # All mneshes read in this chunk
+        data = [] # All data segments read in this chunk
 
         nextDataType = U.readLong(file)
         file.seek(-4, os.SEEK_CUR)
         while nextDataType & 0xFF000000 > 0x60000000:
-            dataType, result = Course._parsePart(file, scale)
-            if dataType == "mesh":
+            dataType, result = Course._parsePart(file, index, scale)
+            if result == None:
+                # Ingore
+                print("read skip")
+                pass
+            elif dataType == "mesh":
+                print("read mesh")
                 currentMeshes.append(result)
                 meshes.append(result)
             elif dataType == "data":
-                meshesByData[Course.currentDataIndex] = (result, currentMeshes)
+                print("read data")
+                if currentData != [] or len(currentMeshes) != 0:
+                    meshesByData[Course.currentDataIndex] = (currentData, currentMeshes)
                 currentMeshes = []
                 currentData = result
                 Course.currentDataIndex += 1
                 data.append(result)
             else:
-                print(f"ERR")
-                print(f"z{z}, x{x} Got {len(meshes)} meshses")
-                print(f"z{z}, x{x} Got {len(data)} data")
+                print(f"ERR unknown mesh part type")
                 print(f"{file.tell()}")
                 print(f"last {nextDataType}")
                 exit(2)
@@ -385,6 +489,13 @@ class Course():
             else:
                 file.seek(-4, os.SEEK_CUR)
             
+            print(f"Reading another mesh? {nextDataType & 0xFF000000 > 0x60000000}")
+
+        # Handle last of the meshes, and attach to the data/material
+        meshesByData[Course.currentDataIndex] = (currentData, currentMeshes)
+        currentMeshes = []
+        Course.currentDataIndex = 0
+        
         print(f"Last dataType {nextDataType}")
         print(f"shorts {len(meshes)} == {count}: {len(meshes) == count}")
         if len(meshes) != count:
@@ -421,16 +532,21 @@ class Course():
             for x in range(0, xLimit):
                 index = x + z * 8
                 print(f"Reading chunk {index} z{z} x{x}")
-                chunk = Course._parseChunk(file, offset+chunkOffsets[index], shorts[index], scale)
+                if chunkOffsets[index] < 390:
+                    # Must be empty or invalid chunk as offset table is within this region
+                    print("Skipping chunk offset = 0")
+                    continue
+                chunk = Course._parseChunk(file, offset+chunkOffsets[index], shorts[index], index, scale)
                 zRow.append(chunk)
             chunks.append(zRow)
         
         # Process the extra part of the course
-        # This is usually used in fields to hold the windows
-        # This allows the windows to light up at night
-        print(f"extraOffset {offset+extraOffset} {extraOffset} {extraShort} but at @ {file.tell()}")
-        extraChunk = Course._parseChunk(file, offset+extraOffset, extraShort, scale)
-        chunks.append([extraChunk])
+        # This is usually used in fields to hold the windows/trees
+        # Ensure offset is after the offset table
+        if extraOffset > 390:
+            print(f"extraOffset {offset+extraOffset} {extraOffset} {extraShort} but at @ {file.tell()}")
+            extraChunk = Course._parseChunk(file, offset+extraOffset, extraShort, 65, scale)
+            chunks.append([extraChunk])
 
         return Course(chunks, chunkOffsets, shorts)
 
@@ -471,6 +587,9 @@ class CourseMesh(AMesh):
             fout.write("vt " + tu + " " + tv + "\n")
         fout.write("#" + str(len(self.meshUvs)) + " texture vertices\n")
         
+        fout.write("usemtl None\n")
+        fout.write("s off\n")
+
         # Write mesh face order/list
         for i in range(0, len(self.meshFaces)):
             fx = self.meshFaces[i][0] + startIndex
@@ -655,7 +774,7 @@ class CourseCollider(AMesh):
         # shorts.append(extraShort)
 
         lastOffset = U.readLong(file) # Last offset is just before the first offset's data
-        lastSize = U.readLong(file) # This is the number of floats to read
+        lastSize = U.readLong(file) # This is the number of vertices to read
 
         colliders = []
         scale = 1
@@ -673,7 +792,6 @@ class CourseCollider(AMesh):
             xLimit = 16
             for x in range(0, xLimit):
                 index = x + z * 16
-                print(f"reading collider chunk {index} z{z} x{x}")
                 meshes = []
                 data = []
 
@@ -685,6 +803,8 @@ class CourseCollider(AMesh):
                 if offset+chunkOffsets[index] >= maxLength:
                     # At end of file
                     continue
+
+                print(f"reading collider chunk {index} z{z} x{x} count: {shorts[index]}")
 
                 file.seek(offset+chunkOffsets[index], os.SEEK_SET)
 
@@ -700,7 +820,11 @@ class CourseCollider(AMesh):
                 while count < shorts[index]:
                     print(f"Reading collider chunk {z} {x} {index} from: {file.tell()}")
                     vertCount = U.readByte(file)
-                    U.BreadByte(file) # always 0x80
+                    check80 = U.BreadByte(file) # always 0x80
+                    if check80 != 0x80:
+                        print("Collider does not have 80 after count, must be in wrong location, skipping")
+                        count += 1
+                        continue
                     U.BreadShort(file) # always 0x0000
                     # Skip 12 (todo workout)
                     file.seek(12, os.SEEK_CUR)
@@ -721,28 +845,15 @@ class CourseCollider(AMesh):
                 if count != shorts[index]:
                     print(f"Number of colliders read is different")
                 colliders.append(CourseCollider(meshVertCount, meshVerts, meshNormals, meshFaces))
-        
+
         file.seek(offset + lastOffset, os.SEEK_SET)
-        if offset + lastOffset + (lastSize * 12) < maxLength:
-            # Process the last chunk, x,y,z,y2 format and re-uses x/y for doing posts/towers
-            postVerticies = []
-            for i in range(int(lastSize)):
-                x = U.readFloat(file)
-                y = U.readFloat(file)
-                z = U.readFloat(file)
-                y2 = U.readFloat(file)
-                postVerticies.append((x, y, z)) # Upper post
-                postVerticies.append((x, y2, z)) # Lower post
+        postColliders = []
+        # Process the last chunk, x,y,z,y2 format and re-uses x/y for doing posts/towers
+        if offset + lastOffset + (lastSize * 16) < maxLength:
+            print(f"Reading last colliders (4 point) at {file.tell()} should have {lastSize} floats len {lastSize * 16}")
+            postColliders += CoursePostCollider.parsePostCollider(file, lastSize, scale)
 
-                
-            faces = CourseCollider.createFaceList(len(postVerticies))
-            for i in range(0, len(faces)):
-                vertices = faces[i]
-                meshFaces.append((vertices[0] + meshVertCount, vertices[1] + meshVertCount, vertices[2] + meshVertCount))
-
-            colliders.append(CourseCollider(len(postVerticies), postVerticies, [], meshFaces))
-
-        return colliders
+        return colliders, postColliders
 
     @staticmethod
     def parseChunk(file, vertCount, scale):
@@ -757,7 +868,8 @@ class CourseCollider(AMesh):
             verts.append((vx * scale, vy * scale, vz * scale))
 
         # Read in normals
-        if vertCount <= 40 and vertCount >= 3:
+        #if vertCount <= 40 and vertCount >= 3:
+        if vertCount >= 3:
             for n in range(vertCount-2):
                 normals.append(U.readXYZ(file))
                 U.BreadLong(file) # 1.0f
@@ -918,5 +1030,110 @@ class CourseCollider(AMesh):
         fout.write("#" + str(len(self.meshVerts)) + " vertices\n")      
         fout.write("#" + str(len(self.meshNormals)) + " texture vertices\n")
         fout.write("#" + str(len(self.meshFaces)) + " faces\n")
+
+        return len(self.meshVerts)
+
+class CoursePostCollider(AMesh):
+
+    def __init__(self, meshVertCount = [], meshVerts = []):
+        self.meshVertCount   = meshVertCount
+        self.meshVerts       = meshVerts
+
+    @staticmethod
+    def parsePostCollider(file, lastSize, scale):
+        vertCount = 0 
+        faceDirection = 1
+        posts = []
+        for i in range(int(lastSize)):
+            postVerticies = []
+            postFaces = []
+
+            x = U.readFloat(file)
+            y = U.readFloat(file)
+            z = U.readFloat(file)
+            y2 = U.readFloat(file)
+            # Convert 2 point collider into box collider
+
+            postVerticies.append((x * scale, y2 * scale, z * scale))
+            postVerticies.append((x * scale, y * scale, z * scale))
+            
+            # postVerticies.append((x+0.01, y2, z))
+            # postVerticies.append((x+0.01, y, z))
+
+            # postVerticies.append((x+0.01, y2, z+0.01))
+            # postVerticies.append((x+0.01, y, z+0.01))
+
+            # postVerticies.append((x, y2, z+0.01))
+            # postVerticies.append((x, y, z+0.01))
+
+            # postVerticies.append((x, y, z)) # Upper post
+            # postVerticies.append((x, y2, z)) # Lower post
+
+            postVertCount = len(postVerticies)
+            # faces = CourseCollider.createFaceList(len(postVerticies), 2, faceDirection)
+            # if i % 2 == 0:
+            #     faceDirection *= -1
+            # for i in range(0, len(faces)):
+            #     vertices = faces[i]
+            #     postFaces.append((vertices[0], vertices[1], vertices[2]))
+            
+            #postColliders.append(CourseCollider(len(postVerticies), postVerticies, [], postFaces))
+            posts.append(CoursePostCollider(len(postVerticies), postVerticies))
+        return posts
+
+    def writeMeshToObj(self, fout, startIndex = 0):
+        # Write verticies
+        for i in range(0, len(self.meshVerts)):
+            vx = '{:.20f}'.format(self.meshVerts[i][0])
+            vy = '{:.20f}'.format(self.meshVerts[i][1])
+            vz = '{:.20f}'.format(self.meshVerts[i][2])
+            fout.write("v " + vx + " " + vy + " " + vz + "\n")
+        fout.write("#" + str(len(self.meshVerts)) + " vertices\n")
+    
+        return len(self.meshVerts)
+
+    def writeMeshToComb(self, fout, startIndex = 0):
+        fout.write(f"vertex_count {len(self.meshVerts)}\n")
+        fout.write(f"face_count {0}\n")
+        fout.write("end_header\n")
+
+        # Write verticies, normals
+        for i in range(0, len(self.meshVerts)):
+            vx = '{:.20f}'.format(self.meshVerts[i][0])
+            vy = '{:.20f}'.format(self.meshVerts[i][1])
+            vz = '{:.20f}'.format(self.meshVerts[i][2])
+
+            fout.write(f"{vx} {vy} {vz} {0} {0} {0}\n")
+
+        return len(self.meshVerts)
+
+    def writeMeshToPly(self, fout, startIndex = 0):
+        # Write header
+        fout.write("ply\n")
+        fout.write("format ascii 1.0\n")
+        fout.write(f"element vertex {len(self.meshVerts)}\n")
+        fout.write("property float x\n")
+        fout.write("property float y\n")
+        fout.write("property float z\n")
+        fout.write("end_header\n")
+
+        # Write verticies, normals
+        for i in range(0, len(self.meshVerts)):
+            vx = '{:.20f}'.format(self.meshVerts[i][0])
+            vy = '{:.20f}'.format(self.meshVerts[i][1])
+            vz = '{:.20f}'.format(self.meshVerts[i][2])
+
+            fout.write(f"{vx} {vy} {vz}\n")
+
+        return len(self.meshVerts)
+        
+    def writeMeshToDBG(self, fout, startIndex = 0):
+        for i in range(0, len(self.meshVerts)):
+            vx = '{:.20f}'.format(self.meshVerts[i][0])
+            vy = '{:.20f}'.format(self.meshVerts[i][1])
+            vz = '{:.20f}'.format(self.meshVerts[i][2])
+            fout.write("v " + vx + " " + vy + " " + vz + "\n")
+
+        fout.write("#" + str(len(self.meshVerts)) + " vertices\n")      
 
         return len(self.meshVerts)
