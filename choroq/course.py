@@ -755,11 +755,22 @@ class CourseCollider(AMesh):
     @staticmethod
     def fromFile(file, offset):
         file.seek(offset, os.SEEK_SET)
+        firstOffset = U.readLong(file)
+        file.seek(offset, os.SEEK_SET)
+
+        xChunks = 16
+        yChunks = 16
+        if firstOffset > 1544:
+            # Table is probably larger
+            # Assume HG 3 format file
+            xChunks = 32
+            yChunks = 32
 
         chunkOffsets = []
-        for z in range(0, 16):
-            for x in range(0, 16):
+        for z in range(0, xChunks):
+            for x in range(0, yChunks):
                 chunkOffsets.append(U.readLong(file))
+        print("Collider offsets:")
         print(chunkOffsets)
         # extraOffset = U.readLong(file)
         # chunkOffsets.append(extraOffset)
@@ -767,8 +778,9 @@ class CourseCollider(AMesh):
         # Number of sub files/meshes in chunk
         # This is not used in this script
         shorts = []
-        for j in range(256):
+        for j in range(xChunks * yChunks):
             shorts.append(U.readShort(file))
+        print("Collider shorts:")
         print(shorts)
         # extraShort = U.readShort(file)
         # shorts.append(extraShort)
@@ -778,6 +790,7 @@ class CourseCollider(AMesh):
 
         colliders = []
         scale = 1
+        colliderCount = 0
         
         totalVerts = 0
 
@@ -787,9 +800,9 @@ class CourseCollider(AMesh):
         maxLength = file.tell()
 
         # Read the mesh data between this offset and the next
-        for z in range(0, 16):
+        for z in range(0, xChunks):
             zRow = []
-            xLimit = 16
+            xLimit = yChunks
             for x in range(0, xLimit):
                 index = x + z * 16
                 meshes = []
@@ -818,22 +831,33 @@ class CourseCollider(AMesh):
                 count = 0
 
                 while count < shorts[index]:
-                    print(f"Reading collider chunk {z} {x} {index} from: {file.tell()}")
+                    print(f"Reading collider chunk {z} {x} {index} {count}/{shorts[index]} {colliderCount} from: {file.tell()}")
                     vertCount = U.readByte(file)
                     check80 = U.BreadByte(file) # always 0x80
                     if check80 != 0x80:
-                        print("Collider does not have 80 after count, must be in wrong location, skipping")
+                        # This check is here for ChoroQ HG 3 files, mainly
+                        print(f"Collider does not have 80 after count, must be in wrong location, skipping {count}/{shorts[index]}")
                         count += 1
                         continue
                     U.BreadShort(file) # always 0x0000
-                    # Skip 12 (todo workout)
-                    file.seek(12, os.SEEK_CUR)
+                    
+                    U.BreadLong(file) # Often the same value (00 40 22 20), needs investigating
+                    U.BreadLong(file) # Often the save value (41 00 00 00), needs investigating
+                    
+                     # Usually 00 00 for roads, and 55 04 for ice
+                    slip = U.readByte(file) # Surface grip, 0=grippy 55=ice, might be forward slip
+                    b = U.readByte(file) # Unknown, probably slip related, could be side slip seen 01/02/03/04/11
+                    # Other properties varies for river
+                    c = U.readByte(file) # Seems to be 0 so far, 10 seen for a cave road
+                    waterFlag = U.readByte(file) # 10 seen for river, 00 for rest (80 in ocean once)
+                    
 
                     verts, normals, faces = CourseCollider.parseChunk(file, vertCount, scale)
                     
                     for i in range(0, len(faces)):
                         vertices = faces[i]
                         meshFaces.append((vertices[0] + meshVertCount, vertices[1] + meshVertCount, vertices[2] + meshVertCount))
+                        #meshFaces.append((vertices[0], vertices[1], vertices[2]))
                     
                     meshVertCount += len(verts)
                     meshVerts += verts
@@ -841,6 +865,10 @@ class CourseCollider(AMesh):
 
                     totalVerts += len(verts)
                     count += 1
+                    colliderCount += 1
+
+                    #colliders.append(CourseCollider(meshVertCount, meshVerts, meshNormals, meshFaces))
+                    meshFaces = []
                 print(f"Got {meshVertCount} {count} vs {shorts[index]}")
                 if count != shorts[index]:
                     print(f"Number of colliders read is different")

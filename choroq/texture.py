@@ -210,7 +210,7 @@ class Texture:
 
         U.BreadByte(file)
         ffCheck = U.readByte(file)
-        if ffCheck & 0xFF != 0xFF:
+        if ffCheck != 0xFF and ffCheck < 0x40:
             # This is not a palette, image probably doesn't use one
             return False, 0, 0, 0, (0, 0)
         
