@@ -285,9 +285,9 @@ class Course():
 
                 d2 = U.BreadLong(file) # This is usually 80 0F 00 00
                 d3 = U.BreadLong(file) # This is usually 15 00 00 00
-                data.append(d1)
-                data.append(d2)
-                data.append(d3)
+                # data.append(d1)
+                # data.append(d2)
+                # data.append(d3)
 
                 # Texture reference is here, unsure how it wokrs
                 # I think this could be a texture load register for GIF or 
@@ -307,7 +307,7 @@ class Course():
 
                 data.append(textureRef1)
                 data.append(textureRef3 << 16 | textureRef2)
-                data.append(unknown4)
+                # data.append(unknown4)
                 data.append(textureType)
 
                 # Following is what works so far
@@ -326,17 +326,19 @@ class Course():
                     print(F"Found new data texture reference type @ {file.tell()-4}")
                     exit(60)
 
-                data.append(U.BreadLong(file)) # 0 Always
-                data.append(U.BreadLong(file)) # 9 Always
+                unkwn0 = U.BreadLong(file)
+                unkwn9 = U.BreadLong(file)
+                # data.append(unkwn0) # 0 Always
+                # data.append(unkwn9) # 9 Always
 
                 if count > 3:
                     for x in range(count-3):
                         d1 = U.BreadLong(file)
                         d2 = U.BreadLong(file)
                         d3 = U.BreadLong(file)
-                        data.append(d1)
-                        data.append(d2)
-                        data.append(d3)
+                        # data.append(d1)
+                        # data.append(d2)
+                        # data.append(d3)
 
             else:
                 print(f"New mesh \"Data\" type @ {file.tell()} 03 probably should be at this address")
