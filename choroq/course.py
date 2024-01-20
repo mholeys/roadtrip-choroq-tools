@@ -132,15 +132,15 @@ class CourseModel:
                 meshes.append(Course._fromFile(file, offset+o))
             elif oi == 2: # 3rd Subfile
                 cols, postCols = CourseCollider.fromFile(file, offset+o)
-                colliders += cols
+                colliders.append(cols)
                 postColliders += postCols
             elif oi >= 3: # 4th Subfile
                 # Holds the map for showing the player position, vs others on the hud
                 # Might be other sub files, that hold moving object, e.g. doors
                 file.seek(offset+o+8, os.SEEK_SET)
                 if U.readLong(file) == 0x1000101:
-                    file.seek(os.SEEK_SET, offset+o)
                     # No header, probably just a mesh
+                    file.seek(os.SEEK_SET, offset+o)
                     mapMeshes += CarMesh._fromFile(file, offset+o)
                 else:
                     # First bit is offset table as usual
@@ -279,28 +279,35 @@ class Course():
             unknown2 = U.BreadLong(file) # Usually 0x0000000E
             
             if count >= 3:
+                # I think this section contains some information about the mesh
+                # This might be similar to the collider system
                 d1 = U.BreadLong(file)
-                d2 = U.BreadLong(file)
-                d3 = U.BreadLong(file)
-                # data.append(d1)
-                # data.append(d2)
-                # data.append(d3)
+
+                d2 = U.BreadLong(file) # This is usually 80 0F 00 00
+                d3 = U.BreadLong(file) # This is usually 15 00 00 00
+                data.append(d1)
+                data.append(d2)
+                data.append(d3)
 
                 # Texture reference is here, unsure how it wokrs
-                # I think this could be a texture load register for GIF or similar
+                # I think this could be a texture load register for GIF or 
+                # or pointer to location of texture in memory
 
                 # Seems to be texture reference, changes texture
-                textureReferenceFirst = U.readLong(file)
+                textureRef1 = U.readLong(file)
                 # Seems to relate to colours/CLUT?, texture stays roughly the same
-                textureReferenceSecond = U.readLong(file)
+                textureRef2 = U.readShort(file)
+                textureRef3 = U.readShort(file) # Usually 06 20 or 07 20
+
                 unknown4 = U.readLong(file) # Always 7 so far
                 if unknown4 != 7:
                     print(f"Found new unknown4 texture reference @ {file.tell()}")
 
                 textureType = U.readLong(file)
 
-                data.append(textureReferenceFirst)
-                data.append(textureReferenceSecond) 
+                data.append(textureRef1)
+                data.append(textureRef3 << 16 | textureRef2)
+                data.append(unknown4)
                 data.append(textureType)
 
                 # Following is what works so far
@@ -319,17 +326,17 @@ class Course():
                     print(F"Found new data texture reference type @ {file.tell()-4}")
                     exit(60)
 
-                U.BreadLong(file) # 0 Always
-                U.BreadLong(file) # 9 Always
+                data.append(U.BreadLong(file)) # 0 Always
+                data.append(U.BreadLong(file)) # 9 Always
 
                 if count > 3:
                     for x in range(count-3):
                         d1 = U.BreadLong(file)
                         d2 = U.BreadLong(file)
                         d3 = U.BreadLong(file)
-                        # data.append(d1)
-                        # data.append(d2)
-                        # data.append(d3)
+                        data.append(d1)
+                        data.append(d2)
+                        data.append(d3)
 
             else:
                 print(f"New mesh \"Data\" type @ {file.tell()} 03 probably should be at this address")
@@ -746,11 +753,12 @@ class CourseMesh(AMesh):
 
 class CourseCollider(AMesh):
 
-    def __init__(self, meshVertCount = [], meshVerts = [], meshNormals = [], meshFaces = []):
+    def __init__(self, meshVertCount = [], meshVerts = [], meshNormals = [], meshFaces = [], colliderProperties = None):
         self.meshVertCount   = meshVertCount
         self.meshVerts       = meshVerts
         self.meshNormals     = meshNormals
         self.meshFaces       = meshFaces
+        self.properties      = colliderProperties
 
     @staticmethod
     def fromFile(file, offset):
@@ -789,6 +797,7 @@ class CourseCollider(AMesh):
         lastSize = U.readLong(file) # This is the number of vertices to read
 
         colliders = []
+        collidersByMat = {}
         scale = 1
         colliderCount = 0
         
@@ -827,6 +836,7 @@ class CourseCollider(AMesh):
                 meshFaces = []
                 meshColours = []
                 meshVertCount = 0
+                colliderProperties = None
 
                 count = 0
 
@@ -841,16 +851,26 @@ class CourseCollider(AMesh):
                         continue
                     U.BreadShort(file) # always 0x0000
                     
-                    U.BreadLong(file) # Often the same value (00 40 22 20), needs investigating
-                    U.BreadLong(file) # Often the save value (41 00 00 00), needs investigating
+                    f1 = U.BreadLong(file) # Often the same value (00 40 22 20), needs investigating
+                    f2 = U.BreadLong(file) # Often the save value (41 00 00 00), needs investigating
+                    if f1 != 0x20224000:
+                        printf(f"Collider Flag 1 different @ {file.tell()} colIndex {count} z{z} x{x}")
+                        raise NameError(f"Collider Flag 1 different @ {file.tell()} colIndex {count} z{z} x{x}")
+                    
+                    if f2 != 0x00000041:
+                        printf(f"Collider Flag 2 different @ {file.tell()} colIndex {count} z{z} x{x}")
+                        raise NameError(f"Collider Flag 2 different @ {file.tell()} colIndex {count} z{z} x{x}")
+                    
+
                     
                      # Usually 00 00 for roads, and 55 04 for ice
                     slip = U.readByte(file) # Surface grip, 0=grippy 55=ice, might be forward slip
                     b = U.readByte(file) # Unknown, probably slip related, could be side slip seen 01/02/03/04/11
                     # Other properties varies for river
-                    c = U.readByte(file) # Seems to be 0 so far, 10 seen for a cave road
+                    c = U.readByte(file) # Seems to be 0 so far, 10 seen for a cave road seen 19 underwater (might be shader related (blue underwater))
                     waterFlag = U.readByte(file) # 10 seen for river, 00 for rest (80 in ocean once)
                     
+                    colliderProperties = (1 - (slip/255.0), b/255.0, c, waterFlag)
 
                     verts, normals, faces = CourseCollider.parseChunk(file, vertCount, scale)
                     
@@ -867,12 +887,19 @@ class CourseCollider(AMesh):
                     count += 1
                     colliderCount += 1
 
+                    if colliderProperties not in collidersByMat:
+                        collidersByMat[colliderProperties] = []
+
+                    # Store collider by material
+                    collidersByMat[colliderProperties].append(CourseCollider(len(verts), verts, normals, faces, colliderProperties))
+
                     #colliders.append(CourseCollider(meshVertCount, meshVerts, meshNormals, meshFaces))
                     meshFaces = []
                 print(f"Got {meshVertCount} {count} vs {shorts[index]}")
                 if count != shorts[index]:
                     print(f"Number of colliders read is different")
-                colliders.append(CourseCollider(meshVertCount, meshVerts, meshNormals, meshFaces))
+                
+                #colliders.append(CourseCollider(meshVertCount, meshVerts, meshNormals, meshFaces, colliderProperties))
 
         file.seek(offset + lastOffset, os.SEEK_SET)
         postColliders = []
@@ -881,7 +908,7 @@ class CourseCollider(AMesh):
             print(f"Reading last colliders (4 point) at {file.tell()} should have {lastSize} floats len {lastSize * 16}")
             postColliders += CoursePostCollider.parsePostCollider(file, lastSize, scale)
 
-        return colliders, postColliders
+        return collidersByMat, postColliders
 
     @staticmethod
     def parseChunk(file, vertCount, scale):
@@ -941,6 +968,9 @@ class CourseCollider(AMesh):
     def writeMeshToComb(self, fout, startIndex = 0):
         fout.write(f"vertex_count {len(self.meshVerts)}\n")
         fout.write(f"face_count {len(self.meshFaces)}\n")
+        if self.properties:
+            slip, b, c, waterFlag = self.properties
+            fout.write(f"colliderprop {slip} {b} {c} {waterFlag}\n")
         fout.write("end_header\n")
 
         if len(self.meshNormals) != len(self.meshVerts):

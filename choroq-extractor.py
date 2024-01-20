@@ -38,6 +38,11 @@ def show_help():
     print("     - colliders/ # Colliders/other mesh data")
     print("     - tex/ # All textures ")
     print("     - Cxx-{zIndex}-{xIndex}-{meshIndex}.{obj/ply}")
+    print(" - ACTIONS/")
+    print("   - Axx{obj/ply}/ # where xx is the action number")
+    print("     - colliders/ # Colliders/other mesh data")
+    print("     - tex/ # All textures ")
+    print("     - Axx-{zIndex}-{xIndex}-{meshIndex}.{obj/ply}")
     print(" - FIELDS/")
     print("   - xxx{obj/ply}/ # where xxx is the field number")
     print("     - colliders/ # Folder for colliders/other mesh data")
@@ -98,10 +103,11 @@ def process_courses(source, dest, outputFormats):
                         for i,mesh in enumerate(extra.meshes):
                             with open(f"{courseOutputFolder}/C{cNumber}-extra{e}-{i}.{outType}", "w") as fout:
                                 mesh.writeMeshToType(outType, fout)
-
-                    for i,collider in enumerate(course.colliders):
-                        with open(f"{courseOutputFolder}/colliders/C{cNumber}-collider{i}.{outType}", "w") as fout:
-                            collider.writeMeshToType(outType, fout)
+                    for collidersByMat in course.colliders:
+                        for mat,colliders in collidersByMat.items():
+                            for i,collider in enumerate(colliders):
+                                with open(f"{courseOutputFolder}/colliders/C{cNumber}-collider{i}.{outType}", "w") as fout:
+                                    collider.writeMeshToType(outType, fout)
                     
                     if len(course.textures) > 0:
                         Path(f"{courseOutputFolder}/tex/").mkdir(parents=True, exist_ok=True)
@@ -160,9 +166,11 @@ def process_fields(source, dest, outputFormats):
                                     with open(f"{fieldOutputFolder}/F{fieldNumber}-extra{e}-{i}.{outType}", "w") as fout:
                                         mesh.writeMeshToType(outType, fout)
 
-                            for i,collider in enumerate(field.colliders):
-                                with open(f"{fieldOutputFolder}/colliders/F{fieldNumber}-collider{i}.{outType}", "w") as fout:
-                                    collider.writeMeshToType(outType, fout)
+                            for collidersByMat in course.colliders:
+                                for mat,colliders in collidersByMat.items():
+                                    for i,collider in enumerate(colliders):
+                                        with open(f"{fieldOutputFolder}/colliders/F{fieldNumber}-collider{i}.{outType}", "w") as fout:
+                                            collider.writeMeshToType(outType, fout)
                             
                             if len(field.textures) > 0:
                                 Path(f"{fieldOutputFolder}/tex/").mkdir(parents=True, exist_ok=True)
@@ -244,6 +252,7 @@ if __name__ == '__main__':
 
     if os.path.isdir(folderIn):
         process_courses(folderIn, folderOut, outputFormats)
+        process_actions(folderIn, folderOut, outputFormats)
         process_fields(folderIn, folderOut, outputFormats)
         process_cars(folderIn, folderOut, outputFormats)
     else:
