@@ -5,7 +5,7 @@
 #   Contains 4 sub files
 #     - Textures
 #     - Models
-#     - Possibly a collision mesh, as is usually just the roads
+#     - Collision mesh (allowed areas that the cars can be in)
 #     - Overlay map, or number of extra meshes such as doors/barrels
 
 # Textures:
@@ -41,7 +41,9 @@
 # and go back to the offset list for the start of the next mesh
 #
 # File 3: 
-# Assuming that this file contains colliders or simplified mesh data
+# This file contains a mesh system used to keep the cars within certain
+# areas. Once a car leaves this area it is pulled back on the this mesh.
+# I think this is used to simplify collision checks in the game
 # The file is broken into chunks (16x16)
 # Each chunk contains a number of verticies, and sometimes normals
 #
@@ -811,17 +813,18 @@ class CourseCollider(AMesh):
         maxLength = file.tell()
 
         # Read the mesh data between this offset and the next
-        for z in range(0, xChunks):
+        for z in range(0, yChunks):
             zRow = []
-            xLimit = yChunks
+            xLimit = xChunks
             for x in range(0, xLimit):
-                index = x + z * 16
+                index = x + z * xLimit
                 meshes = []
                 data = []
 
-                # Skip duplicates
-                if chunkOffsets[index] in offsetsDone:
-                    continue
+                # Skip duplicates, removed as some chunks were being missed
+                #if chunkOffsets[index] in offsetsDone:
+                    #print(f"!!Chunk offset has been visited skipping {x} {z} expected {shorts[index]}")
+                    # continue
                 offsetsDone.add(chunkOffsets[index])
 
                 if offset+chunkOffsets[index] >= maxLength:
@@ -870,7 +873,9 @@ class CourseCollider(AMesh):
                     b = U.readByte(file) # Unknown, probably slip related, could be side slip seen 01/02/03/04/11
                     # Other properties varies for river
                     c = U.readByte(file) # Seems to be 0 so far, 10 seen for a cave road seen 19 underwater (might be shader related (blue underwater))
-                    waterFlag = U.readByte(file) # 10 seen for river, 00 for rest (80 in ocean once)
+                    # 10 seen for river, (80 bottom of ocean sometimes)
+                    # Seen 10 for other meshes (roads)
+                    waterFlag = U.readByte(file) 
                     
                     colliderProperties = (1 - (slip/255.0), b/255.0, c, waterFlag)
 
@@ -902,6 +907,9 @@ class CourseCollider(AMesh):
                     print(f"Number of colliders read is different")
                 
                 #colliders.append(CourseCollider(meshVertCount, meshVerts, meshNormals, meshFaces, colliderProperties))
+
+        if (sum(shorts) != colliderCount):
+            print(f"Number of colliders read is different {sum(shorts)} {colliderCount}")
 
         file.seek(offset + lastOffset, os.SEEK_SET)
         postColliders = []

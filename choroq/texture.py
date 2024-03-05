@@ -92,6 +92,9 @@ class Texture:
                 elif width == 640 and height == 384:
                     length = int(width * height * (bpp/8))
                     print(f"Image header has been read wrong, assuming full screen image")
+                elif width == 640 and height == 448:
+                    length = int(width * height * (bpp/8))
+                    print(f"Image header has been read wrong, assuming full screen image")
                 else:
                     # Image stats do not match what we would expect
                     print(f"Image header has been read wrong")
