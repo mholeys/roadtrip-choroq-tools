@@ -46,6 +46,7 @@ class Texture:
         
         oldWay = False
         if not oldWay:
+            # Sony/HW defined texture types
             # 0x00  PSNCT32
             # 0x01  PSMCT24
             # 0x02  PSMCT16
@@ -79,7 +80,7 @@ class Texture:
             
             file.seek(offset+0x34, os.SEEK_SET)
             length = U.readLong(file)
-            print(f"reading texture w:{width} h:{height} l:{length} {bpp} from {bppCheckRaw >> 4}")
+            print(f"reading texture w:{width} h:{height} l:{length} bpp {bpp} from bppC {bppCheckRaw >> 4}")
             if length == 0 and bpp != 0:
                 length = int(width * height * (bpp/8))
                 print(f"reading texture w:{width} h:{height} l:{length} {bpp}")
@@ -383,6 +384,33 @@ class Texture:
             colours = None
         return Texture(texture, colours, (width, height), psize, fixAlpha)
     
+    def getTextureAsBytes(self, flipX=False, flipY=False, usepalette=True):
+        cList = []
+        if self.pwidth == 0 and self.pheight == 0: # bpp > 8
+            image = Image.frombytes('RGB', (self.width, self.height), self.texture, 'raw')
+            return bytes(image.tobytes())
+        else:
+            for c in self.palette:
+                cList.append(c[0])
+                cList.append(c[1])
+                cList.append(c[2])
+                cList.append(c[3])
+            if usepalette:
+                image = Image.frombytes('P', (self.width, self.height), self.texture, 'raw', 'P')
+                palette = ImagePalette.raw("RGBA", bytes(cList))
+                palette.mode = "RGBA"
+                image.palette = palette
+            else:
+                image = Image.frombytes('L', (self.width, self.height), self.texture, 'raw')
+        
+            rgbd = image.convert("RGBA")
+            if flipX:
+                rgbd = ImageOps.mirror(rgbd)
+            if flipY:
+                rgbd = ImageOps.flip(rgbd)
+
+            return bytes(rgbd.tobytes())
+
     def writeTextureToPNG(self, path, flipX=False, flipY=False, usepalette=True):
         cList = []
         if self.pwidth == 0 and self.pheight == 0: # bpp > 8
