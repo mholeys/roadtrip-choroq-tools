@@ -26,9 +26,10 @@ def show_help():
     print("<source path>")
     print("<output folder>")
     # print("[makefolders]             : whether to create sub folders for each car : 1 = Yes")
-    print("[type]                    : model output format (requires [makefolders])")
+    print("[type]                    : model output format")
     print("                            -- 1 = OBJ only")
     print("                            -- 2 = PLY only")
+    print("                            -- 3 = Experimental OBJ grouped by material")
     print("                            --  <other> = BOTH ")
 
     print("The output folder structure will be as follows:")
@@ -59,15 +60,118 @@ def show_help():
     print(Fore.YELLOW+"          On my pc, on a HDD 5900RPM it takes ~15mins for OBJ.")
     print(Fore.YELLOW+"          Courses (obj): ~110K files ~450 MB")
     print(Fore.YELLOW+"          Courses (ply): ~110k files ~500 MB")
+    print(Fore.YELLOW+"          Courses ( 3 ): ~ 12K files ~180 MB")
     print(Fore.YELLOW+"          Actions (obj): ~100K files ~400 MB")
     print(Fore.YELLOW+"          Actions (ply): ~100k files ~400 MB")
+    print(Fore.YELLOW+"          Actions ( 3 ): ~ 13K files ~150 MB")
     print(Fore.YELLOW+"          Fields  (obj): ~600K files ~1.7 GB")
     print(Fore.YELLOW+"          Fields  (ply): ~730K files ~2.8 GB")
+    print(Fore.YELLOW+"          Fields  ( 3 ): ~300K files ~850 MB")
     print(Fore.YELLOW+"          Cars    (obj): ~1.5k files ~120 MB")
     print(Fore.YELLOW+"          Cars    (ply): ~1.5k files ~100 MB")
 
 
-def process_courses(source, dest, outputFormats):
+# Open parse, and extract the common data, for fields/courses/actions
+def process_course_type(courseFile, destFolder, fileNumber, outType, filePrefix, mergeByData = False):
+    with open(courseFile, "rb") as f: # Open input course data file
+        # Check that the output folders exist (make them)
+        Path(f"{destFolder}/").mkdir(parents=True, exist_ok=True)
+        Path(f"{destFolder}/colliders").mkdir(parents=True, exist_ok=True)
+
+        # Set logging output
+        with open(f"{destFolder}/log.log", "w") as sys.stdout:
+            f.seek(0, os.SEEK_END)
+            fileSize = f.tell()
+            f.seek(0, os.SEEK_SET)
+            # Parse the course
+            course = CourseModel.fromFile(f, 0, fileSize)
+        
+            if mergeByData:
+                # Need to group the meshes by the "data/material" info
+                Path(f"{destFolder}/matLinked").mkdir(parents=True, exist_ok=True)
+                # Sort all meshes into meshes by type
+                numberOfMeshes = 0
+                meshByMaterial = {}
+                for i,level in enumerate(course.meshes):
+                    for z, zRow in enumerate(level.chunks):
+                        for x, ((meshes, data), meshesByData) in enumerate(zRow):
+                            for dataIndex, (dd, mm) in meshesByData.items():
+                                if dd == []:
+                                    continue
+                                dataKey = dd[0]
+                                # Add meshes that match this material to the list of meshes
+                                if dataKey not in meshByMaterial:
+                                    meshByMaterial[dataKey] = []
+                                meshByMaterial[dataKey] += mm
+                                numberOfMeshes += 1
+                                print(len(meshByMaterial[dataKey]))
+                # Save all meshes into one file, based on their data/mat type
+                matIndex = 0
+                print("Mesh by material keys")
+                print(meshByMaterial.keys())
+                print("Number of meshes")
+                print(numberOfMeshes)
+                for key, mm in meshByMaterial.items():
+                    # If you come across this, this is a custom file format I have made, expect this to change over time
+                    # you will have to modify this file to get this to output
+                    if outType == "comb":
+                        with open(f"{destFolder}/matLinked/{filePrefix}{fileNumber}-{matIndex}.{outType}", "w") as fout:
+                            fout.write("comb - mesh data format\n")
+                            fout.write(f"meshes {len(mm)}\n")
+                            fout.write(f"type field\n")
+
+                            for m, mesh in enumerate(mm):
+                                fout.write(f"s z{z}-x{x}-{m}\n") # Start of a mesh
+                                mesh.writeMeshToType(outType, fout)
+                                fout.write(f"e z{z}-x{x}-{m}\n") # End of a mesh
+                    elif outType == "obj":
+                        with open(f"{destFolder}/matLinked/{filePrefix}{fileNumber}-{matIndex}.{outType}", "w") as fout:
+                            vertCount = 0
+                            for m, mesh in enumerate(mm):
+                                fout.write(f"o {m}\n") # Start of an object
+                                vertCount += mesh.writeMeshToType(outType, fout, vertCount)
+                    matIndex += 1
+            else:
+                # Export the main level mesh data
+                for i,level in enumerate(course.meshes):
+                    for z, zRow in enumerate(level.chunks):
+                        Path(f"{destFolder}/").mkdir(parents=True, exist_ok=True)
+                        for x, ((meshes, data), _) in enumerate(zRow):
+                            for m, mesh in enumerate(meshes):
+                                with open(f"{destFolder}/{filePrefix}{fileNumber}-{z}-{x}-{m}.{outType}", "w") as fout:
+                                    mesh.writeMeshToType(outType, fout)
+
+            # Export all maps
+            for i,mesh in enumerate(course.mapMeshes):
+                with open(f"{destFolder}/{filePrefix}{fileNumber}-map{i}.{outType}", "w") as fout:
+                    mesh.writeMeshToType(outType, fout)
+            # Export any additional objects (e.g barrels)
+            for e,extra in enumerate(course.extras):
+                for i,mesh in enumerate(extra.meshes):
+                    with open(f"{destFolder}/{filePrefix}{fileNumber}-extra{e}-{i}.{outType}", "w") as fout:
+                        mesh.writeMeshToType(outType, fout)
+            for collidersByMat in course.colliders:
+                for mat,colliders in collidersByMat.items():
+                    for i,collider in enumerate(colliders):
+                        with open(f"{destFolder}/colliders/{filePrefix}{fileNumber}-collider{i}.{outType}", "w") as fout:
+                            collider.writeMeshToType(outType, fout)
+            
+            if len(course.textures) > 0:
+                Path(f"{destFolder}/tex/").mkdir(parents=True, exist_ok=True)
+            for i,texture in enumerate(course.textures):
+                try:
+                    texture.writeTextureToPNG(f"{destFolder}/tex/t{fileNumber}-{i}.png")
+                except:
+                    print(f"Failed to write texture/palette probably decoded badly Course:{fileNumber} Texture:{i} {texture}")
+            for e,extra in enumerate(course.extras):
+                for i,texture in enumerate(extra.textures):
+                    try:
+                        texture.writeTextureToPNG(f"{destFolder}/tex/t{fileNumber}-e{e}-{i}.png")
+                    except:
+                        print(f"Failed to write texture/palette probably decoded badly Course:{fileNumber} Texture:{i} {texture}")
+        sys.stdout = sys.__stdout__
+
+def process_courses(source, dest, outputFormats, mergeByData = False):
     print("Processing courses")
     for cNumber in ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '16', '18', '19', '20']:
         courseFile = f"{source}/COURSE/C{cNumber}.BIN"
@@ -75,59 +179,10 @@ def process_courses(source, dest, outputFormats):
         print(f"Processing {courseFile}")
         for outType in outputFormats:
             courseOutputFolder = f"{dest}/COURSE/C{cNumber}{outType}"
-            with open(courseFile, "rb") as f: # Open input course data file
-                # Check that the output folders exist (make them)
-                Path(f"{courseOutputFolder}/").mkdir(parents=True, exist_ok=True)
-                Path(f"{courseOutputFolder}/colliders").mkdir(parents=True, exist_ok=True)
+            process_course_type(courseFile, courseOutputFolder, cNumber, outType, "C", mergeByData)
+            
 
-                # Set logging output
-                with open(f"{courseOutputFolder}/log.log", "w") as sys.stdout:
-                    f.seek(0, os.SEEK_END)
-                    fileSize = f.tell()
-                    f.seek(0, os.SEEK_SET)
-                    # Parse the course
-                    course = CourseModel.fromFile(f, 0, fileSize)
-                
-                    # Export the main level mesh data
-                    for i,level in enumerate(course.meshes):
-                        for z, zRow in enumerate(level.chunks):
-                            Path(f"{courseOutputFolder}/").mkdir(parents=True, exist_ok=True)
-                            for x, ((meshes, data), _) in enumerate(zRow):
-                                for m, mesh in enumerate(meshes):
-                                    with open(f"{courseOutputFolder}/C{cNumber}-{z}-{x}-{m}.{outType}", "w") as fout:
-                                        mesh.writeMeshToType(outType, fout)
-
-                    # Export all maps
-                    for i,mesh in enumerate(course.mapMeshes):
-                        with open(f"{courseOutputFolder}/C{cNumber}-map{i}.{outType}", "w") as fout:
-                            mesh.writeMeshToType(outType, fout)
-                    # Export any additional objects (e.g barrels)
-                    for e,extra in enumerate(course.extras):
-                        for i,mesh in enumerate(extra.meshes):
-                            with open(f"{courseOutputFolder}/C{cNumber}-extra{e}-{i}.{outType}", "w") as fout:
-                                mesh.writeMeshToType(outType, fout)
-                    for collidersByMat in course.colliders:
-                        for mat,colliders in collidersByMat.items():
-                            for i,collider in enumerate(colliders):
-                                with open(f"{courseOutputFolder}/colliders/C{cNumber}-collider{i}.{outType}", "w") as fout:
-                                    collider.writeMeshToType(outType, fout)
-                    
-                    if len(course.textures) > 0:
-                        Path(f"{courseOutputFolder}/tex/").mkdir(parents=True, exist_ok=True)
-                    for i,texture in enumerate(course.textures):
-                        try:
-                            texture.writeTextureToPNG(f"{courseOutputFolder}/tex/t{cNumber}-{i}.png")
-                        except:
-                            print(f"Failed to write texture/palette probably decoded badly Course:{cNumber} Texture:{i} {texture}")
-                    for e,extra in enumerate(course.extras):
-                        for i,texture in enumerate(extra.textures):
-                            try:
-                                texture.writeTextureToPNG(f"{courseOutputFolder}/tex/t{cNumber}-e{e}-{i}.png")
-                            except:
-                                print(f"Failed to write texture/palette probably decoded badly Course:{cNumber} Texture:{i} {texture}")
-                sys.stdout = sys.__stdout__
-
-def process_actions(source, dest, outputFormats):
+def process_actions(source, dest, outputFormats, mergeByData = False):
     print("Processing actions")
     for aNumber in ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', "15", '16', "17", '18', '19', '20']:
         actionFile = f"{source}/ACTION/A{aNumber}.BIN"
@@ -135,59 +190,9 @@ def process_actions(source, dest, outputFormats):
         print(f"Processing {actionFile}")
         for outType in outputFormats:
             actionOutputFolder = f"{dest}/ACTION/A{aNumber}{outType}"
-            with open(actionFile, "rb") as f: # Open input action data file
-                # Check that the output folders exist (make them)
-                Path(f"{actionOutputFolder}/").mkdir(parents=True, exist_ok=True)
-                Path(f"{actionOutputFolder}/colliders").mkdir(parents=True, exist_ok=True)
+            process_course_type(actionFile, actionOutputFolder, aNumber, outType, "A", mergeByData)
 
-                # Set logging output
-                with open(f"{actionOutputFolder}/log.log", "w") as sys.stdout:
-                    f.seek(0, os.SEEK_END)
-                    fileSize = f.tell()
-                    f.seek(0, os.SEEK_SET)
-                    # Parse the action (same as course)
-                    action = CourseModel.fromFile(f, 0, fileSize)
-                
-                    # Export the main level mesh data
-                    for i,level in enumerate(action.meshes):
-                        for z, zRow in enumerate(level.chunks):
-                            Path(f"{actionOutputFolder}/").mkdir(parents=True, exist_ok=True)
-                            for x, ((meshes, data), _) in enumerate(zRow):
-                                for m, mesh in enumerate(meshes):
-                                    with open(f"{actionOutputFolder}/A{aNumber}-{z}-{x}-{m}.{outType}", "w") as fout:
-                                        mesh.writeMeshToType(outType, fout)
-
-                    # Export all maps
-                    for i,mesh in enumerate(action.mapMeshes):
-                        with open(f"{actionOutputFolder}/A{aNumber}-map{i}.{outType}", "w") as fout:
-                            mesh.writeMeshToType(outType, fout)
-                    # Export any additional objects (e.g barrels)
-                    for e,extra in enumerate(action.extras):
-                        for i,mesh in enumerate(extra.meshes):
-                            with open(f"{actionOutputFolder}/A{aNumber}-extra{e}-{i}.{outType}", "w") as fout:
-                                mesh.writeMeshToType(outType, fout)
-                    for collidersByMat in action.colliders:
-                        for mat,colliders in collidersByMat.items():
-                            for i,collider in enumerate(colliders):
-                                with open(f"{actionOutputFolder}/colliders/A{aNumber}-collider{i}.{outType}", "w") as fout:
-                                    collider.writeMeshToType(outType, fout)
-                    
-                    if len(action.textures) > 0:
-                        Path(f"{actionOutputFolder}/tex/").mkdir(parents=True, exist_ok=True)
-                    for i,texture in enumerate(action.textures):
-                        try:
-                            texture.writeTextureToPNG(f"{actionOutputFolder}/tex/t{aNumber}-{i}.png")
-                        except:
-                            print(f"Failed to write texture/palette probably decoded badly Action:{aNumber} Texture:{i} {texture}")
-                    for e,extra in enumerate(action.extras):
-                        for i,texture in enumerate(extra.textures):
-                            try:
-                                texture.writeTextureToPNG(f"{actionOutputFolder}/tex/t{aNumber}-e{e}-{i}.png")
-                            except:
-                                print(f"Failed to write texture/palette probably decoded badly Action:{aNumber} Texture:{i} {texture}")
-                sys.stdout = sys.__stdout__
-
-def process_fields(source, dest, outputFormats):
+def process_fields(source, dest, outputFormats, mergeByData = False):
     print("Processing fields (FLD)")
     for fx in [0, 1, 2, 3]:
         for fy in [0, 1, 2, 3]:
@@ -197,58 +202,9 @@ def process_fields(source, dest, outputFormats):
                 print(f"Processing {fieldFile}")
                 for outType in outputFormats:
                     fieldOutputFolder = f"{dest}/FIELD/F{fieldNumber}{outType}"
-                    with open(fieldFile, "rb") as f: # Open input field data file
-                        # Check that the output folders exist (make them)
-                        Path(f"{fieldOutputFolder}/").mkdir(parents=True, exist_ok=True)
-                        Path(f"{fieldOutputFolder}/colliders").mkdir(parents=True, exist_ok=True)
+                    process_course_type(fieldFile, fieldOutputFolder, fieldNumber, outType, "F", mergeByData)
 
-                        # Set logging output
-                        with open(f"{fieldOutputFolder}/log.log", "w") as sys.stdout:
-                            f.seek(0, os.SEEK_END)
-                            fileSize = f.tell()
-                            f.seek(0, os.SEEK_SET)
-                            # Parse the field
-                            field = CourseModel.fromFile(f, 0, fileSize)
-                        
-                            # Export the main level mesh data
-                            for i,level in enumerate(field.meshes):
-                                for z, zRow in enumerate(level.chunks):
-                                    Path(f"{fieldOutputFolder}/").mkdir(parents=True, exist_ok=True)
-                                    for x, ((meshes, data), _) in enumerate(zRow):
-                                        for m, mesh in enumerate(meshes):
-                                            with open(f"{fieldOutputFolder}/F{fieldNumber}-{z}-{x}-{m}.{outType}", "w") as fout:
-                                                mesh.writeMeshToType(outType, fout)
-    
-                            # Export all maps
-                            for i,mesh in enumerate(field.mapMeshes):
-                                with open(f"{fieldOutputFolder}/F{fieldNumber}-map{i}.{outType}", "w") as fout:
-                                    mesh.writeMeshToType(outType, fout)
-                            # Export any additional objects (e.g barrels)
-                            for e,extra in enumerate(field.extras):
-                                for i,mesh in enumerate(extra.meshes):
-                                    with open(f"{fieldOutputFolder}/F{fieldNumber}-extra{e}-{i}.{outType}", "w") as fout:
-                                        mesh.writeMeshToType(outType, fout)
-
-                            for collidersByMat in field.colliders:
-                                for mat,colliders in collidersByMat.items():
-                                    for i,collider in enumerate(colliders):
-                                        with open(f"{fieldOutputFolder}/colliders/F{fieldNumber}-collider{i}.{outType}", "w") as fout:
-                                            collider.writeMeshToType(outType, fout)
-                            
-                            if len(field.textures) > 0:
-                                Path(f"{fieldOutputFolder}/tex/").mkdir(parents=True, exist_ok=True)
-                            for i,texture in enumerate(field.textures):
-                                try:
-                                    texture.writeTextureToPNG(f"{fieldOutputFolder}/tex/t{fieldNumber}-{i}.png")
-                                except:
-                                    print(f"Failed to write texture/palette probably decoded badly Field:{fieldNumber} Texture:{i} {texture}")
-                            for e,extra in enumerate(field.extras):
-                                for i,texture in enumerate(extra.textures):
-                                    try:
-                                        texture.writeTextureToPNG(f"{fieldOutputFolder}/tex/t{fieldNumber}-e{e}-{i}.png")
-                                    except:
-                                        print(f"Failed to write texture/palette probably decoded badly Field:{fieldNumber} Texture:{i} {texture}")
-                        sys.stdout = sys.__stdout__
+                    
 
 def process_cars(source, dest, outputFormats):
     print("Processing cars")
@@ -289,10 +245,12 @@ if __name__ == '__main__':
         exit(1)
     
     obj = False
+    obj_grouped = False
     ply = True
     if len(sys.argv) == 4:
         obj = True if sys.argv[3] == "1" else False
         ply = True if sys.argv[3] == "2" else False
+        obj_grouped = True if sys.argv[3] == "3" else False
     elif len(sys.argv) > 4:
         show_help()
         print(Fore.RED +"ERROR: " +Style.RESET_ALL+ "Too many args")
@@ -311,12 +269,14 @@ if __name__ == '__main__':
     if obj == True:
         outputFormats.append("obj")
     if ply == True:
-        outputFormats.append("ply")
+        outputFormats.append("ply")  
+    if obj_grouped == True:
+        outputFormats.append("obj")
 
     if os.path.isdir(folderIn):
-        process_courses(folderIn, folderOut, outputFormats)
-        process_actions(folderIn, folderOut, outputFormats)
-        process_fields(folderIn, folderOut, outputFormats)
+        process_courses(folderIn, folderOut, outputFormats, obj_grouped)
+        process_actions(folderIn, folderOut, outputFormats, obj_grouped)
+        process_fields(folderIn, folderOut, outputFormats, obj_grouped)
         process_cars(folderIn, folderOut, outputFormats)
     else:
         print(Fore.RED + "ERROR: " +Style.RESET_ALL+ "Failed to read source folder")
