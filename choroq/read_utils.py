@@ -84,3 +84,11 @@ def remove_duplicates(seq):
     seen = set()
     seen_add = seen.add
     return [x for x in seq if not (x in seen or seen_add(x))]
+
+def readNormalOffsetTable(file, size):
+    subFileOffsets = []
+    o = 1
+    while o != size and  o != 0:
+        o = readLong(file)
+        subFileOffsets.append(o)
+    return subFileOffsets

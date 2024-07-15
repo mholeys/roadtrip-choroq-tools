@@ -18,7 +18,7 @@ def show_help():
     print("Extracts Road Trip Adventure model/textures")
     print("Works on the UK/EU version of the game aka ChoroQ 2 HG")
     print("Textures are exported in PNG format") #, and the texture palette is marked \"-p\"")
-    print("Models will be exported as PLY by default, OBJ does not contain colours")
+    print("Models will be exported as PLY by default, as OBJ does not contain vertex colours")
     print("")
     print("Currently this will only work when given the path to the game root")
     print("")
@@ -55,11 +55,14 @@ def show_help():
     print("   - WHEEL/ # Folder with models/textures for the wheels")
 
     print(Fore.YELLOW+" WARNING: This may produce a large number of files, and take some time,")
-    print(Fore.YELLOW+"          with all data currently supported this will be around 2GB")
-    print(Fore.YELLOW+"          Courses (obj): ~100k files ~140 MB")
-    print(Fore.YELLOW+"          Courses (ply): ~100k files ~190 MB")
-    print(Fore.YELLOW+"          Fields  (obj): ~430k files ~700 MB")
-    print(Fore.YELLOW+"          Fields  (ply): ~430K files ~900 MB")
+    print(Fore.YELLOW+"          with all data currently supported this will be around PLY: 4GB or OBJ: 3GB.")
+    print(Fore.YELLOW+"          On my pc, on a HDD 5900RPM it takes ~15mins for OBJ.")
+    print(Fore.YELLOW+"          Courses (obj): ~110K files ~450 MB")
+    print(Fore.YELLOW+"          Courses (ply): ~110k files ~500 MB")
+    print(Fore.YELLOW+"          Actions (obj): ~100K files ~400 MB")
+    print(Fore.YELLOW+"          Actions (ply): ~100k files ~400 MB")
+    print(Fore.YELLOW+"          Fields  (obj): ~600K files ~1.7 GB")
+    print(Fore.YELLOW+"          Fields  (ply): ~730K files ~2.8 GB")
     print(Fore.YELLOW+"          Cars    (obj): ~1.5k files ~120 MB")
     print(Fore.YELLOW+"          Cars    (ply): ~1.5k files ~100 MB")
 
@@ -89,7 +92,7 @@ def process_courses(source, dest, outputFormats):
                     for i,level in enumerate(course.meshes):
                         for z, zRow in enumerate(level.chunks):
                             Path(f"{courseOutputFolder}/").mkdir(parents=True, exist_ok=True)
-                            for x, (meshes, data) in enumerate(zRow):
+                            for x, ((meshes, data), _) in enumerate(zRow):
                                 for m, mesh in enumerate(meshes):
                                     with open(f"{courseOutputFolder}/C{cNumber}-{z}-{x}-{m}.{outType}", "w") as fout:
                                         mesh.writeMeshToType(outType, fout)
@@ -124,6 +127,66 @@ def process_courses(source, dest, outputFormats):
                                 print(f"Failed to write texture/palette probably decoded badly Course:{cNumber} Texture:{i} {texture}")
                 sys.stdout = sys.__stdout__
 
+def process_actions(source, dest, outputFormats):
+    print("Processing actions")
+    for aNumber in ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', "15", '16', "17", '18', '19', '20']:
+        actionFile = f"{source}/ACTION/A{aNumber}.BIN"
+
+        print(f"Processing {actionFile}")
+        for outType in outputFormats:
+            actionOutputFolder = f"{dest}/ACTION/A{aNumber}{outType}"
+            with open(actionFile, "rb") as f: # Open input action data file
+                # Check that the output folders exist (make them)
+                Path(f"{actionOutputFolder}/").mkdir(parents=True, exist_ok=True)
+                Path(f"{actionOutputFolder}/colliders").mkdir(parents=True, exist_ok=True)
+
+                # Set logging output
+                with open(f"{actionOutputFolder}/log.log", "w") as sys.stdout:
+                    f.seek(0, os.SEEK_END)
+                    fileSize = f.tell()
+                    f.seek(0, os.SEEK_SET)
+                    # Parse the action (same as course)
+                    action = CourseModel.fromFile(f, 0, fileSize)
+                
+                    # Export the main level mesh data
+                    for i,level in enumerate(action.meshes):
+                        for z, zRow in enumerate(level.chunks):
+                            Path(f"{actionOutputFolder}/").mkdir(parents=True, exist_ok=True)
+                            for x, ((meshes, data), _) in enumerate(zRow):
+                                for m, mesh in enumerate(meshes):
+                                    with open(f"{actionOutputFolder}/A{aNumber}-{z}-{x}-{m}.{outType}", "w") as fout:
+                                        mesh.writeMeshToType(outType, fout)
+
+                    # Export all maps
+                    for i,mesh in enumerate(action.mapMeshes):
+                        with open(f"{actionOutputFolder}/A{aNumber}-map{i}.{outType}", "w") as fout:
+                            mesh.writeMeshToType(outType, fout)
+                    # Export any additional objects (e.g barrels)
+                    for e,extra in enumerate(action.extras):
+                        for i,mesh in enumerate(extra.meshes):
+                            with open(f"{actionOutputFolder}/A{aNumber}-extra{e}-{i}.{outType}", "w") as fout:
+                                mesh.writeMeshToType(outType, fout)
+                    for collidersByMat in action.colliders:
+                        for mat,colliders in collidersByMat.items():
+                            for i,collider in enumerate(colliders):
+                                with open(f"{actionOutputFolder}/colliders/A{aNumber}-collider{i}.{outType}", "w") as fout:
+                                    collider.writeMeshToType(outType, fout)
+                    
+                    if len(action.textures) > 0:
+                        Path(f"{actionOutputFolder}/tex/").mkdir(parents=True, exist_ok=True)
+                    for i,texture in enumerate(action.textures):
+                        try:
+                            texture.writeTextureToPNG(f"{actionOutputFolder}/tex/t{aNumber}-{i}.png")
+                        except:
+                            print(f"Failed to write texture/palette probably decoded badly Action:{aNumber} Texture:{i} {texture}")
+                    for e,extra in enumerate(action.extras):
+                        for i,texture in enumerate(extra.textures):
+                            try:
+                                texture.writeTextureToPNG(f"{actionOutputFolder}/tex/t{aNumber}-e{e}-{i}.png")
+                            except:
+                                print(f"Failed to write texture/palette probably decoded badly Action:{aNumber} Texture:{i} {texture}")
+                sys.stdout = sys.__stdout__
+
 def process_fields(source, dest, outputFormats):
     print("Processing fields (FLD)")
     for fx in [0, 1, 2, 3]:
@@ -151,7 +214,7 @@ def process_fields(source, dest, outputFormats):
                             for i,level in enumerate(field.meshes):
                                 for z, zRow in enumerate(level.chunks):
                                     Path(f"{fieldOutputFolder}/").mkdir(parents=True, exist_ok=True)
-                                    for x, (meshes, data) in enumerate(zRow):
+                                    for x, ((meshes, data), _) in enumerate(zRow):
                                         for m, mesh in enumerate(meshes):
                                             with open(f"{fieldOutputFolder}/F{fieldNumber}-{z}-{x}-{m}.{outType}", "w") as fout:
                                                 mesh.writeMeshToType(outType, fout)
@@ -166,7 +229,7 @@ def process_fields(source, dest, outputFormats):
                                     with open(f"{fieldOutputFolder}/F{fieldNumber}-extra{e}-{i}.{outType}", "w") as fout:
                                         mesh.writeMeshToType(outType, fout)
 
-                            for collidersByMat in course.colliders:
+                            for collidersByMat in field.colliders:
                                 for mat,colliders in collidersByMat.items():
                                     for i,collider in enumerate(colliders):
                                         with open(f"{fieldOutputFolder}/colliders/F{fieldNumber}-collider{i}.{outType}", "w") as fout:
