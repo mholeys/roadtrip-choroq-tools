@@ -211,6 +211,7 @@ class Course():
                 xOffset = U.readFloat(file)
                 yOffset = U.readFloat(file)
                 zOffset = U.readFloat(file)
+                print(f"Billboard / uses prefaced x/y/z")
             elif numberOfExtra != 0:
                 print(f"Offset theory doesnt work {numberOfExtra} != 3")
                 exit(50)
@@ -485,22 +486,48 @@ class Course():
                 exit(2)
             nextDataType = U.readLong(file)
             # Unusual cases
-            if nextDataType == 0:
-                # where theres a gap in the data
-                file.seek(8, os.SEEK_CUR)
+            # This is the case where padding has been introduced, unsure why, could be due to 
+            # sector boundries/LBAs? Have seen C5050010 / 5E060010 / 90000010
+            if nextDataType & 0xFFFF0000 == 0x10000000:
+                print("Unusual case, may have data after preamble")
+                U.readLong(file) # Skip 00000000
                 meshTest = U.readLong(file)
                 if meshTest == 0x01000101:
                     nextDataType = U.readLong(file)
-                    file.seek(-4, os.SEEK_CUR)
                     print(f"Special case @ {file.tell()}")
+                else: 
+                    file.seek(-8, os.SEEK_CUR)
+            # Same case as above, but look after padding
+            if nextDataType == 0:
+                # print("Unusual case, may have data after 00s")
+                # where theres a gap in the data
+                positionBeforeTest = file.tell()
+                zeroGapTest = U.readLong(file)
+                while zeroGapTest == 0:
+                    zeroGapTest = U.readLong(file)
+                print(f"Unsual case {zeroGapTest}")
+                # Case where there is a gap of x amount of padding
+                # and then there is another mesh afterwards
+                if zeroGapTest & 0xFF000000 == 0x10000000:
+                    U.readLong(file) # Skip 00000000
+                    meshTest = U.readLong(file)
+                    if meshTest == 0x01000101:
+                        nextDataType = U.readLong(file)
+                        file.seek(-4, os.SEEK_CUR)
+                        print(f"Special case @ {file.tell()}")
+                # catch when this is not the case and jump back to where we were
+                if zeroGapTest & 0xFF000000 != 0x10000000:
+                    print("Was not an unusual case")
+                    file.seek(positionBeforeTest, os.SEEK_SET)
             elif nextDataType == 0x3F666666: 
                 # Unusual case, with special marker
                 # Data seems to continue?
+                print("Unusual case, but there is more data")
                 file.seek(-4, os.SEEK_CUR)
             else:
                 file.seek(-4, os.SEEK_CUR)
             
-            print(f"Reading another mesh? {nextDataType & 0xFF000000 > 0x60000000}")
+            print(f"Reading another mesh? {nextDataType & 0xFF000000 > 0x60000000} @ {file.tell()}")
 
         # Handle last of the meshes, and attach to the data/material
         meshesByData[Course.currentDataIndex] = (currentData, currentMeshes)
