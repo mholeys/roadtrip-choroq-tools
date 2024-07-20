@@ -228,7 +228,7 @@ def process_file(entry, folderOut, outputFormats):
         car = CarModel.fromFile(f, 0, fileSize)
         for i,mesh in enumerate(car.meshes):
             for outType in outputFormats:
-                with open(f"{outfolder}{basename}-{i}.ply", "w") as fout:
+                with open(f"{outfolder}{basename}-{i}.{outType}", "w") as fout:
                     mesh.writeMeshToType(outType, fout)
         for i,tex in enumerate(car.textures):
             tex.writeTextureToPNG(f"{outfolder}{basename}-{i}.png")
