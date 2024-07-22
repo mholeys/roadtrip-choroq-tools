@@ -30,6 +30,8 @@ def show_help():
     print("                            -- 1 = OBJ only")
     print("                            -- 2 = PLY only")
     print("                            -- 3 = Experimental OBJ grouped by material")
+    print("                               This version will try and combine the meshes")
+    print("                               when they share the same material (usually texture)")
     print("                            --  <other> = BOTH ")
 
     print("The output folder structure will be as follows:")
@@ -70,6 +72,63 @@ def show_help():
     print(Fore.YELLOW+"          Cars    (obj): ~1.5k files ~120 MB")
     print(Fore.YELLOW+"          Cars    (ply): ~1.5k files ~100 MB")
 
+def group_meshes_by_material(meshes):
+    # Sort all meshes into meshes by type
+    numberOfMeshes = 0
+    meshByMaterial = {}
+    for i,level in enumerate(meshes):
+        for z, zRow in enumerate(level.chunks):
+            for x, ((meshes, data), meshesByData) in enumerate(zRow):
+                for dataIndex, (dd, mm) in meshesByData.items():
+                    if dd == []:
+                        continue
+                    dataKey = dd[0]
+                    # Add meshes that match this material to the list of meshes
+                    if dataKey not in meshByMaterial:
+                        meshByMaterial[dataKey] = []
+                    meshByMaterial[dataKey] += mm
+                    numberOfMeshes += 1
+                    print(len(meshByMaterial[dataKey]))
+    return meshByMaterial, numberOfMeshes
+    
+
+def save_course_type_grouped(meshByMaterial, numberOfMeshes, destFolder, fileNumber, outType, filePrefix):
+    # Save all meshes into one file, based on their data/mat type
+    matIndex = 0
+    print("Mesh by material keys")
+    print(meshByMaterial.keys())
+    print("Number of meshes")
+    print(numberOfMeshes)
+    for key, mm in meshByMaterial.items():
+        # If you come across this, this is a custom file format I have made, expect this to change over time
+        # you will have to modify this file to get this to output
+        if outType == "comb":
+            with open(f"{destFolder}/matLinked/{filePrefix}{fileNumber}-{matIndex}.{outType}", "w") as fout:
+                fout.write("comb - mesh data format\n")
+                fout.write(f"meshes {len(mm)}\n")
+                fout.write(f"type field\n")
+
+                for m, mesh in enumerate(mm):
+                    fout.write(f"s z-{m}\n") # Start of a mesh
+                    mesh.writeMeshToType(outType, fout)
+                    fout.write(f"e z-{m}\n") # End of a mesh
+        elif outType == "obj":
+            with open(f"{destFolder}/matLinked/{filePrefix}{fileNumber}-{matIndex}.{outType}", "w") as fout:
+                vertCount = 0
+                for m, mesh in enumerate(mm):
+                    fout.write(f"o {m}\n") # Start of an object
+                    vertCount += mesh.writeMeshToType(outType, fout, vertCount)
+        matIndex += 1
+
+def save_course_type(meshes, destFolder, fileNumber, outType, filePrefix):
+    # Export the main level mesh data
+    for i,level in enumerate(meshes):
+        for z, zRow in enumerate(level.chunks):
+            Path(f"{destFolder}/").mkdir(parents=True, exist_ok=True)
+            for x, ((meshes, data), _) in enumerate(zRow):
+                for m, mesh in enumerate(meshes):
+                    with open(f"{destFolder}/{filePrefix}{fileNumber}-{z}-{x}-{m}.{outType}", "w") as fout:
+                        mesh.writeMeshToType(outType, fout)
 
 # Open parse, and extract the common data, for fields/courses/actions
 def process_course_type(courseFile, destFolder, fileNumber, outType, filePrefix, mergeByData = False):
@@ -89,57 +148,10 @@ def process_course_type(courseFile, destFolder, fileNumber, outType, filePrefix,
             if mergeByData:
                 # Need to group the meshes by the "data/material" info
                 Path(f"{destFolder}/matLinked").mkdir(parents=True, exist_ok=True)
-                # Sort all meshes into meshes by type
-                numberOfMeshes = 0
-                meshByMaterial = {}
-                for i,level in enumerate(course.meshes):
-                    for z, zRow in enumerate(level.chunks):
-                        for x, ((meshes, data), meshesByData) in enumerate(zRow):
-                            for dataIndex, (dd, mm) in meshesByData.items():
-                                if dd == []:
-                                    continue
-                                dataKey = dd[0]
-                                # Add meshes that match this material to the list of meshes
-                                if dataKey not in meshByMaterial:
-                                    meshByMaterial[dataKey] = []
-                                meshByMaterial[dataKey] += mm
-                                numberOfMeshes += 1
-                                print(len(meshByMaterial[dataKey]))
-                # Save all meshes into one file, based on their data/mat type
-                matIndex = 0
-                print("Mesh by material keys")
-                print(meshByMaterial.keys())
-                print("Number of meshes")
-                print(numberOfMeshes)
-                for key, mm in meshByMaterial.items():
-                    # If you come across this, this is a custom file format I have made, expect this to change over time
-                    # you will have to modify this file to get this to output
-                    if outType == "comb":
-                        with open(f"{destFolder}/matLinked/{filePrefix}{fileNumber}-{matIndex}.{outType}", "w") as fout:
-                            fout.write("comb - mesh data format\n")
-                            fout.write(f"meshes {len(mm)}\n")
-                            fout.write(f"type field\n")
-
-                            for m, mesh in enumerate(mm):
-                                fout.write(f"s z{z}-x{x}-{m}\n") # Start of a mesh
-                                mesh.writeMeshToType(outType, fout)
-                                fout.write(f"e z{z}-x{x}-{m}\n") # End of a mesh
-                    elif outType == "obj":
-                        with open(f"{destFolder}/matLinked/{filePrefix}{fileNumber}-{matIndex}.{outType}", "w") as fout:
-                            vertCount = 0
-                            for m, mesh in enumerate(mm):
-                                fout.write(f"o {m}\n") # Start of an object
-                                vertCount += mesh.writeMeshToType(outType, fout, vertCount)
-                    matIndex += 1
+                meshByMaterial, numberOfMeshes = group_meshes_by_material(course.meshes)
+                save_course_type_grouped(meshByMaterial, numberOfMeshes, destFolder, fileNumber, outType, filePrefix)
             else:
-                # Export the main level mesh data
-                for i,level in enumerate(course.meshes):
-                    for z, zRow in enumerate(level.chunks):
-                        Path(f"{destFolder}/").mkdir(parents=True, exist_ok=True)
-                        for x, ((meshes, data), _) in enumerate(zRow):
-                            for m, mesh in enumerate(meshes):
-                                with open(f"{destFolder}/{filePrefix}{fileNumber}-{z}-{x}-{m}.{outType}", "w") as fout:
-                                    mesh.writeMeshToType(outType, fout)
+                save_course_type(course.meshes, destFolder, fileNumber, outType, filePrefix)
 
             # Export all maps
             for i,mesh in enumerate(course.mapMeshes):
@@ -169,6 +181,15 @@ def process_course_type(courseFile, destFolder, fileNumber, outType, filePrefix,
                         texture.writeTextureToPNG(f"{destFolder}/tex/t{fileNumber}-e{e}-{i}.png")
                     except:
                         print(f"Failed to write texture/palette probably decoded badly Course:{fileNumber} Texture:{i} {texture}")
+            if len(course.extraFields) > 0:
+                if mergeByData:
+                    Path(f"{destFolder}/extras/matLinked").mkdir(parents=True, exist_ok=True)
+                    meshByMaterial, numberOfMeshes = group_meshes_by_material(course.extraFields)
+                    save_course_type_grouped(meshByMaterial, numberOfMeshes, f"{destFolder}/extras/", fileNumber, outType, filePrefix+"-E")
+                else:
+                    Path(f"{destFolder}/extras/").mkdir(parents=True, exist_ok=True)
+                    save_course_type(course.extraFields, f"{destFolder}/extras/", fileNumber, outType, filePrefix+"-E")
+                
         sys.stdout = sys.__stdout__
 
 def process_courses(source, dest, folder, outputFormats, mergeByData = False):
@@ -190,7 +211,8 @@ def process_courses(source, dest, folder, outputFormats, mergeByData = False):
                         process_course_type(entry, courseOutputFolder, cNumber, outType, cPrefix, mergeByData)
                     except KeyboardInterrupt:
                         break
-                    except:
+                    except Exception as e:
+                        print(e)
                         sys.stdout = sys.__stdout__
                         print(f"Failed to process file {entry.path}")
 

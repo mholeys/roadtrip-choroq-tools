@@ -111,16 +111,18 @@ class CarModel:
                 # At end of file
                 break
             file.seek(offset+o, os.SEEK_SET)
+            # print(f"Reading model from {file.tell()}")
             magic = U.readLong(file)
             file.seek(offset+o, os.SEEK_SET)
             if magic & 0x10120006 >= 0x10120006 or magic & 0x10400006 >= 0x10400006:
                 # File is possibly a texture
-                print(f"Parsing texture @ {offset+o} {magic & 0x10120006} {magic & 0x10400006}")
+                # print(f"Parsing texture @ {offset+o} {magic & 0x10120006} {magic & 0x10400006}")
                 textures.append(Texture._fromFile(file, offset+o))
             elif magic == 0x0000050:
+                # print(f"Parsing meshes found 0x50 @ {offset+o}")
                 meshes += CarMesh._fromFile(file, offset+o+0x50)
             else:
-                #print(f"Parsing meshes @ {offset+o}")
+                # print(f"Parsing meshes @ {offset+o}")
                 meshes += CarMesh._fromFile(file, offset+o)
         return CarModel("", meshes, textures)
 
@@ -148,12 +150,20 @@ class CarMesh(AMesh):
         nullF0 = U.readLong(file)
         meshStartFlag = U.readLong(file)
         if meshStartFlag != 0x01000101:
-            print(f"Mesh's start flag is different {meshStartFlag} from usual, continuing")
+            print(f"Mesh's start flag is different {meshStartFlag} from usual, continuing @{file.tell()}")
         return unkw0, nullF0, meshStartFlag
 
     @staticmethod
     def _fromFile(file, offset, scale=1):
-        offsets = CarMesh._parseOffsets(file, offset)
+        # Check to see if there is a offset table, or just header
+        file.seek(offset+8, os.SEEK_SET)
+        meshFlagNoTableTest = U.readLong(file) 
+        file.seek(offset, os.SEEK_SET)
+        if meshFlagNoTableTest == 0x01000101:
+            print(f"Skipping offset table for Car Mesh, as there is a mesh flag")
+            offsets = [0]
+        else:
+            offsets = CarMesh._parseOffsets(file, offset)
         meshes = []
         for o in offsets:
             file.seek(o + offset, os.SEEK_SET)
@@ -161,6 +171,7 @@ class CarMesh(AMesh):
             header = CarMesh._parseHeader(file)
             # Read mesh
             meshFlag  = U.readLong(file)
+            # print(hex(meshFlag))
 
             meshVerts = []
             meshNormals = []

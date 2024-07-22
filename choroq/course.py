@@ -9,50 +9,57 @@
 #     - Overlay map, or number of extra meshes such as doors/barrels
 
 # Textures:
-#
+#   This is just a continuous block of textures
+#   Each texture just follows the previous, usually with a 
+#   palette proceeding the texture data.
 #
 
 # Models:
-# Magic: 90 01 00 00
-# Followed by a offset list of models/meshes
-# !Not all meshes are in the list, and are probably sub models/meshes to split up for texture mapping
-# Some models/meshes in the list end up being:
-#    00 00 00 10 00 00 00 00 01 01 00 01 00 00 00 00 00 00 00 60 00 00 00 00 00 00 00 00 00 00 00 00
-#  Unknown reason for this "empty" version
-# offset list ends with 0s not eof offset
-# 
-# Each mesh is then as follows:
-# vertCount = readByte(file)
-# 0x80 single byte
-# zero short
-# 16 bytes of unknown
-# Then the rest of the data is verticies:
-#    vertex  x, y, z (floats)
-#    normals x, y, z (floats)
-#    colours r, g, b set (int a float)
-#    unknown x, y, z set (floats)
-#    uv(w)   u, v, w set (floats)
-# a unknown long
-# 
-# If at this point there is the mesh continue flag: 0x6c018000
-# then repeat above as extra verticies of the same mesh
-# 
-# If not then this is the end of the current mesh, 
-# and go back to the offset list for the start of the next mesh
+#   Magic: 90 01 00 00
+#   Followed by a offset list of models/meshes
+#   !Not all meshes are in the list, and are probably sub models/meshes to split up for texture mapping
+#   Some models/meshes in the list end up being:
+#      00 00 00 10 00 00 00 00 01 01 00 01 00 00 00 00 00 00 00 60 00 00 00 00 00 00 00 00 00 00 00 00
+#    Unknown reason for this "empty" version
+#   offset list ends with 0s not eof offset
+#   
+#   Each mesh is then as follows:
+#       vertCount = readByte(file)
+#       0x80 single byte
+#       zero short
+#       16 bytes of unknown
+#       Then the rest of the data is verticies:
+#          vertex  x, y, z (floats)
+#          normals x, y, z (floats)
+#          colours r, g, b set (int a float)
+#          unknown x, y, z set (floats)
+#          uv(w)   u, v, w set (floats)
+#       a unknown long
+#   
+#   If at this point there is the mesh continue flag: 0x6c018000
+#   then repeat above as extra verticies of the same mesh
+#   
+#   If not then this is the end of the current mesh, 
+#   and go back to the offset list for the start of the next mesh
 #
 # File 3: 
-# This file contains a mesh system used to keep the cars within certain
-# areas. Once a car leaves this area it is pulled back on the this mesh.
-# I think this is used to simplify collision checks in the game
-# The file is broken into chunks (16x16)
-# Each chunk contains a number of verticies, and sometimes normals
+#   This file contains a mesh system used to keep the cars within certain
+#   areas. Once a car leaves this area it is pulled back on the this mesh.
+#   I think this is used to simplify collision checks in the game
+#   The file is broken into chunks (16x16)
+#   Each chunk contains a number of verticies, and sometimes normals
 #
 # File 4+: 
-# This is often the mini map, used for showing player position 
-# on the blue track ring overlay. It can be parsed as like a car mesh, 
-# using the CarMesh class as is and will produce the map
-# There may be more than 1 file from here onwards, usually holding 
-# movable items such as doors, chests or barrels.
+#   This is often the mini map, used for showing player position 
+#   on the blue track ring overlay. 
+#   It can be parsed as like a car mesh, using the CarMesh class as is and will produce the map
+#   There may be more than 1 file from here onwards, usually holding 
+#   movable items such as doors, chests or barrels.
+#   
+#   Some files (Field 023) hold more than just simple meshes, 023 holds the
+#   MyCity meshes as field/course format meshes, so not all files 
+#   only hold car format like meshes.
+#
 
 import io
 import os
@@ -64,7 +71,7 @@ import choroq.read_utils as U
 
 class CourseModel:
 
-    def __init__(self, name, meshes = [], textures = [], colliders = [], postColliders = [], mapMeshes = [], extras = []):
+    def __init__(self, name, meshes = [], textures = [], colliders = [], postColliders = [], mapMeshes = [], extras = [], extraFields = []):
         self.name = name
         self.meshes = meshes
         self.colliders = colliders
@@ -72,6 +79,7 @@ class CourseModel:
         self.mapMeshes = mapMeshes
         self.textures = textures
         self.extras = extras
+        self.extraFields = extraFields
 
     @staticmethod
     def _parseOffsets(file, offset, size):
@@ -97,6 +105,7 @@ class CourseModel:
         postColliders = [] # 4 point colliders, used for things like walls and fence posts
         mapMeshes = [] # Holds ui overlay map
         extras = [] # Holds car like format extras (for actions)
+        extraFields = [] # Holds field like format extras (usually for My City)
         for oi, o in enumerate(subFileOffsets):
             if (o == size or o == 0):
                 # At end of file
@@ -139,14 +148,21 @@ class CourseModel:
             elif oi >= 3: # 4th Subfile
                 # Holds the map for showing the player position, vs others on the hud
                 # Might be other sub files, that hold moving object, e.g. doors
+                magic = U.readLong(file)
                 file.seek(offset+o+8, os.SEEK_SET)
-                if U.readLong(file) == 0x1000101:
+                meshFlag = U.readLong(file)
+                file.seek(offset+o, os.SEEK_SET)
+                # Some files have fields after the second offset, mainly the 023 FIELD used for MyCity
+                if magic == 400:
+                    # This is to handle the my city files, as they are fields, but not
+                    extraFields.append(Course._fromFile(file, offset+o))
+                elif meshFlag == 0x1000101:
                     # No header, probably just a mesh
-                    file.seek(os.SEEK_SET, offset+o)
+                    print("Reading as car mesh direct")
                     mapMeshes += CarMesh._fromFile(file, offset+o)
                 else:
-                    # First bit is offset table as usual
-                    file.seek(offset+o, os.SEEK_SET)
+                    # First bit is offset table as usua
+                    print("Reading as car model fully")
                     extra = CarModel.fromFile(file, offset+o, subFileOffsets[oi+1] - o)
                     if oi != 4:
                         mapMeshes += extra.meshes
@@ -155,7 +171,7 @@ class CourseModel:
 
 
         print(f"Got {len(meshes)} meshes")
-        return CourseModel("", meshes, textures, colliders, postColliders, mapMeshes, extras)
+        return CourseModel("", meshes, textures, colliders, postColliders, mapMeshes, extras, extraFields)
 
 class Course():
 
