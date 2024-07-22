@@ -411,6 +411,8 @@ class Course():
             # Skip 12 bytes as we dont know what they are used for
             file.seek(0xC, os.SEEK_CUR)
             meshFormatVar = U.readLong(file)
+            # print(f"vertCount {vertCount}")
+            # print(f"meshFormatVar {hex(meshFormatVar)}")
 
             # Extra unknown
             unkw2 = U.BreadLong(file)

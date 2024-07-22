@@ -1,5 +1,6 @@
 from choroq.texture import Texture
 from choroq.car import CarModel, CarMesh
+from choroq.car_hg3 import HG3CarModel, HG3CarMesh
 
 import io
 import os
@@ -26,8 +27,11 @@ def show_help():
     print("                            -- 1 = OBJ only")
     print("                            -- 2 = PLY only")
     print("                            --  <other> = BOTH ")
+    print("[gameVersion]             : default = 2, ChoroQ HG 2 or other (requires [type])")
+    print("                            -- 2 = HG 2")
+    print("                            -- 3 = HG 3")
 
-def process_file(entry, folderOut, obj = True, ply = True):
+def process_file(entry, folderOut, obj = True, ply = True, gameVersion = 2):
     if type(entry) is str:
         entry = pathlib.Path(entry)
     basename = entry.name[0 : entry.name.find('.')]
@@ -37,7 +41,10 @@ def process_file(entry, folderOut, obj = True, ply = True):
         f.seek(0, os.SEEK_END)
         fileSize = f.tell()
         f.seek(0, os.SEEK_SET)
-        car = CarModel.fromFile(f, 0, fileSize)
+        if gameVersion == 2:
+            car = CarModel.fromFile(f, 0, fileSize)
+        elif gameVersion == 3:
+            car = HG3CarModel.fromFile(f, 0, fileSize)
         for i,mesh in enumerate(car.meshes):
             if obj:
                 with open(f"{outfolder}{basename}-{i}.obj", "w") as fout:
@@ -68,9 +75,19 @@ if __name__ == '__main__':
         makeFolders = True if sys.argv[3] == "1" else False
         obj = True if sys.argv[4] == "1" else False
         ply = True if sys.argv[4] == "2" else False
-    elif len(sys.argv) > 4:
+    elif len(sys.argv) == 6:
+        makeFolders = True if sys.argv[3] == "1" else False
+        obj = True if sys.argv[4] == "1" else False
+        ply = True if sys.argv[4] == "2" else False
+        gameVersion = int(sys.argv[5])
+    elif len(sys.argv) > 6:
         show_help()
         print(Fore.RED +"ERROR: " +Style.RESET_ALL+ "Too many args")
+        exit(1)
+
+    if gameVersion != 2 and gameVersion != 3:
+        show_help()
+        print(Fore.RED +"ERROR: " +Style.RESET_ALL+ "Unknown game version")
         exit(1)
 
     os.makedirs(folderOut, exist_ok=True)
@@ -82,10 +99,10 @@ if __name__ == '__main__':
         with os.scandir(folderIn) as it:
             for entry in it:
                 if not entry.name.startswith('.') and entry.is_file():
-                    process_file(entry, folderOut, obj, ply)
+                    process_file(entry, folderOut, obj, ply, gameVersion)
     
     elif os.path.isfile(folderIn):
-        process_file(folderIn, folderOut, obj, ply)
+        process_file(folderIn, folderOut, obj, ply, gameVersion)
     else:
         print(Fore.RED + "ERROR: " +Style.RESET_ALL+ "Failed to read file/folder")
         exit(1)
