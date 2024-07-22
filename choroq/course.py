@@ -306,6 +306,8 @@ class Course():
                 if unknown4 != 7:
                     print(f"Found new unknown4 texture reference @ {file.tell()}")
 
+                # This is usually 5 or 4, but can be varaible with the same texture
+                # I thought this was to do with how its used on the mesh, but unsure
                 textureType = U.readLong(file)
 
                 data.append(textureRef1)
@@ -355,7 +357,7 @@ class Course():
                 exit(61)
 
             return "data", data
-        elif dataType == 0x6C028192: 
+        elif dataType & 0xFF00FFFF == 0x6C008192: # 6C028192
             # Seen in ChoroQ HG 3 files, unsure of use probably data section
             data = []
             # Unknown data type/use
@@ -535,7 +537,7 @@ class Course():
         Course.currentDataIndex = 0
         
         print(f"Last dataType {nextDataType}")
-        print(f"shorts {len(meshes)} == {count}: {len(meshes) == count}")
+        print(f"shorts Read vs Expected {len(meshes)} == {count}: {len(meshes) == count}")
         if len(meshes) != count:
             print("Got different lengths")
             # exit(22)
@@ -546,33 +548,61 @@ class Course():
     def _fromFile(file, offset, scale=1):
         file.seek(offset, os.SEEK_SET)
         print(f"Reading Course from {file.tell()}")
-        chunks = [] #16x16 grid with meshes inside
+        chunks = [] #8x8 grid with meshes inside
+        x_max = 8
+        z_max = 8
+        shorts_max = 64
+        min_offset = 390
+
+        choroq3Test = U.readLong(file)
+        file.seek(-4, os.SEEK_CUR)
+        # Check to see if this course table is too big for CHQ HG 2 format,
+        # Is over 256 table size (8 x 8 chunks) + 128 (8 x 8 shorts, number of meshes)
+        # Then this must be a larger course, probably a CHQ HG 3 course
+        if choroq3Test > 400:  # 400 is the standard table size in CHQ HG 2
+            # CHQ HG 3 table seems to be 1024 chunks + 512 shorts (count)
+            if choroq3Test >= 2080: 
+                choroq3Test = True
+                x_max = 16
+                z_max = 16 
+                shorts_max = 512 # 16*16*2
+                min_offset = 2000
+                # Very last offset is actually the end of the table, i.e max length
+            else:
+                choroq3Test = False
+        else:
+            choroq3Test = False
+
 
         chunkOffsets = []
-        for z in range(0, 8):
-            for x in range(0, 8):
+        for z in range(0, z_max):
+            for x in range(0, x_max):
                 chunkOffsets.append(U.readLong(file))
-        extraOffset = U.readLong(file)
+        if not choroq3Test:
+            extraOffset = U.readLong(file)
 
         # Number of sub files/meshes in chunk
         # This is not used in this script
         shorts = []
-        for j in range(64):
+        for j in range(shorts_max):
             shorts.append(U.readShort(file))
-        extraShort = U.readShort(file)
+        if not choroq3Test:
+            extraShort = U.readShort(file)
 
         print(f"Read end of table @ {file.tell()}")
         print(f"Reading Chunks from {offset+chunkOffsets[0]}")
         # Read each chunk
-        for z in range(0, 8):
+        for z in range(0, z_max):
             zRow = []
-            xLimit = 8
-            for x in range(0, xLimit):
-                index = x + z * 8
+            for x in range(0, x_max):
+                index = x + z * x_max
                 print(f"Reading chunk {index} z{z} x{x}")
-                if chunkOffsets[index] < 390:
+                if chunkOffsets[index] < min_offset:
                     # Must be empty or invalid chunk as offset table is within this region
-                    print("Skipping chunk offset = 0")
+                    print(f"Skipping chunk offset too low {chunkOffsets[index]}")
+                    continue
+                if choroq3Test and index == z_max * x_max - 1:
+                    print("Skipping as last for CHQ HG 3")
                     continue
                 chunk = Course._parseChunk(file, offset+chunkOffsets[index], shorts[index], index, scale)
                 zRow.append(chunk)
@@ -581,7 +611,7 @@ class Course():
         # Process the extra part of the course
         # This is usually used in fields to hold the windows/trees
         # Ensure offset is after the offset table
-        if extraOffset > 390:
+        if not choroq3Test and extraOffset > min_offset:
             print(f"extraOffset {offset+extraOffset} {extraOffset} {extraShort} but at @ {file.tell()}")
             extraChunk = Course._parseChunk(file, offset+extraOffset, extraShort, 65, scale)
             chunks.append([extraChunk])

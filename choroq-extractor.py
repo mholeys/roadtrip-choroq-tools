@@ -171,28 +171,33 @@ def process_course_type(courseFile, destFolder, fileNumber, outType, filePrefix,
                         print(f"Failed to write texture/palette probably decoded badly Course:{fileNumber} Texture:{i} {texture}")
         sys.stdout = sys.__stdout__
 
-def process_courses(source, dest, outputFormats, mergeByData = False):
-    print("Processing courses")
-    for cNumber in ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '16', '18', '19', '20']:
-        courseFile = f"{source}/COURSE/C{cNumber}.BIN"
+def process_courses(source, dest, folder, outputFormats, mergeByData = False):
+    if not Path(f"{source}/{folder}").is_dir():
+        print(f"No {folder}s to process, folder {folder} missing")
+        return
 
-        print(f"Processing {courseFile}")
-        for outType in outputFormats:
-            courseOutputFolder = f"{dest}/COURSE/C{cNumber}{outType}"
-            process_course_type(courseFile, courseOutputFolder, cNumber, outType, "C", mergeByData)
-            
-
-def process_actions(source, dest, outputFormats, mergeByData = False):
-    print("Processing actions")
-    for aNumber in ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', "15", '16', "17", '18', '19', '20']:
-        actionFile = f"{source}/ACTION/A{aNumber}.BIN"
-
-        print(f"Processing {actionFile}")
-        for outType in outputFormats:
-            actionOutputFolder = f"{dest}/ACTION/A{aNumber}{outType}"
-            process_course_type(actionFile, actionOutputFolder, aNumber, outType, "A", mergeByData)
+    print(f"Processing {folder}s")
+    with os.scandir(f"{source}/{folder}") as it:
+        for entry in it:
+            if not entry.name.startswith('.') and entry.is_file():
+                cNumber = entry.name[0 : entry.name.find('.')]
+                cPrefix = cNumber[0]
+                cNumber = cNumber[1:]
+                print(f"Processing {entry.name}")
+                for outType in outputFormats:
+                    courseOutputFolder = f"{dest}/{folder}/{cPrefix}{cNumber}{outType}"
+                    try:
+                        process_course_type(entry, courseOutputFolder, cNumber, outType, cPrefix, mergeByData)
+                    except KeyboardInterrupt:
+                        break
+                    except:
+                        sys.stdout = sys.__stdout__
+                        print(f"Failed to process file {entry.path}")
 
 def process_fields(source, dest, outputFormats, mergeByData = False):
+    if not Path(f"{source}/FLD").is_dir():
+        print("No fields to process, folder FLD missing")
+        return
     print("Processing fields (FLD)")
     for fx in [0, 1, 2, 3]:
         for fy in [0, 1, 2, 3]:
@@ -204,15 +209,24 @@ def process_fields(source, dest, outputFormats, mergeByData = False):
                     fieldOutputFolder = f"{dest}/FIELD/F{fieldNumber}{outType}"
                     process_course_type(fieldFile, fieldOutputFolder, fieldNumber, outType, "F", mergeByData)
 
-                    
+
+def process_towns(source, dest, outputFormats, mergeByData = False):
+    return
+    if Path(f"{folderIn}/SYS").is_dir():
+        for t in ["T00", "T00S01", "T01", "T02", "T03"]:
+            townFile = f"{folderIn}/SYS/{t}.BIN"
+            for outType in outputFormats:
+                process_course_type(townFile, f"{folderOut}/TOWN/{t}-{outType}", t[1:], outType, "T", mergeByData)
+
 
 def process_cars(source, dest, outputFormats):
     print("Processing cars")
     for carFolder in [f"{source}/CAR0", f"{source}/CAR1", f"{source}/CAR2", f"{source}/CAR3", f"{source}/CAR4", f"{source}/CARS"]:
-        with os.scandir(carFolder) as it:
-            for entry in it:
-                if not entry.name.startswith('.') and entry.is_file():
-                    process_file(entry, dest, outputFormats)
+        if Path(carFolder).is_dir():
+            with os.scandir(carFolder) as it:
+                for entry in it:
+                    if not entry.name.startswith('.') and entry.is_file():
+                        process_file(entry, dest, outputFormats)
 
 def process_file(entry, folderOut, outputFormats):
     if type(entry) is str:
@@ -221,18 +235,20 @@ def process_file(entry, folderOut, outputFormats):
     print(f"Processing {entry}")
     with open(entry, "rb") as f:
         outfolder = f"{folderOut}/CARS/{basename}/"
-        os.makedirs(outfolder, exist_ok=True)
-        f.seek(0, os.SEEK_END)
-        fileSize = f.tell()
-        f.seek(0, os.SEEK_SET)
-        car = CarModel.fromFile(f, 0, fileSize)
-        for i,mesh in enumerate(car.meshes):
-            for outType in outputFormats:
-                with open(f"{outfolder}{basename}-{i}.{outType}", "w") as fout:
-                    mesh.writeMeshToType(outType, fout)
-        for i,tex in enumerate(car.textures):
-            tex.writeTextureToPNG(f"{outfolder}{basename}-{i}.png")
-            # tex.writePaletteToPNG(f"{outfolder}{basename}-{i}-p.png")
+        with open(f"{outfolder}/log.log", "w") as sys.stdout:
+            os.makedirs(outfolder, exist_ok=True)
+            f.seek(0, os.SEEK_END)
+            fileSize = f.tell()
+            f.seek(0, os.SEEK_SET)
+            car = CarModel.fromFile(f, 0, fileSize)
+            for i,mesh in enumerate(car.meshes):
+                for outType in outputFormats:
+                    with open(f"{outfolder}{basename}-{i}.{outType}", "w") as fout:
+                        mesh.writeMeshToType(outType, fout)
+            for i,tex in enumerate(car.textures):
+                tex.writeTextureToPNG(f"{outfolder}{basename}-{i}.png")
+                # tex.writePaletteToPNG(f"{outfolder}{basename}-{i}-p.png")
+        sys.stdout = sys.__stdout__
 
 if __name__ == '__main__':
     colorama.init()
@@ -273,11 +289,19 @@ if __name__ == '__main__':
     if obj_grouped == True:
         outputFormats.append("obj")
 
+    # outputFormats = ["comb"]
+    # obj_grouped = True
+
     if os.path.isdir(folderIn):
-        process_courses(folderIn, folderOut, outputFormats, obj_grouped)
-        process_actions(folderIn, folderOut, outputFormats, obj_grouped)
+        process_courses(folderIn, folderOut, "COURSE", outputFormats, obj_grouped)
+        process_courses(folderIn, folderOut, "ACTION", outputFormats, obj_grouped)
         process_fields(folderIn, folderOut, outputFormats, obj_grouped)
         process_cars(folderIn, folderOut, outputFormats)
+
+        # Check for Towns for CHQ HG 3, DOESNT WORK ATM
+        # process_towns(folderIn, folderOut, outputFormats, obj_grouped)
+
+
     else:
         print(Fore.RED + "ERROR: " +Style.RESET_ALL+ "Failed to read source folder")
         exit(1)
