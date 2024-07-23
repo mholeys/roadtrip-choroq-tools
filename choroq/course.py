@@ -411,21 +411,56 @@ class Course():
             # Skip 12 bytes as we dont know what they are used for
             file.seek(0xC, os.SEEK_CUR)
             meshFormatVar = U.readLong(file)
+
+            if meshFormatVar & 0xFF00FF00 == 0x3000C000:
+                print("using shorter mesh")
+                pass
+
             # print(f"vertCount {vertCount}")
             # print(f"meshFormatVar {hex(meshFormatVar)}")
 
             # Extra unknown
+            # This might be a flag to say if there are normals
             unkw2 = U.BreadLong(file)
 
             for x in range(0, vertCount):
-                vx, vy, vz = U.readXYZ(file)
+                if meshFormatVar & 0xFF00FF00 == 0x3100C000:
+                    # 36 bytes per vert
+                    # Mesh is normal
+                    vx, vy, vz = U.readXYZ(file)
+                    nx, ny, nz = (0, 0, 0)
+                    # Some bits have normals, currently detected with:
+                    if unkw2 == 0x20:
+                        # If 12 then it should be 48
+                                # if dataType & 0xFFFFFFF00 == 0x68128000: # Bit 2 lower set 
+                                #     nx, ny, nz = U.readXYZ(file)
+                                # # Bit 2 and 1 upper or 4 upper should be 36 so far
+                                # elif dataType & 0xFF0FFF00 == 0x68028000: # Bit 2 lower set 
+                                #     if dataType & 0x00100000 != 0x00100000: # Not upper bit 1
+                                #         if dataType & 0x00400000 != 0x00400000: # Not upper bit 4
+                                # # if dataType & 0xFFFFFF00 != 0x681A8000: # Seen in C17
+                                #                 nx, ny, nz = U.readXYZ(file)
 
-                # Baked lighting data/colours?
-                cr, cg, cb = U.readXYZ(file) 
-                tu, tv, tw = U.readXYZ(file) # Are texture coords
+                        # Best backup one
+                        if dataType & 0xFFFFFF00 != 0x68448000: # Seen in C04M # Does all but 17/18
+                            nx, ny, nz = U.readXYZ(file)
+                    cr, cg, cb = U.readXYZ(file)
+                    tu, tv, tw = U.readXYZ(file)
+
+                elif meshFormatVar & 0xFF00FF00 == 0x3000C000:
+                    # Mesh is shorter, no normals I think
+                    # 36 bytes per vert
+                    vx, vy, vz = U.readXYZ(file)
+                    nx, ny, nz = (0, 0, 0)
+                    cr, cg, cb = U.readXYZ(file)
+                    tu, tv, tw = U.readXYZ(file)
+                else:
+                    print("New meshFormatVar")
+                    print(hex(meshFormatVar))
+                    exit(1)
 
                 fx, fy, fz = (0, 0, 0)
-                nx, ny, nz = (0, 0, 0)
+
 
                 if fx > 255 or fy > 255 or fz > 255:
                     print("Found value > 255")
@@ -436,9 +471,9 @@ class Course():
                 
                 c = (cr, cg, cb, 255) # Convert to RGBA
                 verts.append((vx * scale, vy * scale, vz * scale))
-                normals.append((nx, ny, nz))
                 colours.append(c)
                 extras.append((fx, fy, fz))
+                normals.append((nx, ny, nz))
                 uvs.append((tu, 1-tv, tw))
             
             unkw3 = U.BreadShort(file) # 0x0008 not when numberOfExtra != 0
