@@ -181,7 +181,7 @@ class CarMesh(AMesh):
             meshVertCount = 0
 
             # Read chunk of verticies
-            while meshFlag == 0x6c018000:
+            while meshFlag == 0x6c018000 or meshFlag == 0x68808000:
                 verts = [] 
                 uvs = []
                 normals = []

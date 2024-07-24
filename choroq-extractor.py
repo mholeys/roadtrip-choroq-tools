@@ -1,5 +1,6 @@
 from choroq.texture import Texture
 from choroq.car import CarModel, CarMesh
+from choroq.car_hg3 import HG3CarModel, HG3CarMesh
 from choroq.course import CourseModel
 from choroq.quickpic import QuickPic
 
@@ -82,7 +83,7 @@ def group_meshes_by_material(meshes):
                 for dataIndex, (dd, mm) in meshesByData.items():
                     if dd == []:
                         continue
-                    dataKey = dd[0]
+                    dataKey = hex(dd[0]) + hex(dd[1])[2:] + hex(dd[2])[2:]
                     # Add meshes that match this material to the list of meshes
                     if dataKey not in meshByMaterial:
                         meshByMaterial[dataKey] = []
@@ -231,45 +232,45 @@ def process_fields(source, dest, outputFormats, mergeByData = False):
                     fieldOutputFolder = f"{dest}/FIELD/F{fieldNumber}{outType}"
                     process_course_type(fieldFile, fieldOutputFolder, fieldNumber, outType, "F", mergeByData)
 
-
-def process_towns(source, dest, outputFormats, mergeByData = False):
-    return
-    if Path(f"{folderIn}/SYS").is_dir():
-        for t in ["T00", "T00S01", "T01", "T02", "T03"]:
-            townFile = f"{folderIn}/SYS/{t}.BIN"
-            for outType in outputFormats:
-                process_course_type(townFile, f"{folderOut}/TOWN/{t}-{outType}", t[1:], outType, "T", mergeByData)
-
-
 def process_cars(source, dest, outputFormats):
     print("Processing cars")
+    # Default to hg2 cars
+    version = 2
+    if not Path(f"{source}/CAR0").is_dir():
+        # Then using chq hg 3 cars
+        print("HG3 cars")
+        version = 3
+
     for carFolder in [f"{source}/CAR0", f"{source}/CAR1", f"{source}/CAR2", f"{source}/CAR3", f"{source}/CAR4", f"{source}/CARS"]:
         if Path(carFolder).is_dir():
             with os.scandir(carFolder) as it:
                 for entry in it:
                     if not entry.name.startswith('.') and entry.is_file():
-                        process_file(entry, dest, outputFormats)
+                        process_file(entry, dest, outputFormats, version)
 
-def process_file(entry, folderOut, outputFormats):
+def process_file(entry, folderOut, outputFormats, version):
     if type(entry) is str:
         entry = pathlib.Path(entry)
     basename = entry.name[0 : entry.name.find('.')]
     print(f"Processing {entry}")
     with open(entry, "rb") as f:
-        outfolder = f"{folderOut}/CARS/{basename}/"
+        outfolder = f"{folderOut}/CARS/{basename}"
+        Path(outfolder).mkdir(parents=True, exist_ok=True)
         with open(f"{outfolder}/log.log", "w") as sys.stdout:
-            os.makedirs(outfolder, exist_ok=True)
             f.seek(0, os.SEEK_END)
             fileSize = f.tell()
             f.seek(0, os.SEEK_SET)
-            car = CarModel.fromFile(f, 0, fileSize)
+            if version == 2:
+                car = CarModel.fromFile(f, 0, fileSize)
+            elif version == 3:
+                car = HG3CarModel.fromFile(f, 0, fileSize)
             for i,mesh in enumerate(car.meshes):
                 for outType in outputFormats:
-                    with open(f"{outfolder}{basename}-{i}.{outType}", "w") as fout:
+                    with open(f"{outfolder}/{basename}-{i}.{outType}", "w") as fout:
                         mesh.writeMeshToType(outType, fout)
             for i,tex in enumerate(car.textures):
-                tex.writeTextureToPNG(f"{outfolder}{basename}-{i}.png")
-                # tex.writePaletteToPNG(f"{outfolder}{basename}-{i}-p.png")
+                tex.writeTextureToPNG(f"{outfolder}/{basename}-{i}.png")
+                # tex.writePaletteToPNG(f"{outfolder}/{basename}-{i}-p.png")
         sys.stdout = sys.__stdout__
 
 if __name__ == '__main__':
@@ -311,6 +312,12 @@ if __name__ == '__main__':
     if obj_grouped == True:
         outputFormats.append("obj")
 
+    if len(sys.argv) == 4 and sys.argv[3] == "M":
+        obj = False
+        ply = False
+        obj_grouped = True
+        outputFormats = ["comb"] 
+
     # outputFormats = ["comb"]
     # obj_grouped = True
 
@@ -319,10 +326,6 @@ if __name__ == '__main__':
         process_courses(folderIn, folderOut, "ACTION", outputFormats, obj_grouped)
         process_fields(folderIn, folderOut, outputFormats, obj_grouped)
         process_cars(folderIn, folderOut, outputFormats)
-
-        # Check for Towns for CHQ HG 3, DOESNT WORK ATM
-        # process_towns(folderIn, folderOut, outputFormats, obj_grouped)
-
 
     else:
         print(Fore.RED + "ERROR: " +Style.RESET_ALL+ "Failed to read source folder")

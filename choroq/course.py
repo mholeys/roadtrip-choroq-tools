@@ -67,6 +67,7 @@ import math
 from choroq.amesh import AMesh
 from choroq.texture import Texture
 from choroq.car import CarModel, CarMesh
+from choroq.car_hg3 import HG3CarModel, HG3CarMesh
 import choroq.read_utils as U
 
 class CourseModel:
@@ -155,14 +156,22 @@ class CourseModel:
                 # Some files have fields after the second offset, mainly the 023 FIELD used for MyCity
                 if magic == 400:
                     # This is to handle the my city files, as they are fields, but not
+                    print("Parsing extra as field")
                     extraFields.append(Course._fromFile(file, offset+o))
+                elif magic == 1:
+                    # possibly HG3 "car", with unknown 16 byte padding
+                    # file.seek(16, os.SEEK_CUR) 
+                    # mapMeshes += HG3CarMesh._fromFile(file, offset+o)
+                    chunk = Course._parseChunk(file, offset+o+16, 0, 0, 1)
+                    # extraFields.append(Course([[chunk]], [], []))
+                    mapMeshes += chunk[0][0]
                 elif meshFlag == 0x1000101:
                     # No header, probably just a mesh
                     print("Reading as car mesh direct")
                     mapMeshes += CarMesh._fromFile(file, offset+o)
                 else:
                     # First bit is offset table as usua
-                    print("Reading as car model fully")
+                    print(f"Reading as car model fully @ {file.tell()}")
                     extra = CarModel.fromFile(file, offset+o, subFileOffsets[oi+1] - o)
                     if oi != 4:
                         mapMeshes += extra.meshes
@@ -284,7 +293,7 @@ class Course():
             mesh = CourseMesh(len(verts), verts, normals, uvs, faces, colours, extras)
 
             return "mesh", mesh
-        elif dataType & 0xFF00FFFF == 0x68008192: 
+        elif dataType & 0xFF00FFFF == 0x68008192 or dataType & 0xFF00FFFF == 0x6C008192: 
             # Data section is labelled as DATA as I dont know what it is
             # it usually contains texture info, and other unknown data
             data = []
@@ -297,7 +306,15 @@ class Course():
             unknown1 = U.BreadLong(file) # Usually 0x10000000
             unknown2 = U.BreadLong(file) # Usually 0x0000000E
             
-            if count >= 3:
+            if count == 1:
+                U.BreadLong(file)
+                U.BreadLong(file)
+                U.BreadLong(file)
+                U.BreadLong(file)
+                U.BreadLong(file)
+                
+                U.BreadLong(file)
+            elif count >= 3:
                 # I think this section contains some information about the mesh
                 # This might be similar to the collider system
                 d1 = U.BreadLong(file)
@@ -375,6 +392,7 @@ class Course():
             return "data", data
         elif dataType & 0xFF00FFFF == 0x6C008192: # 6C028192
             # Seen in ChoroQ HG 3 files, unsure of use probably data section
+            # currently being handled above same as other data
             data = []
             # Unknown data type/use
             subType = (dataType & 0x00FF0000) >> 16 # Seen 02
@@ -422,28 +440,42 @@ class Course():
             # Extra unknown
             # This might be a flag to say if there are normals
             unkw2 = U.BreadLong(file)
+            
+            len48 = False
+
+            # Current poor way of checking the length of mesh data, usually 48 or 36
+            # I have not found a better way of detecting it, so guess, then workout
+            # Currently this only chesk 31 format not 30 format
+            if meshFormatVar & 0xFF00FF00 == 0x3100C000:
+                # Might be a 48 len mesh, probably 36
+                # check
+                if unkw2 == 0x20:
+                    beforeTest = file.tell()
+                    file.seek(vertCount * 36, os.SEEK_CUR)
+                    test = U.readLong(file)
+                    # Check if end of mesh bit is found (unkw3/4)
+                    if test & 0xFFFFFF00 == 0x15000000 and test & 0xFFFFFFFF >= 0x15000000:
+                        len48 = False
+                        print("guess at len 36")
+                    else:
+                        file.seek(beforeTest, os.SEEK_SET)
+                        file.seek(vertCount * 48, os.SEEK_CUR)
+                        test = U.readLong(file)
+                        if test & 0xFFFFFF00 == 0x15000000 and test & 0xFFFFFFFF >= 0x15000000:
+                            print("guess at len 48")
+                            len48 = True
+                        else: 
+                            print(f"HG3 MESH LENGTH UNKNOWN @ {file.tell()}")
+                    # Go back to where the data starts
+                    file.seek(beforeTest, os.SEEK_SET)
+
 
             for x in range(0, vertCount):
                 if meshFormatVar & 0xFF00FF00 == 0x3100C000:
-                    # 36 bytes per vert
-                    # Mesh is normal
                     vx, vy, vz = U.readXYZ(file)
                     nx, ny, nz = (0, 0, 0)
-                    # Some bits have normals, currently detected with:
-                    if unkw2 == 0x20:
-                        # If 12 then it should be 48
-                                # if dataType & 0xFFFFFFF00 == 0x68128000: # Bit 2 lower set 
-                                #     nx, ny, nz = U.readXYZ(file)
-                                # # Bit 2 and 1 upper or 4 upper should be 36 so far
-                                # elif dataType & 0xFF0FFF00 == 0x68028000: # Bit 2 lower set 
-                                #     if dataType & 0x00100000 != 0x00100000: # Not upper bit 1
-                                #         if dataType & 0x00400000 != 0x00400000: # Not upper bit 4
-                                # # if dataType & 0xFFFFFF00 != 0x681A8000: # Seen in C17
-                                #                 nx, ny, nz = U.readXYZ(file)
-
-                        # Best backup one
-                        if dataType & 0xFFFFFF00 != 0x68448000: # Seen in C04M # Does all but 17/18
-                            nx, ny, nz = U.readXYZ(file)
+                    if len48:
+                        nx, ny, nz = U.readXYZ(file)
                     cr, cg, cb = U.readXYZ(file)
                     tu, tv, tw = U.readXYZ(file)
 
@@ -459,7 +491,12 @@ class Course():
                     print(hex(meshFormatVar))
                     exit(1)
 
+                # vx, vy, vz = U.readXYZ(file)
+                # cr, cg, cb = U.readXYZ(file)
+                # tu, tv, tw = U.readXYZ(file)
+
                 fx, fy, fz = (0, 0, 0)
+                # nx, ny, nz = (0, 0, 0)
 
 
                 if fx > 255 or fy > 255 or fz > 255:
