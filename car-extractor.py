@@ -69,6 +69,7 @@ if __name__ == '__main__':
     makeFolders = False
     obj = True
     ply = True
+    gameVersion = 2
     if len(sys.argv) == 4: 
         makeFolders = True if sys.argv[3] == "1" else False
     elif len(sys.argv) == 5:

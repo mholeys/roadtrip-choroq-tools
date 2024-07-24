@@ -82,7 +82,7 @@ import os
 import math
 from choroq.amesh import AMesh
 from choroq.car import CarModel, CarMesh
-from choroq.course import Course
+# from choroq.course import Course
 from choroq.texture import Texture
 import choroq.read_utils as U
 
@@ -242,17 +242,18 @@ class HG3CarMesh(CarMesh):
                         cr, cg, cb = U.readXYZ(file)
                         tu, tv, unkw2 = U.readXYZ(file)
 
-                        normals.append((nx, ny, nz))
 
                     elif meshFormatVar & 0xFF00FF00 == 0x3000C000:
                         # Mesh is shorter, no normals I think
                         vx, vy, vz = U.readXYZ(file)
+                        nx, ny, nz = (0,0,0)
                         cr, cg, cb = U.readXYZ(file)
                         tu, tv, unkw2 = U.readXYZ(file)
                     
                     c = (cr, cg, cb, 255) # Convert to RGBA
                     verts.append((vx * -scale, vy * scale, vz * scale))
                     colours.append(c)
+                    normals.append((nx, ny, nz))
                     uvs.append((tu, 1-tv, 0))
                 unkw3 = U.BreadShort(file) # 0400
                 unkw4 = U.BreadShort(file) # 0015
