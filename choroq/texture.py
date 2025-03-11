@@ -1,6 +1,7 @@
 import io
 import os
 import choroq.read_utils as U
+import choroq.ps2_utils as PS2
 from PIL import Image, ImagePalette, ImageOps
 
 class Texture:
@@ -13,7 +14,7 @@ class Texture:
             0x82,0x86,0x8a,0x8e, 0x92,0x96,0x9a,0x9e, 0xa2,0xa6,0xaa,0xae, 0xb2,0xb6,0xba,0xbe,
             0xc2,0xc6,0xca,0xce, 0xd2,0xd7,0xdb,0xdf, 0xe3,0xe7,0xeb,0xef, 0xf3,0xf7,0xfb,0xff]
 
-    def __init__(self, texture = [], palette = [], size=(0,0), palettesize=(0,0), fixAlpha=True):
+    def __init__(self, texture = [], palette = [], size=(0,0), palettesize=(0,0), bpp=24, fixAlpha=True):
         self.width = size[0]
         self.height = size[1]
         self.pwidth = palettesize[0]
@@ -21,9 +22,16 @@ class Texture:
         self.texture = texture
         self.palette = palette
         self.fixAlpha = fixAlpha
+        self.bpp = bpp
 
     @staticmethod
     def _parseTextureHeader(file, offset):
+        dmaTag = PS2.decode_DMATag(file)
+        tagId = PS2.decode_DMATagID_source(dmaTag)
+        print(dmaTag)
+        print(tagId)
+        file.seek(offset, os.SEEK_SET)
+
         typeF = U.readByte(file) - 0x6
         print(f"TextType: {typeF}")
         
@@ -208,8 +216,6 @@ class Texture:
         #file.seek(112, os.SEEK_CUR)
         #header = file.read(112)
 
-        print(f"parse palette header at {offset} {file.tell()}")
-        
         fB = U.readByte(file) #  Often 0xX6 where x could be something
 
         U.BreadByte(file)
@@ -223,15 +229,16 @@ class Texture:
         isNonLinear = True
         
         colourSize = fB - 6
+        headerByteSize = 112
         isNonLinear = True # Assuming all are swizzled
         file.seek(offset+0x40, os.SEEK_SET)
         pWidth = U.readShort(file) & 0xFFF
         file.seek(offset+0x44, os.SEEK_SET)
+        # pHeight = int((fB * 16 + 16 - 112) / pWidth / 4)
         pHeight = U.readShort(file) & 0xFFF
         psize = pWidth, pHeight
         thisPaletteSize = pWidth * pHeight
         numberOfPalettes = 1 # Assumption
-        headerByteSize = 112
 
         file.seek(offset+0x6C, os.SEEK_SET)
         endLong = U.readLong(file)
@@ -243,6 +250,7 @@ class Texture:
         print(f"Palette size: {psize[0]}x{psize[1]}px colourSize: {colourSize} numColours: {thisPaletteSize}")
         
         file.seek(offset+headerByteSize, os.SEEK_SET)
+        
         return isNonLinear, colourSize, thisPaletteSize, numberOfPalettes, psize
 
     @staticmethod
@@ -264,7 +272,7 @@ class Texture:
         return colours
 
     @staticmethod
-    def _paletteFromFile(file, length, offset, fixAlpha=True):
+    def _paletteFromFile(file, offset, fixAlpha=True):
         
         isNonLinear, colourSize, thisPaletteSize, numberOfPalettes, psize = Texture._parsePaletteHeader(file, offset)
         if (isNonLinear, colourSize, thisPaletteSize, numberOfPalettes, psize) == (False, 0, 0, 0, (0, 0)):
@@ -369,7 +377,7 @@ class Texture:
         if (width, height, length, bpp) == (0,0,0,0):
             # This is probably a double palette image
             file.seek(offset, os.SEEK_SET)
-            colours, psize = Texture._paletteFromFile(file, length, offset, fixAlpha)
+            colours, psize = Texture._paletteFromFile(file, offset, fixAlpha)
             return None
         headerLength = 0x70
 
@@ -377,12 +385,258 @@ class Texture:
         # Read texture data in
         texture = Texture._readTexture(file, length, bpp)
         if bpp <= 8:
-            colours, psize = Texture._paletteFromFile(file, length, offset + length + headerLength, fixAlpha)
+            colours, psize = Texture._paletteFromFile(file, offset + length + headerLength, fixAlpha)
         else:
             # No palette
             psize = (0, 0)
             colours = None
-        return Texture(texture, colours, (width, height), psize, fixAlpha)
+        return Texture(texture, colours, (width, height), psize, bpp, fixAlpha)
+
+    @staticmethod
+    def allFromFile(file, offset, size, fixAlpha=True, returnToStart=True):
+        file.seek(offset, os.SEEK_SET)
+        # Find all image start locations
+        imageOffsets = []
+        textures = []
+        tagId = { 'tag_end': False }
+        nextAddr = 0
+        position = 0
+        while not tagId['tag_end']:
+            dmaTag = PS2.decode_DMATag(file)
+            tagId = PS2.decode_DMATagID_source(dmaTag)
+            print(dmaTag)
+            print(tagId)
+            if tagId == None:
+                return []
+
+            # This is after the DmaTag header, 
+            if tagId['tag_end']:
+                print(f"TagEND @ {file.tell()}")
+                # This is an odd little set of data,
+                # it must be used by the game/vu1 to 
+                # find or do something, but for us its
+                # just an unknown set of bytes usually 32 bytes
+                # but it is the end of the list
+
+                # # Check the length of the data, without the header
+                # file.seek(-12, os.SEEK_CUR) # Jump to start of the possible header
+                # file.seek(96, os.SEEK_CUR) # This holds the same length as at byte 0 (dma tag, without the header's length (6))
+                # dataLength = U.readShort(file)
+                # file.seek(-2, os.SEEK_CUR)
+                # print(file.tell())
+
+                # # Check we are not going pass out texture file bounds before guessing for more textures
+                # # 1024 *16 would be the whole GS memory
+                # if 16 + file.tell() + dataLength * 16 > size or dataLength > 1024:
+                #     #if dmaTag['unused'] != 135: # Case in shops where there is another
+                #     postTag = dmaTag['taddr']+dmaTag['qwordCount']*16+16
+                #     # Jump past the little bit at the end, incase we are not returning to start
+                #     file.seek(postTag, os.SEEK_SET)
+                #     break
+
+                # if dmaTag['qwordCount'] != 0 and dmaTag['tagId'] != 0 and dataLength % 4 == 0 and dataLength > 16 and dataLength < 1228800: # 640x480 image
+                #     # Probably has another partial image
+                #     # replace the data from the dma tag, to fake this into thinking its an image
+                #     file.seek(-96, os.SEEK_CUR) # Go back to where we should be
+
+                #     if dataLength == 8192:
+                #         width = 16
+                #         height = 512
+                #     else:
+                #         width = 16
+                #         height = dataLength / 16
+                    
+                #     dmaTag['taddr'] = file.tell() + 112
+                #     print("Decoded endTag, but with image data, trying as image")
+                #     file.seek(dmaTag['taddr'], os.SEEK_SET)
+                #     bpp = 8
+                #     print(f"reading texture at {file.tell()}")
+                #     texture = Texture._readTexture(file, dataLength*16, bpp)
+                #     print(file.tell())
+                #     print("")
+                #     dmaTag['qwordCount'] = dataLength
+                #     if bpp <= 8:
+                #         print("Probably has palette")
+                #         # Move to next texture, and treat as palette
+                #         paletteAddr = dmaTag['qwordCount']*16
+                #         print(f"Working palette at {file.tell()}-> {dmaTag['taddr']+paletteAddr}")
+                #         # Check if this is probably a palette or not
+                #         file.seek(dmaTag['taddr']+paletteAddr+2, os.SEEK_SET)
+                #         ffCheck = U.readByte(file)
+                #         if ffCheck != 0xFF and ffCheck < 0x40:
+                #             # Not palette
+                #             print("probably not a palette next, so treat image as having no palette")
+                #             psize = (0, 0)
+                #             colors = None
+                #         else:
+                #             file.seek(dmaTag['taddr']+paletteAddr, os.SEEK_SET)
+                            
+                #             colours, psize = Texture._paletteFromFile(file, dmaTag['taddr']+paletteAddr, fixAlpha)
+                #             paletteEnd = file.tell()
+                #             #print(f"Palette: size {psize} [{colours}]")
+                #             # Read the palette's header again, as now it will be used to find the next
+                #             file.seek(dmaTag['taddr']+paletteAddr, os.SEEK_SET)
+                #             dmaTag = PS2.decode_DMATag(file)
+                #             tagId = PS2.decode_DMATagID_source(dmaTag)
+                #             print(dmaTag)
+                #             print(tagId)
+                #             print("1 palette handled")
+                #             if not returnToStart:
+                #                 file.seek(paletteEnd, os.SEEK_SET)
+                #     else:
+                #         # No palette
+                #         print("no palette")
+                #         psize = (0, 0)
+                #         colours = None
+                #     textures.append(Texture(texture, colours, (16, 512), psize, bpp, fixAlpha))
+                #     #if dmaTag['unused'] != 135: # Case in shops where there is another
+                #     postTag = dmaTag['taddr']+dmaTag['qwordCount']*16+16
+                #     # Jump past the little bit at the end, incase we are not returning to start
+                #     file.seek(postTag, os.SEEK_SET)
+                # else:
+                #     #if dmaTag['unused'] != 135: # Case in shops where there is another
+                postTag = dmaTag['taddr']+dmaTag['qwordCount']*16+16
+                # Jump past the little bit at the end, incase we are not returning to start
+                file.seek(postTag, os.SEEK_SET)
+                break
+            
+            if dmaTag['qwordCount'] == 0:
+                # This is not a texture area at all, probably from guessing for textures
+                # We probably don't need to jump here as its will be a offset test, and the next 
+                # will jump to the next offset anyway
+                break
+
+            # Decode the current texture
+            # Guess bits per pixel, to see if we need 
+            # a palette
+            bpp = 0
+
+            file.seek(dmaTag['taddr'], os.SEEK_SET)
+            print(f"reading header  @{file.tell()} vs {dmaTag['taddr']+nextAddr} {dmaTag['taddr']} {nextAddr}")
+            file.seek(dmaTag['taddr']+0x26, os.SEEK_SET)
+            bppCheckRaw = U.readShort(file)
+
+            if bppCheckRaw & 0xFF00 == 0x1300:
+                bpp = 8
+            elif bppCheckRaw & 0xFF00 == 0x1400 or bppCheckRaw == 0x0001:
+                bpp = 4
+            elif bppCheckRaw == 0x0101 or bppCheckRaw == 0x0102 or bppCheckRaw == 0xC0C1:
+                bpp = 24
+            else:
+                print(f"Found new bpp check value {bppCheckRaw} @ {dmaTag['taddr']+0x26}")
+                
+
+            # Guess width/height
+            file.seek(dmaTag['taddr']+0x44, os.SEEK_SET)
+            height = U.readShort(file) & 0xFFF ## Think 12 bits for height of texture
+            file.seek(dmaTag['taddr']+0x40, os.SEEK_SET)
+            width = U.readShort(file) & 0xFFF ## Think 12 bits for width of texture
+            
+            file.seek(dmaTag['taddr']+0x34, os.SEEK_SET)
+            length = U.readLong(file)
+            print(f"length should be {dmaTag['qwordCount']*16+16 - 112} {length}") 
+            # if length != dmaTag['qwordCount']*16+16 - 112:
+            #     exit(1)
+
+            if bpp != 8 and bpp != 4 and bpp != 24:
+                print(f"reading texture @{file.tell()} w:{width} h:{height} l:{length} bpp {bpp} from bppC {bppCheckRaw >> 4}")
+                exit(1)
+
+            if length == 0 and bpp != 0:
+                length = int(width * height * (bpp/8))
+                print(f"calc miss len   w:{width} h:{height} l:{length} bpp {bpp}")
+            elif bpp == 0:
+                bpp = int(length / (width * height) * 8)
+                print(f"calc miss bpp   w:{width} h:{height} l:{length} bpp {bpp}")
+            if width * height != length * 8/bpp:
+                if width == 640 and height == 384:
+                    length = int(width * height * (bpp/8))
+                    print(f"Image header has been read wrong, assuming full screen image")
+                elif width == 640 and height == 448:
+                    length = int(width * height * (bpp/8))
+                    print(f"Image header has been read wrong, assuming full screen image")
+                else:
+                    # Image stats do not match what we would expect
+                    print(f"Image header has been read wrong")
+                    if length != dmaTag['qwordCount']*16+16 - 112:
+                        print("assuming dmaTag length to correct wrong length")
+                        length = dmaTag['qwordCount']*16+16 - 112
+
+            file.seek(dmaTag['taddr']+112, os.SEEK_SET)
+            print(f"reading texture @{file.tell()} w:{width} h:{height} l:{length} bpp {bpp} from bppC {bppCheckRaw >> 4}")
+            
+            texture = Texture._readTexture(file, length, bpp)
+            print(file.tell())
+            print("")
+            if bpp <= 8:
+                print("Probably has palette")
+                # Move to next texture, and treat as palette
+                paletteAddr = dmaTag['qwordCount']*16+16
+                print(f"Working palette at {file.tell()}-> {dmaTag['taddr']+paletteAddr}")
+                # Check if this is probably a palette or not
+                file.seek(dmaTag['taddr']+paletteAddr+2, os.SEEK_SET)
+                ffCheck = U.readByte(file)
+                if ffCheck != 0xFF and ffCheck < 0x40:
+                    # Not palette
+                    print("probably not a palette next, so treat image as having no palette")
+                    psize = (0, 0)
+                    colors = None
+                else:
+                    file.seek(dmaTag['taddr']+paletteAddr, os.SEEK_SET)
+                    
+                    colours, psize = Texture._paletteFromFile(file, dmaTag['taddr']+paletteAddr, fixAlpha)
+                    paletteEnd = file.tell()
+                    #print(f"Palette: size {psize} [{colours}]")
+                    # Read the palette's header again, as now it will be used to find the next
+                    file.seek(dmaTag['taddr']+paletteAddr, os.SEEK_SET)
+                    dmaTag = PS2.decode_DMATag(file)
+                    tagId = PS2.decode_DMATagID_source(dmaTag)
+                    print(dmaTag)
+                    print(tagId)
+                    print("1 palette handled")
+                    if not returnToStart:
+                        file.seek(paletteEnd, os.SEEK_SET)
+            else:
+                # No palette
+                print("no palette")
+                psize = (0, 0)
+                colours = None
+            textures.append(Texture(texture, colours, (width, height), psize, bpp, fixAlpha))
+            print("Texture parsed")
+            print("")
+
+            # Workout next image location
+            nextAddr = dmaTag['qwordCount']*16+16
+            imageOffsets.append(dmaTag['taddr']+nextAddr)
+            print(f"Working at {file.tell()}-> {dmaTag['taddr']+nextAddr}")
+            file.seek(dmaTag['taddr']+nextAddr, os.SEEK_SET)
+            print(f"Texture[{position}]")
+            position += 1
+        
+        if returnToStart:
+            file.seek(offset, os.SEEK_SET)
+
+        return textures
+
+        # ####################################### END
+        width, height, length, bpp = Texture._parseTextureHeader(file, offset)
+        if (width, height, length, bpp) == (0,0,0,0):
+            # This is probably a double palette image
+            file.seek(offset, os.SEEK_SET)
+            colours, psize = Texture._paletteFromFile(file, offset, fixAlpha)
+            return None
+        headerLength = 0x70
+
+
+        # Read texture data in
+        texture = Texture._readTexture(file, length, bpp)
+        if bpp <= 8:
+            colours, psize = Texture._paletteFromFile(file, offset + length + headerLength, fixAlpha)
+        else:
+            # No palette
+            psize = (0, 0)
+            colours = None
+        return Texture(texture, colours, (width, height), psize, bpp, fixAlpha)
     
     def getTextureAsBytes(self, flipX=False, flipY=False, usepalette=True):
         cList = []
@@ -413,9 +667,16 @@ class Texture:
 
     def writeTextureToPNG(self, path, flipX=False, flipY=False, usepalette=True):
         cList = []
-        if self.pwidth == 0 and self.pheight == 0: # bpp > 8
-            image = Image.frombytes('RGB', (self.width, self.height), self.texture, 'raw')
-            image.convert("RGBA").save(path, "PNG")
+        if self.pwidth == 0 and self.pheight == 0: 
+            if self.bpp == 24: 
+                image = Image.frombytes('RGB', (self.width, self.height), self.texture, 'raw')
+                image.convert("RGBA").save(path, "PNG")
+            elif self.bpp == 4 or self.bpp == 8:
+                image = Image.frombytes('L', (self.width, self.height), self.texture, 'raw')
+                image.convert("RGBA").save(path, "PNG")
+            else:
+                print("BAD BPP value")
+                exit()
         else:
             for c in self.palette:
                 cList.append(c[0])

@@ -116,29 +116,31 @@ class CourseModel:
             file.seek(offset+o, os.SEEK_SET)
             print(f"offset {offset + o} magic :{magic}")
             
-            if CourseModel.matchesTextureMagic(magic):
-                textureCount = 0
+            if oi == 0:
+                textures += Texture.allFromFile(file, offset+o, size)
+            # if CourseModel.matchesTextureMagic(magic):
+            #     textureCount = 0
                 
-                print(f"Parsing texture @ {offset+o} {magic & 0x10120006} {magic & 0x10400006}")
-                print(f"Reading texture {textureCount}")
-                textures.append(Texture._fromFile(file, offset+o))
-                nextTextureOffset = file.tell()
-                nextTexture = U.readLong(file)
-                file.seek(nextTextureOffset, os.SEEK_SET)
+            #     print(f"Parsing texture @ {offset+o} {magic & 0x10120006} {magic & 0x10400006}")
+            #     print(f"Reading texture {textureCount}")
+            #     textures.append(Texture._fromFile(file, offset+o))
+            #     nextTextureOffset = file.tell()
+            #     nextTexture = U.readLong(file)
+            #     file.seek(nextTextureOffset, os.SEEK_SET)
 
-                print(f"nextTextureOffset {nextTextureOffset}")
-                print(f"nextTexture {nextTexture}")
+            #     print(f"nextTextureOffset {nextTextureOffset}")
+            #     print(f"nextTexture {nextTexture}")
 
-                while CourseModel.matchesTextureMagic(nextTexture):
-                    textureCount += 1
-                    print(f"Reading texture {textureCount}")
-                    textures.append(Texture._fromFile(file, nextTextureOffset))
-                    nextTextureOffset = file.tell()
-                    nextTexture = U.readLong(file)
-                    file.seek(nextTextureOffset, os.SEEK_SET)
-                    print(f"nextTextureOffset {nextTextureOffset}")
-                    print(f"nextTexture {nextTexture}")
-                print(file.tell())
+            #     while CourseModel.matchesTextureMagic(nextTexture):
+            #         textureCount += 1
+            #         print(f"Reading texture {textureCount}")
+            #         textures.append(Texture._fromFile(file, nextTextureOffset))
+            #         nextTextureOffset = file.tell()
+            #         nextTexture = U.readLong(file)
+            #         file.seek(nextTextureOffset, os.SEEK_SET)
+            #         print(f"nextTextureOffset {nextTextureOffset}")
+            #         print(f"nextTexture {nextTexture}")
+            #     print(file.tell())
                 
             elif oi == 1:
                 meshes.append(Course._fromFile(file, offset+o))

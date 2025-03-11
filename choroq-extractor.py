@@ -2,6 +2,8 @@ from choroq.texture import Texture
 from choroq.car import CarModel, CarMesh
 from choroq.car_hg3 import HG3CarModel, HG3CarMesh
 from choroq.course import CourseModel
+from choroq.garage import GarageModel
+from choroq.shop import Shop
 from choroq.quickpic import QuickPic
 
 import io
@@ -174,8 +176,14 @@ def process_course_type(courseFile, destFolder, fileNumber, outType, filePrefix,
             for i,texture in enumerate(course.textures):
                 try:
                     texture.writeTextureToPNG(f"{destFolder}/tex/t{fileNumber}-{i}.png")
-                except:
-                    print(f"Failed to write texture/palette probably decoded badly Course:{fileNumber} Texture:{i} {texture}")
+                except Exception as E:
+                    print(f"Failed to write texture/palette probably decoded badly Course:{fileNumber} Texture:{i} {texture} {E}")
+                    try:
+                        print(f"{texture} W{texture.width} H{texture.height} PW{texture.pwidth} PH{texture.pheight} T{texture.texture} P{texture.palette} FA{texture.fixAlpha}")
+                        texture.writeTextureToPNG(f"{destFolder}/tex/t{fileNumber}-{i}.png", usepalette=False)
+                        texture.writePaletteToPNG(f"{destFolder}/tex/p{fileNumber}-{i}.png")
+                    except Exception as E:
+                        print(f"Failed to write raw texture/palette probably decoded badly Course:{fileNumber} Texture:{i} {texture} {E}")
             for e,extra in enumerate(course.extras):
                 for i,texture in enumerate(extra.textures):
                     try:
@@ -222,7 +230,7 @@ def process_fields(source, dest, outputFormats, mergeByData = False):
         print("No fields to process, folder FLD missing")
         return
     print("Processing fields (FLD)")
-    for fx in [0, 1, 2, 3]:
+    for fx in [1, 2, 3]:
         for fy in [0, 1, 2, 3]:
             for fz in [0, 1, 2, 3]:
                 fieldNumber = f"{fx}{fy}{fz}"
@@ -272,6 +280,68 @@ def process_file(entry, folderOut, outputFormats, version):
                 tex.writeTextureToPNG(f"{outfolder}/{basename}-{i}.png")
                 # tex.writePaletteToPNG(f"{outfolder}/{basename}-{i}-p.png")
         sys.stdout = sys.__stdout__
+        
+def process_items(source, dest, outputFormats):
+    print("Processing items")
+
+    itemFolder = f"{source}/ITEM"
+    if Path(itemFolder).is_dir():
+        with os.scandir(itemFolder) as it:
+            for entry in it:
+                if not entry.name.startswith('.') and entry.is_file():
+                    if type(entry) is str:
+                        entry = pathlib.Path(entry)
+                    basename = entry.name[0 : entry.name.find('.')]
+                    outfolder = f"{folderOut}/ITEM/{basename}"
+                    Path(outfolder).mkdir(parents=True, exist_ok=True)
+                    print(f"Processing {entry}")
+                    with open(entry, "rb") as f:
+                        with open(f"{outfolder}/log.log", "w") as sys.stdout:
+                            textures = Texture.allFromFile(f, 0, 0xFFFFFFFF)
+                            for i,tex in enumerate(textures):
+                                tex.writeTextureToPNG(f"{outfolder}/{basename}-{i}.png")
+                        sys.stdout = sys.__stdout__
+
+def process_shops(source, dest, outputFormats):
+    print("Processing shops")
+
+    itemFolder = f"{source}/SHOP"
+    # HG 3 does not have "SHOP" folder
+    if Path(itemFolder).is_dir():
+        with os.scandir(itemFolder) as it:
+            for entry in it:
+                if not entry.name.startswith('.') and entry.is_file():
+                    if type(entry) is str:
+                        entry = pathlib.Path(entry)
+                    basename = entry.name[0 : entry.name.find('.')]
+                    outfolder = f"{folderOut}/ITEM/{basename}"
+                    Path(outfolder).mkdir(parents=True, exist_ok=True)
+                    print(f"Processing {entry} to {outfolder}")
+                    with open(entry, "rb") as f:
+                        with open(f"{outfolder}/log.log", "w") as sys.stdout:
+                            if basename == "GARAGE":
+                                # GARAGE is different
+                                garage = GarageModel.fromFile(f, 0)
+                                for ei, entry in enumerate(garage.entries):
+                                    for i,mesh in enumerate(entry.meshes):
+                                        for outType in outputFormats:
+                                            with open(f"{outfolder}/{basename}-{ei}-{i}.{outType}", "w") as fout:
+                                                mesh.writeMeshToType(outType, fout)
+                                    for i,tex in enumerate(entry.textures):
+                                        try:
+                                            tex.writeTextureToPNG(f"{outfolder}/{basename}-{ei}-{i}.png")
+                                        except Exception as E:
+                                            print(f"Failed to write texture/palette probably decoded badly Garage[{ei}]:{entry} Texture:{i} {tex} {E}")
+                            else:
+                                shops = Shop.fromFile(f, 0)
+                                print(f"Done shop {entry}")
+                                for s,shop in enumerate(shops.entries):
+                                    for i,tex in enumerate(shop):
+                                        try:
+                                            tex.writeTextureToPNG(f"{outfolder}/{basename}-{s}-{i}.png")
+                                        except Exception as E:
+                                            print(f"Failed to write texture/palette probably decoded badly Shop[{s}]:{entry} Texture:{i} {tex} {E}")
+                        sys.stdout = sys.__stdout__
 
 if __name__ == '__main__':
     colorama.init()
@@ -326,6 +396,8 @@ if __name__ == '__main__':
         process_courses(folderIn, folderOut, "ACTION", outputFormats, obj_grouped)
         process_fields(folderIn, folderOut, outputFormats, obj_grouped)
         process_cars(folderIn, folderOut, outputFormats)
+        process_items(folderIn, folderOut, outputFormats)
+        process_shops(folderIn, folderOut, outputFormats)
 
     else:
         print(Fore.RED + "ERROR: " +Style.RESET_ALL+ "Failed to read source folder")

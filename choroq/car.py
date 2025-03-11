@@ -106,18 +106,31 @@ class CarModel:
         subFileOffsets = CarModel._parseOffsets(file, offset, size)
         meshes = []
         textures = []
-        for o in subFileOffsets:
+        for oi,o in enumerate(subFileOffsets):
             if (o == size or o == 0):
                 # At end of file
                 break
             file.seek(offset+o, os.SEEK_SET)
             # print(f"Reading model from {file.tell()}")
             magic = U.readLong(file)
+            U.BreadLong(file)
+            U.BreadLong(file)
+            textureCheck = U.readLong(file) #  This should be 00 at the end for textures (guesswork)
             file.seek(offset+o, os.SEEK_SET)
-            if magic & 0x10120006 >= 0x10120006 or magic & 0x10400006 >= 0x10400006:
-                # File is possibly a texture
-                # print(f"Parsing texture @ {offset+o} {magic & 0x10120006} {magic & 0x10400006}")
-                textures.append(Texture._fromFile(file, offset+o))
+
+            # Check to prevent overrun
+            if oi < len(subFileOffsets)-1:
+                end = subFileOffsets[oi+1]
+            else:
+                # This should not be a problem, as the last is usually the end of the file anyway
+                end = size
+
+            print(f"TextureCheck: pos: {oi}? {oi == len(subFileOffsets)-2} and {textureCheck} {textureCheck & 0xFF000000 == 0}")
+            if oi > 0 and oi == len(subFileOffsets)-2 and textureCheck & 0xFF000000 == 0:
+                textures += Texture.allFromFile(file, offset+o, end)
+            elif magic & 0x10120006 >= 0x10120006 or magic & 0x10400006 >= 0x10400006:
+                # Just to not miss any
+                textures += Texture.allFromFile(file, offset+o, end)
             elif magic == 0x0000050:
                 # print(f"Parsing meshes found 0x50 @ {offset+o}")
                 meshes += CarMesh._fromFile(file, offset+o+0x50)

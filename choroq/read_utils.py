@@ -39,6 +39,10 @@ class Coverage:
         for i in range(position, position+length):
             Coverage.markByte(i)
 
+    @staticmethod
+    def reset():
+        byteCoverage = dict()
+
 
 
 def readFloat(f):    
@@ -59,6 +63,14 @@ def readByte(f):
 
 def readXYZ(f):
     return (readFloat(f), readFloat(f), readFloat(f))
+
+def read64(f):
+    Coverage.markLength(f.tell(), 8)
+    return int.from_bytes(f.read(8), byteorder='little')
+
+def read128(f):
+    Coverage.markLength(f.tell(), 16)
+    return int.from_bytes(f.read(16), byteorder='little')
 
 def read(f, length):
     Coverage.markLength(f.tell(), length)
