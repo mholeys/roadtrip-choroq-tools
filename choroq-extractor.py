@@ -385,6 +385,8 @@ def process_cars(source, dest, output_formats):
         if Path(carFolder).is_dir():
             with os.scandir(carFolder) as it:
                 for entry in it:
+                    if entry.name == "WHEEL.BIN":
+                        continue
                     if not entry.name.startswith('.') and entry.is_file():
                         process_file(entry, dest, output_formats, version)
 
@@ -548,7 +550,7 @@ if __name__ == '__main__':
         process_courses(folderIn, folderOut, "COURSE", outputFormats)
         process_courses(folderIn, folderOut, "ACTION", outputFormats)
         process_fields(folderIn, folderOut, outputFormats)
-        # process_cars(folderIn, folderOut, outputFormats)
+        process_cars(folderIn, folderOut, outputFormats)
         # process_items(folderIn, folderOut, outputFormats)
         # process_shops(folderIn, folderOut, outputFormats)
 

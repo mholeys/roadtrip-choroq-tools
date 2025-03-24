@@ -1454,7 +1454,7 @@ def gifDecodePacked(file, gifTag, index, descriptor, gsState):
 def gifHandlePacked(file, gifTag, index, descriptor, gsState):
     if descriptor == GIF_REG_DESCRIPTOR_PRIM:
         prim = U.read128(file) & 0x7FF
-        gsState.PRIM = prim
+        gsState.PRIM = parsePRIM(prim)
         return
     elif descriptor == GIF_REG_DESCRIPTOR_RGBAQ:
         r = U.readLong(file) & 0xFF
@@ -1716,7 +1716,6 @@ class GsState:
     # There are others, but they are restricted, so assuming they have to be set
     # via EE or microprogram not via GIF
 
-
     def __init__(self):
         # Initialise all variables
         self.pipelineData = { }
@@ -1744,7 +1743,7 @@ class GsState:
         self.MIPTBP2_1 = 0
         self.MIPTBP2_2 = 0
         self.PABE = 0
-        self.PRIM = parsePRIM(0x100) # Sets context to 1
+        self.PRIM = parsePRIM(0x100)  # Sets context to 1
         self.PRMODECONT = 0
         self.PRMODE = 0
         self.RGBAQ = { "R": 0, "G": 0, "B": 0, "A": 0, "q": 0 }
@@ -1852,7 +1851,7 @@ class GsState:
             print("SCANMSK set")
             exit()
             self.SCANMSK = data
-        elif addr == 0x34: 
+        elif addr == 0x34:
             self.MIPTBP1_1 = parseMiptBp1_X(data)
             if self.MIPTBP1_1["TBP2"] != 0:
                 print("Found mipmap value")

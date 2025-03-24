@@ -195,7 +195,7 @@ class CourseModel:
                     # Probably a field mesh table
                     print("Reading course: Field meshes")
                     extra_fields += Course.read_course_meshes(file, o)
-                elif 48 > peek > 16:
+                elif 48 > peek >= 16:
                     # Has whole car model style data
                     extras.append(CarModel.read_car(file, o, other_offsets[oi + 1]))
                 else:
@@ -258,7 +258,7 @@ class Course:
         min_offset = 390
 
         choroq3_test = False
-        if first_offset >= 400:
+        if first_offset > 400:
             choroq3_test = True
             # This has larger table
             # At least 16x16
@@ -406,7 +406,7 @@ class Course:
                                 file.seek(-8, os.SEEK_CUR)
                                 print(f"Restarting readCourseChunk after more DMAs @ {file.tell()}")
                     pass
-                elif vif_state.ExecAddr == 0xA0:
+                elif hg3 and vif_state.ExecAddr == 0xA0:
                     # Unsure on this, it has been: 3 0xFF then 0 then a float of 0.5, then integer (4 bytes) then float (800)
                     # Could be offsetting or positioning of the course? or anything else
                     # Just move past.
@@ -930,6 +930,7 @@ class CourseCollider(AMesh):
         x_chunks = 16
         y_chunks = 16
         if first_offset > 1544:
+            print(f"Assuming HG3 collider as first offset is {first_offset}")
             # Table is probably larger
             # Assume HG 3 format file
             x_chunks = 32

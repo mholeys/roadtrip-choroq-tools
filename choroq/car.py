@@ -380,7 +380,7 @@ class CarMesh(AMesh):
         return len(self.meshVerts)
 
     def write_mesh_to_obj(self, fout, start_index = 0, material=None):
-        # Write verticies
+        # Write vertices
         for i in range(0, len(self.meshVerts)):
             vx = '{:.20f}'.format(self.meshVerts[i][0])
             vy = '{:.20f}'.format(self.meshVerts[i][1])
