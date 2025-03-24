@@ -22,6 +22,6 @@ class QuickPic:
         
         textures = []
         while file.tell() < size:
-            textures.append(Texture._fromFile(file, file.tell()))
+            textures.append(Texture.read_texture(file, file.tell()))
             file.seek(file.tell() + 800)
         return QuickPic(textures)

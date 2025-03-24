@@ -21,12 +21,13 @@ from choroq.car import CarModel, CarMesh
 from choroq.car_hg3 import HG3CarModel, HG3CarMesh
 import choroq.read_utils as U
 
+
 class GarageModel():
     def __init__(self, entries):
         self.entries = entries
 
     @staticmethod
-    def fromFile(file, offset):
+    def from_file(file, offset):
         file.seek(0, os.SEEK_END)
         maxLength = file.tell()
         file.seek(offset, os.SEEK_SET)
@@ -42,7 +43,7 @@ class GarageModel():
                 currentIndex += 1
 
         if entries == []:
-            print("No entries")
+            print("No textures")
         return GarageModel(entries)
 
 
@@ -55,15 +56,15 @@ class GarageEntry():
 
 
     @staticmethod
-    def _parseOffsets(file, offset):
+    def _parse_offsets(file, offset):
         print(offset)
         file.seek(offset, os.SEEK_SET)
         subFileOffsets = [U.readLong(file), U.readLong(file), U.readLong(file), U.readLong(file)]
         return subFileOffsets
 
     @staticmethod
-    def readAdditional(file, offset, maxLength):
-        if offset + 100 > maxLength:
+    def read_additional(file, offset, max_length):
+        if offset + 100 > max_length:
             return []
         textures = []
         file.seek(offset, os.SEEK_SET)
@@ -78,51 +79,51 @@ class GarageEntry():
             return []
 
         print(f"Reading garage additional @ {offset}")
-        # Read texture data, as we don't know what the image dimentions are
-        dataIn = U.readShort(file)
+        # Read texture data, as we don't know what the image dimensions are
+        data_in = U.readShort(file)
         data = []
         print(f"Reading until palette @ {file.tell()-2}")
         more = True
         count = 0
         while more and count < 0xFFFF:
-            if dataIn == 0x0046:
+            if data_in == 0x0046:
                 more = False
                 break
-            elif dataIn == 0x0010:
+            elif data_in == 0x0010:
                 more = False
                 break
             # Read 4 as the headers are aligned by 16 bytes
-            data.append(dataIn)
-            dataIn = U.readShort(file)
-            data.append(dataIn)
-            dataIn = U.readShort(file)
-            data.append(dataIn)
-            dataIn = U.readShort(file)
-            data.append(dataIn)
-            dataIn = U.readShort(file)
+            data.append(data_in)
+            data_in = U.readShort(file)
+            data.append(data_in)
+            data_in = U.readShort(file)
+            data.append(data_in)
+            data_in = U.readShort(file)
+            data.append(data_in)
+            data_in = U.readShort(file)
             count += 16
         if len(data) < 16:
-            if data[3] == 0 and data[4] == 0x51: #this is midway between a header
+            if data[3] == 0 and data[4] == 0x51:  # this is midway between a header
                 file.seek(offset+64, os.SEEK_SET)
-                return GarageEntry.readAdditional(file, file.tell(), maxLength)
-            if data[3] == 0 and data[4] == 0x52: #this is midway between a header
+                return GarageEntry.read_additional(file, file.tell(), max_length)
+            if data[3] == 0 and data[4] == 0x52:  # this is midway between a header
                 file.seek(offset+48, os.SEEK_SET)
-                return GarageEntry.readAdditional(file, file.tell(), maxLength)
-            if data[3] == 0 and data[4] == 0x53: #this is midway between a header
+                return GarageEntry.read_additional(file, file.tell(), max_length)
+            if data[3] == 0 and data[4] == 0x53:  # this is midway between a header
                 file.seek(offset+32, os.SEEK_SET)
-                return GarageEntry.readAdditional(file, file.tell(), maxLength)
+                return GarageEntry.read_additional(file, file.tell(), max_length)
         print(data)
         print(f"Read up to ?palette @ {file.tell()-2}")
         # Check of the 3/4 byte of the palette, should me FF to be a palette
         # if not we are probably at bad data, give up
         check = U.readShort(file)
         # Check for the start of the next garage entry
-        if dataIn == 0x0010 and check == 0x0000:
+        if data_in == 0x0010 and check == 0x0000:
             # Now check that there are only 3 offsets
             offset1 = U.readLong(file)
             offset2 = U.readLong(file)
             offset3 = U.readLong(file)
-            print(f"offsets? {[(dataIn << 8) | check, offset1, offset2, offset3]}")
+            print(f"offsets? {[(data_in << 8) | check, offset1, offset2, offset3]}")
             if offset2 > offset1: # Sanity check
                 if offset3 == 0:        
                     # Jump back to start of the next (probably) garage file 
@@ -161,7 +162,7 @@ class GarageEntry():
             psize = (0, 0)
             colours = None
             
-        textures.append(Texture(texture, colours, (width, height), psize, bpp, fixAlpha=True))
+        textures.append(Texture(texture, colours, (width, height), psize, bpp, fix_alpha=True))
         print(f"Read texture {texture}")
 
         # Check for extra dma tag, which would end the last image/palette data
@@ -172,7 +173,7 @@ class GarageEntry():
             print("Skipping ending dmatag")
             file.seek((dmaTagCheck & 0xFFFF) * 16 + 16, os.SEEK_CUR)
         # Check for more
-        textures += GarageEntry.readAdditional(file, file.tell(), maxLength)
+        textures += GarageEntry.read_additional(file, file.tell(), max_length)
         return textures
 
     @staticmethod
@@ -181,7 +182,7 @@ class GarageEntry():
         maxLength = file.tell()
         file.seek(offset, os.SEEK_SET)
         print(offset)
-        offsets = GarageEntry._parseOffsets(file, offset)
+        offsets = GarageEntry._parse_offsets(file, offset)
         meshes = []
         textures = []
         for oi, o, in enumerate(offsets):
@@ -191,16 +192,15 @@ class GarageEntry():
             if oi == 0:
                 # Car style meshes
                 print(f"Reading garage mesh {file.tell()}")
-                meshes += CarMesh._fromFile(file, offset+o, offsets[1])
+                meshes += CarMesh.from_file(file, offset + o, offsets[1])
             elif oi == 1:
                 # Textures
                 print(f"Reading garage textures {file.tell()}")
-                textures += Texture.allFromFile(file, offset+o, maxLength, returnToStart=False)
+                textures += Texture.all_from_file(file, offset+o)
             elif oi == 2:
                 # Extra textures?                
-                textures += GarageEntry.readAdditional(file, offset+o, maxLength)
+                textures += GarageEntry.read_additional(file, offset + o, maxLength)
 
-            
         return GarageEntry(meshes, textures)
 
     

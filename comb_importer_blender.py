@@ -150,7 +150,7 @@ class ChoroQCombImporter(Operator, ImportHelper):
 
             vertCount = int(f.readline().split(' ')[1])
             faceCount = int(f.readline().split(' ')[1])
-            #print(f"verts {vertCount} faces {faceCount}")
+            #print(f"verts {vert_count} faces {faceCount}")
             f.readline() # End header
             
             for vert in range(vertCount):

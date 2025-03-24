@@ -31,35 +31,50 @@ def show_help():
     print("                            -- 2 = HG 2")
     print("                            -- 3 = HG 3")
 
-def process_file(entry, folderOut, obj = True, ply = True, gameVersion = 2):
+def process_file(entry, folder_out, obj = True, ply = True, gameVersion = 2):
     if type(entry) is str:
         entry = pathlib.Path(entry)
     basename = entry.name[0 : entry.name.find('.')]
     with open(entry, "rb") as f:
-        outfolder = f"{folderOut}/{basename}/"
-        os.makedirs(outfolder, exist_ok=True)
+        out_folder = f"{folder_out}/{basename}/"
+        os.makedirs(out_folder, exist_ok=True)
         f.seek(0, os.SEEK_END)
-        fileSize = f.tell()
+        file_size = f.tell()
         f.seek(0, os.SEEK_SET)
         if gameVersion == 2:
-            car = CarModel.fromFile(f, 0, fileSize)
+            car = CarModel.read_car(f, 0, file_size)
         elif gameVersion == 3:
-            car = HG3CarModel.fromFile(f, 0, fileSize)
-        for i,mesh in enumerate(car.meshes):
+            car = HG3CarModel.from_file(f, 0, file_size)
+
+        # Get texture, and fix clut/palette
+        address, texture = car.textures[0]
+        clut_address, clut = car.textures[1]
+        # assign palette
+        unswizzled = Texture.unswizzle_bytes(clut)
+        texture.palette = unswizzled  # Set the texture's palette accordingly
+        texture.palette_width = clut.width
+        texture.palette_height = clut.height
+
+        # Save texture and material for use in mesh
+        texture.write_texture_to_png(f"{out_folder}{basename}.png")
+        # texture.writePaletteToPNG(f"{out_folder}/{basename}-{i}-p.png")
+        texture_path = f"{basename}.png"
+        with open(f"{out_folder}{basename}.mtl", "w") as fout:
+            Texture.save_material_file_obj(fout, basename, texture_path)
+
+        for i, mesh in enumerate(car.meshes):
             if obj:
-                with open(f"{outfolder}{basename}-{i}.obj", "w") as fout:
-                    mesh.writeMeshToObj(fout)
+                with open(f"{out_folder}{basename}-{i}.obj", "w") as fout:
+                    mesh.write_mesh_to_obj(fout, material=basename)
             if ply:
-                with open(f"{outfolder}{basename}-{i}.ply", "w") as fout:
-                    mesh.writeMeshToPly(fout)
-        for i,tex in enumerate(car.textures):
-            tex.writeTextureToPNG(f"{outfolder}{basename}-{i}.png")
-            tex.writePaletteToPNG(f"{outfolder}{basename}-{i}-p.png")
+                with open(f"{out_folder}{basename}-{i}.obj", "w") as fout:
+                    mesh.write_mesh_to_ply(fout)
+
 
 if __name__ == '__main__':
     colorama.init()
     if len(sys.argv) >= 3:
-        folderIn = sys.argv[1]
+        folder_in = sys.argv[1]
         folderOut = sys.argv[2]
     else:
         show_help()
@@ -96,22 +111,15 @@ if __name__ == '__main__':
         print(Fore.RED +"ERROR: " +Style.RESET_ALL+ "Failed to create or use output folder")
         exit(1)
 
-    if os.path.isdir(folderIn):
-        with os.scandir(folderIn) as it:
+    if os.path.isdir(folder_in):
+        with os.scandir(folder_in) as it:
             for entry in it:
                 if not entry.name.startswith('.') and entry.is_file():
                     process_file(entry, folderOut, obj, ply, gameVersion)
     
-    elif os.path.isfile(folderIn):
-        process_file(folderIn, folderOut, obj, ply, gameVersion)
+    elif os.path.isfile(folder_in):
+        process_file(folder_in, folderOut, obj, ply, gameVersion)
     else:
-        print(Fore.RED + "ERROR: " +Style.RESET_ALL+ "Failed to read file/folder")
+        print(Fore.RED + "ERROR: " + Style.RESET_ALL + "Failed to read file/folder " + folder_in)
         exit(1)
-    
-
-    
-
-
-
-    
     

@@ -182,9 +182,9 @@ def findAllImages(file, offset):
     accumlatedDmaPos = nextAddr
     while not tagId['tag_end']:
         # print(f"seeking: {dmaTag['taddr']+nextAddr}")
-        f.seek(dmaTag['taddr']+nextAddr, os.SEEK_SET)
+        file.seek(dmaTag['taddr']+nextAddr, os.SEEK_SET)
         # print(f"Got DmaCont: {nextAddr}-> {f.tell()}")
-        dmaTag = decode_DMATag(f)
+        dmaTag = decode_DMATag(file)
         tagId = decode_DMATagID_source(dmaTag)
         # print(dmaTag)
         # print(dmaTag['qwordCount']*16+16)
@@ -446,7 +446,7 @@ def decodeFromVIFCode(file, offset, state):
 
         print(f"VIF: UNPACK: Going with: {expectedLength} ?bytes?64s?128s?")
 
-        # Determine the format type, one of: S-XX or V2-XX or V2-XX or V3-XX or V4-XX
+        # Determine the format output_type, one of: S-XX or V2-XX or V2-XX or V3-XX or V4-XX
         formatS = unpackVN == 0   # Scaler varation
         formatV2 = unpackVN == 1  # Vector2 variation
         formatV3 = unpackVN == 2  # Vector3 variation
@@ -637,7 +637,7 @@ VIF_CMD_UNPACK_HIGHEST = 0b1111111
 
 
 # Dict to allow looking up the cmd field of the VIF command which will give the command info
-# to say what this command is, if the cmd is not in this dict, it is invaild
+# to say what this command is, if the cmd is not in this dict, it is invalid
 vifCommandDebugMask = 0x7F
 # Name
 vifCommandDebugName = {
@@ -840,17 +840,17 @@ def VifDecode(vifCode, vifState):
     cmd = (vifCode >> 24) & 0xFF
     interrupt = cmd & 0b10000000 # interrupt flag
     cmd = cmd & 0b01111111 # cmd without interrupt flag
-    expectedLengthInPackets = VifGetPacketSize(cmd, num, immediate)
+    expected_length_in_packets = VifGetPacketSize(cmd, num, immediate)
     fields = VifDecodeFields(cmd, num, immediate)
-    print(VifDebug(vifState, cmd, num, immediate, expectedLengthInPackets, fields))
+    print(VifDebug(vifState, cmd, num, immediate, expected_length_in_packets, fields))
 
-    return cmd, num, immediate, interrupt, expectedLengthInPackets, fields
+    return cmd, num, immediate, interrupt, expected_length_in_packets, fields
 
 # Returns a string with information from the decoded VIF, used for debugging
 def VifDebug(vifState, cmd, num, immediate, expectedLengthInPackets, fields):
     cmd = cmd & vifCommandDebugMask
     debugLine = ""
-    # Add command's human readable name
+    # Add command's human-readable name
     if cmd not in vifCommandDebugName:
         debugLine += "Invalid VIF cmd"
     else:
@@ -886,9 +886,9 @@ def VifDebug(vifState, cmd, num, immediate, expectedLengthInPackets, fields):
 # This returns the number of bytes that this will READ IN
 # to get the expect unpack size use the other function
 def VifGetPacketSize(cmd, num, immediate):
-    # All packets are 1 + some extra amount, depending on type of packet
-    if cmd <= VIF_CMD_STCOL: # These are constant
-        length =vifCommandPacketLengthSimple[cmd]
+    # All packets are 1 + some extra amount, depending on output_type of packet
+    if cmd <= VIF_CMD_STCOL:  # These are constant
+        length = vifCommandPacketLengthSimple[cmd]
     elif cmd == VIF_CMD_MPG:
         length = 1+num*2
     elif cmd == VIF_CMD_DIRECT:
@@ -923,6 +923,10 @@ def VifGetPacketSize(cmd, num, immediate):
             exit(91)
         # hard to handle (have padding) included
         # S-16, S-8, V2-8, V3-16, V3-8, V4-8, V4-5
+    else:
+        print(f"Command is probably invalid cmd {cmd} num {num} immediate {immediate}")
+    # If you get an error and end up here, its because either a new cmd was found (very unlikely),
+    # or very likely misread data that was then parsed as a VIF
     return length
 
 # Returns the VN part of the Unpack command
@@ -1064,7 +1068,7 @@ def VifUnpackData(cmd, num, immediate, interrupt, expectedLengthInPackets, field
     #         S1 = value & 0xFFFF
     #         # TODO: use signed/unsigned flag to extend to longs
     #         dataOut.write(struct.pack('<LLLL', S1, S1, S1, S1))
-    #     if (expectedLengthInPackets-1) * 2 == 
+    #     if (expectedLengthInPackets-1) * 2 ==
 
     # Handle V2-32
     elif vn == 1 and v1 == 0:
@@ -1146,7 +1150,7 @@ def VifUnpackData(cmd, num, immediate, interrupt, expectedLengthInPackets, field
     #         dataOut.write(struct.pack('<LLLL', x, y, z, w))
     else:
         print("This UNPACK format is not supported!")
-        print(vifCommandDebugName[vmd])
+        print(vifCommandDebugName[cmd])
         exit(91)
             
     dataOut.seek(0, os.SEEK_SET)
@@ -1320,7 +1324,7 @@ gifDebugPSM = {
 
 gifPsmToBitsPP = {
     "PSMCT32": 32,
-    "PSMCT24": 25,
+    "PSMCT24": 24,
     "PSMCT16": 16,
     "PSMCT16S": 16, #signed
     "PSMT8": 8,
@@ -1429,13 +1433,13 @@ def gifGetSize(gifTag):
     mode = gifGetMode(gifTag)
     nreg = gifGetNReg(gifTag)
     nloop = gifGetNLoop(gifTag)
-    if mode == gifModePacked:
+    if mode == GIF_MODE_PACKED:
         size = nreg * nloop * 4
-    elif mode == gifModeRegList:
+    elif mode == GIF_MODE_REGLIST:
         size = nreg * nloop * 4
-    elif mode == gifModeImage:
+    elif mode == GIF_MODE_IMAGE:
         size = nloop * 4
-    elif mode == gifModeDisabled:
+    elif mode == GIF_MODE_DISABLED:
         size = nloop * 4 # just incase
     else:
         print(f"This GIF tag is invalid, wrong mode {mode}?")
@@ -1577,8 +1581,9 @@ def gifHandlePacked(file, gifTag, index, descriptor, gsState):
         addr = U.read64(file)
         print(f"Setting gsState [{addr:x}] to {data:x}")
         print(f"Setting gsState {gifDebugRegisterAddressName[addr & 0x7F]} to {data:x}")
+        pos = file.tell()
         gsState.setAddr(addr & 0x7F, data)
-        pass
+        return
     elif descriptor == GIF_REG_DESCRIPTOR_NOP:
         print("Not finished")
         pass
@@ -1605,11 +1610,11 @@ class GsState:
     # 0x43 Alpha Blending Setting (CTX 2)
     ALPHA_2 = 0
     # 0x50 Buffer transfer settings
-    BITBLTBUF = 0
+    BITBLTBUF = {}
     # 0x08 Texture Wrap Mode (CTX 1)
-    CLAMP_1 = 0
+    CLAMP_1 = {}
     # 0x09 Texture Wrap Mode (CTX 2)
-    CLAMP_2 = 0
+    CLAMP_2 = {}
     # 0x46 Color Clamp Control
     COLCLAMP = 0
     # 0x44 Dither Matrix Setting
@@ -1623,22 +1628,21 @@ class GsState:
     # 0x61 Seems any data can be in here "FINISH Event Occurrence Request"
     FINISH = 0
     # 0x0A Vertex Fog Value 0 = lots of fog 255 = little fog
-    FOG = 0
+    FOG = {}
     # 0x3D Colour of distant fog 8bit r/g/b
-    FOGCOL = 0
+    FOGCOL = (0,0,0)
     # 0x4C framebuffer settings (CTX 1)
     FRAME_1 = 0 
     # 0x4D framebuffer settings (CTX 2)
     FRAME_2 = 0
     # 0x54
-    HWREG = 0 # Probably not ever used for this
+    HWREG = 0  # Probably not ever used for this
     # 0x62
     LABEL = 0
     # 0x34 MipMap settings (CTX 1)
     MIPTBP1_1 = 0
     # 0x35 MipMap settings (CTX 2)
     MIPTBP1_2 = 0
-    LABEL = 0
     # 0x36 MipMap settings (CTX 1)
     MIPTBP2_1 = 0
     # 0x37 MipMap settings (CTX 2)
@@ -1652,7 +1656,7 @@ class GsState:
     # 0x1b Mode changes drawing primitive settings?
     PRMODE = 0
     # 0x01 Vertex Colour settings
-    RGBAQ = 0
+    RGBAQ = {}
     # 0x22 raster masking for all rows or every even or odd
     SCANMSK = 0
     # 0x40 (CTX 1)
@@ -1662,7 +1666,7 @@ class GsState:
     # 0x60 related to SIGLBLID 
     SIGNAL = 0
     # 0x02 texture coord settings
-    ST = 0
+    ST = {}
     # 0x47 (CTX 1)
     TEST_1 = 0
     # 0x48 (CTX 2)
@@ -1688,29 +1692,29 @@ class GsState:
     # 0x51 buffer transfer related pos and scan direction
     TRXPOS = 0
     # 0x52 buffer transfer related size
-    TRXREG = 0
+    TRXREG = {}
     # 0x53 buffer transfer related direction
-    TRXDIR = 0
+    TRXDIR = {}
     # 0x03 UV texture coord of vertex
-    UV = 0
+    UV = {}
     # 0x18 coord offsetting (CTX 1)
     XYOFFSET_1 = 0
     # 0x19 coord offsetting (CTX 2)
     XYOFFSET_2 = 0
     # 0x04 coord values with fog
-    XYZF2 = { }
+    XYZF2 = {}
     # 0x05 coord values 
-    XYZ2 = { }
+    XYZ2 = {}
     # 0x0C coord values with fog # no draw kick
-    XYZF3 = { }
+    XYZF3 = {}
     # 0x0D coord values # no draw kick
-    XYZ3 = { }
+    XYZ3 = {}
     # 0x4E (CTX 1)
     ZBUF_1 = 0
     # 0x4F (CTX 2)
     ZBUF_2 = 0
     # There are others, but they are restricted, so assuming they have to be set
-    # via EE or mciro programnot via GIF
+    # via EE or microprogram not via GIF
 
 
     def __init__(self):
@@ -1719,17 +1723,17 @@ class GsState:
         self.renderedData = []
         self.ALPHA_1 = 0
         self.ALPHA_2 = 0
-        self.BITBLTBUF = 0
-        self.CLAMP_1 = 0
-        self.CLAMP_2 = 0
+        self.BITBLTBUF = parseBitbltbuf(0)
+        self.CLAMP_1 = parseClamp_X(0)
+        self.CLAMP_2 = parseClamp_X(0)
         self.COLCLAMP = 0
         self.DIMX = 0
         self.DTHE = 0
         self.FBA_1 = 0
         self.FBA_2 = 0
         self.FINISH = 0
-        self.FOG = 0
-        self.FOGCOL = 0
+        self.FOG = {}
+        self.FOGCOL = parseFogCol(0)
         self.FRAME_1 = 0 
         self.FRAME_2 = 0
         self.HWREG = 0 # Probably not ever used for this
@@ -1743,12 +1747,12 @@ class GsState:
         self.PRIM = parsePRIM(0x100) # Sets context to 1
         self.PRMODECONT = 0
         self.PRMODE = 0
-        self.RGBAQ = 0
+        self.RGBAQ = { "R": 0, "G": 0, "B": 0, "A": 0, "q": 0 }
         self.SCANMSK = 0
         self.SCISSOR_1 = 0
         self.SCISSOR_2 = 0
         self.SIGNAL = 0
-        self.ST = 0
+        self.ST = { "S": 0, "T": 0, "q": 0 }
         self.TEST_1 = 0
         self.TEST_2 = 0
         self.TEX0_1 = parseTex0_X(0)
@@ -1759,9 +1763,9 @@ class GsState:
         self.TEXCLUT = 0
         self.TEXFLUSH = 0
         self.TRXPOS = 0
-        self.TRXREG = 0
-        self.TRXDIR = 0
-        self.UV = 0
+        self.TRXREG = parseTrxReg(0)
+        self.TRXDIR = parseTrxDir(9)
+        self.UV = {}
         self.XYOFFSET_1 = 0
         self.XYOFFSET_2 = 0
         self.XYZF2 = { }
@@ -1789,13 +1793,21 @@ class GsState:
         elif addr == 0x07: 
             self.TEX0_2 = parseTex0_X(data)
         elif addr == 0x08: 
-            print("CLAMP_1 set")
-            exit()
-            self.CLAMP_1 = data
+            self.CLAMP_1 = parseClamp_X(data)
+            if self.CLAMP_1["WMS"] > 1:
+                print("CLAMP_1 horiz clamping unhandled")
+                exit()
+            if self.CLAMP_2["WMT"] > 1:
+                print("CLAMP_1 vert clamping unhandled")
+                exit()
         elif addr == 0x09: 
-            print("CLAMP_2 set")
-            exit()
-            self.CLAMP_2 = data
+            self.CLAMP_2 = parseClamp_X(data)
+            if self.CLAMP_2["WMS"] > 1:
+                print("CLAMP_2 horiz clamping unhandled")
+                exit()
+            if self.CLAMP_2["WMT"] > 1:
+                print("CLAMP_2 vert clamping unhandled")
+                exit()
         elif addr == 0x0A:
             print("FOG set")
             exit() 
@@ -1806,12 +1818,16 @@ class GsState:
             self.XYZ3 = data
         elif addr == 0x14: 
             self.TEX1_1 = parseTex1_X(data)
+            print(self.TEX1_1)
         elif addr == 0x15: 
             self.TEX1_2 = parseTex1_X(data)
+            print(self.TEX1_2)
         elif addr == 0x16: 
             self.TEX0_1 = parseTex2_X(data, self)
+            print(self.TEX0_1)
         elif addr == 0x17: 
-            self.TEX2_1 = parseTex2_1(data, self)
+            self.TEX2_1 = parseTex2_X(data, self)
+            print(self.TEX2_1)
         elif addr == 0x18: 
             print("XOFFSET_1 set")
             exit()
@@ -1837,33 +1853,41 @@ class GsState:
             exit()
             self.SCANMSK = data
         elif addr == 0x34: 
-            print("MIPTBP1_1 set")
-            exit()
-            self.MIPTBP1_1 = data
+            self.MIPTBP1_1 = parseMiptBp1_X(data)
+            if self.MIPTBP1_1["TBP2"] != 0:
+                print("Found mipmap value")
+                print(self.MIPTBP1_1)
+                # exit()
+            print(self.MIPTBP1_1)
         elif addr == 0x35: 
-            print("MIPTBP1_2 set")
-            exit()
-            self.MIPTBP1_2 = data
+            self.MIPTBP1_2 = parseMiptBp1_X(data)
+            if self.MIPTBP1_2["TBP2"] != 0:
+                print("Found mipmap value")
+                print(self.MIPTBP1_2)
+                # exit()
+            print(self.MIPTBP1_2)
         elif addr == 0x36: 
-            print("MIPTBP2_1 set")
-            exit()
-            self.MIPTBP2_1 = data
+            self.MIPTBP2_1 = parseMiptBp2_X(data)
+            if self.MIPTBP2_1["TBP4"] != 0:
+                print("Found mipmap value")
+                print(self.MIPTBP2_1)
+                # exit()
+            print(self.MIPTBP2_1)
         elif addr == 0x37:
-            print("MIPTBP2_2 set")
-            exit() 
-            self.MIPTBP2_2 = data
+            self.MIPTBP2_2 = parseMiptBp2_X(data)
+            if self.MIPTBP2_2["TBP4"] != 0:
+                print("Found mipmap value")
+                print(self.MIPTBP2_2)
+                # exit()
+            print(self.TEX2_2)
         elif addr == 0x3B: 
             print("TEXA set")
             exit()
             self.TEXA = data
-        elif addr == 0x3D: 
-            print("FOGCOL set")
-            exit()
-            self.FOGCOL = data
+        elif addr == 0x3D:
+            self.FOGCOL = parseFogCol(data)
         elif addr == 0x3F: 
-            print("TEXFLUSH set")
-            exit()
-            self.TEXFLUSH = data
+            self.TEXFLUSH = parseTexFlush(data)
         elif addr == 0x40: 
             print("SCISSOR_1 set")
             exit()
@@ -1929,13 +1953,20 @@ class GsState:
             exit()
             self.ZBUF_2 = data
         elif addr == 0x50: 
-            self.BITBLTBUF = parseBitbltbuf(data, self)
+            self.BITBLTBUF = parseBitbltbuf(data)
+            print(f"bitbltbuf src addr {self.BITBLTBUF['SBP']}")
+            print(f"bitbltbuf dst addr {self.BITBLTBUF['DBP']}")
+            print(f"bitbltbuf spsm {self.BITBLTBUF['SPSM']}")
+            print(f"bitbltbuf dpsm {self.BITBLTBUF['DPSM']}")
         elif addr == 0x51: 
-            self.TRXPOS = parseTrxPos(data, self)
+            self.TRXPOS = parseTrxPos(data)
+            print(self.TRXPOS)
         elif addr == 0x52: 
-            self.TRXREG = parseTrxReg(data, self)
+            self.TRXREG = parseTrxReg(data)
+            print(self.TRXREG)
         elif addr == 0x53: 
-            self.TRXDIR = parseTrxDir(data, self)
+            self.TRXDIR = parseTrxDir(data)
+            print(self.TRXDIR)
         elif addr == 0x54: 
             print("HWREG set")
             exit()
@@ -2035,9 +2066,10 @@ def parseTex1_X(value):
         "L": lodKparam,
     }
 
-def parseTex2_X(value, gsState):
+def parseTex2_X(value, gs):
     # This register, is a register, that updates another register
     # but only some values, TEX0_x = TEX2_X | other bits
+    print(f"Overriding texture values, TEX2_X being set")
     pixelStorageMethod = gifDebugPSM[(value >> 20) & 0x3F]
     clutBufferBasePointer = (value >> 37) & 0x3FFF
     clutPixelStorageMethod = (value >> 51) & 0xF
@@ -2064,10 +2096,15 @@ def parseTex2_X(value, gsState):
         "CLD": clutLoadControl,
     }
 
-def parseBitbltbuf(value, gsState):
+def parseBitbltbuf(value):
+    print("BITBLTBUF change")
     srcBufferBasePtr = value & 0x3FFF
-    srcBufferWidth = (value >> 14) & 0x3F
-    srcPSM = gifDebugPSM[(value >> 24) & 0x3F]
+    srcBufferWidth = (value >> 16) & 0x3F
+    if (value >> 24) & 0x3F not in gifDebugPSM:
+        print(f"failed to get SrcPSM from BITBLTBUF, unknown value {(value >> 24) & 0x3F}")
+        srcPSM = gifDebugPSM[0]
+    else:
+        srcPSM = gifDebugPSM[(value >> 24) & 0x3F]
 
     dstBufferBasePtr = (value >> 32)  & 0x3FFF
     dstBufferWidth = (value >> 48) & 0x3F
@@ -2082,7 +2119,7 @@ def parseBitbltbuf(value, gsState):
         "DPSM": dstPSM,
     }
 
-def parseTrxPos(value, gsState):
+def parseTrxPos(value):
     # docs specify upper left
     srcXCoord = value & 0x7FF
     srcYCoord = (value >> 16) & 0x7FF
@@ -2097,7 +2134,7 @@ def parseTrxPos(value, gsState):
         "DIR": transmissionOrder,
     }
 
-def parseTrxReg(value, gsState):
+def parseTrxReg(value):
     rectRegionWidth = value & 0xFFF
     rectRegionHeight = (value >> 32) & 0xFFF
     return {
@@ -2105,8 +2142,75 @@ def parseTrxReg(value, gsState):
         "RRH": rectRegionHeight
     }
 
-def parseTrxDir(value, gsState):
+def parseTrxDir(value):
     xDir = value & 0x3
     return {
         "XDIR": xDir
     }
+
+# Has no data
+def parseTexFlush(value):
+    return 0
+
+def parseClamp_X(value):
+    wrapModeHorizontal = value & 0x3
+    wrapModeVertical = (value >> 2) & 0x3
+    # Used in region clamp mode:
+    minU = (value >> 4) & 0x3FF
+    maxU = (value >> 14) & 0x3FF
+    maxV = (value >> 24) & 0x3FF
+    minV = (value >> 34) & 0x3FF
+    # if in Region repeat mode above are masks
+    # MaskU FixU MaskV FixU
+    return {
+        "WMS": wrapModeHorizontal,
+        "WMT": wrapModeVertical,
+        "MINU": minU,
+        "MAXU": maxU,
+        "MINV": maxV,
+        "MAXV": minV,
+    }
+
+def parseMiptBp1_X(value):
+    # BP = base pointer for levelX (in 64s)
+    # BW = buffer width for levelX (in 64s)
+    TBP1 = value & 0x3FFF
+    TBW1 = (value >> 14) & 0x3F
+    TBP2 = (value >> 20) & 0x3FFF
+    TBW2 = (value >> 34) & 0x3F
+    TBP3 = (value >> 40) & 0x3FFF
+    TBW3 = (value >> 54) & 0x3F
+    return {
+        "TBP1": TBP1,
+        "TBW1": TBW1,
+        "TBP2": TBP2,
+        "TBW2": TBW2,
+        "TBP3": TBP3,
+        "TBW3": TBW3,
+    }
+
+def parseMiptBp2_X(value):
+    # BP = base pointer for levelX (in 64s)
+    # BW = buffer width for levelX (in 64s)
+    TBP4 = value & 0x3FFF
+    TBW4 = (value >> 14) & 0x3F
+    TBP5 = (value >> 20) & 0x3FFF
+    TBW5 = (value >> 34) & 0x3F
+    TBP6 = (value >> 40) & 0x3FFF
+    TBW7 = (value >> 54) & 0x3F
+    return {
+        "TBP4": TBP4,
+        "TBW4": TBW4,
+        "TBP5": TBP5,
+        "TBW5": TBW5,
+        "TBP6": TBP6,
+        "TBW7": TBW7,
+    }
+
+def parseFogCol(value):
+    # FCR, FCB, FCG
+    # Distant fog color
+    fog_r = value & 0xFF
+    fog_g = (value >> 8) & 0xFF
+    fog_b = (value >> 16) & 0xFF
+    return fog_r, fog_g, fog_b

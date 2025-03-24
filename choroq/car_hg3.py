@@ -94,64 +94,113 @@ class HG3CarModel(CarModel):
         self.textures = textures
 
     @staticmethod
-    def _parseOffsets(file, offset, size):
+    def _parse_offsets(file, offset, size):
         file.seek(offset, os.SEEK_SET)
-        subFileOffsets = []
-        o = 1
-        while o != size and  o != 0:
+        sub_file_offsets = []
+        o = U.readLong(file)
+        sub_file_offsets.append(o)
+        while o != size and o != 0 and (len(sub_file_offsets) == 0 or (file.tell() < offset + sub_file_offsets[0])):
             o = U.readLong(file)
-            subFileOffsets.append(o)
-        return subFileOffsets
+            if o == 0:
+                break
+            sub_file_offsets.append(o)
+        return sub_file_offsets
 
     @staticmethod
-    def fromFile(file, offset, size):
-        subFileOffsets = HG3CarModel._parseOffsets(file, offset, size)
+    def from_file(file, offset, size):
+        sub_file_offsets = HG3CarModel._parse_offsets(file, offset, size)
         meshes = []
         textures = []
-        for offsetIndex,o in enumerate(subFileOffsets):
-            if (o == size or o == 0):
-                # At end of file
-                break
-            if offsetIndex < len(subFileOffsets)-1:
-                currentOffsetMax = subFileOffsets[offsetIndex+1]
-            else:
-                currentOffsetMax = size
-            file.seek(offset+o, os.SEEK_SET)
-            # print(f"Reading model from {file.tell()}")
-            magic = U.readLong(file)
-            file.seek(offset+o, os.SEEK_SET)
-            # Check to prevent overrun
-            if offsetIndex < len(subFileOffsets)-1:
-                end = subFileOffsets[offsetIndex+1]
-            else:
-                # This should not be a problem, as the last is usually the end of the file anyway
-                end = size
+        # for offsetIndex,o in enumerate(sub_file_offsets):
+        #     if (o == size or o == 0):
+        #         # At end of file
+        #         break
+        #     if offsetIndex < len(sub_file_offsets)-1:
+        #         currentOffsetMax = sub_file_offsets[offsetIndex+1]
+        #     else:
+        #         currentOffsetMax = size
+        #     file.seek(offset+o, os.SEEK_SET)
+        #     # print(f"Reading model from {file.tell()}")
+        #     magic = U.readLong(file)
+        #     file.seek(offset+o, os.SEEK_SET)
+        #     # Check to prevent overrun
+        #     if offsetIndex < len(sub_file_offsets)-1:
+        #         end = sub_file_offsets[offsetIndex+1]
+        #     else:
+        #         # This should not be a problem, as the last is usually the end of the file anyway
+        #         end = size
+        #
+        #     U.BreadLong(file)
+        #     U.BreadLong(file)
+        #     textureCheck = U.readLong(file) #  This should be 00 at the end for textures (guesswork)
+        #     file.seek(offset+o, os.SEEK_SET)
+        #
+        #     print(f"TextureCheck: pos: {offsetIndex}? {offsetIndex == len(sub_file_offsets)-2} and {textureCheck} {textureCheck & 0xFF000000 == 0}")
+        #     if offsetIndex > 0 and offsetIndex == len(sub_file_offsets)-2 and textureCheck & 0xFF000000 == 0:
+        #         textures += Texture.allFromFile(file, offset+o, end)
+        #     elif magic & 0x10120006 >= 0x10120006 or magic & 0x10400006 >= 0x10400006:
+        #         # File is possibly a texture
+        #         # print(f"Parsing texture @ {offset+o} {magic & 0x10120006} {magic & 0x10400006}")
+        #         # textures.append(Texture._fromFile(file, offset+o))
+        #         textures += Texture.allFromFile(file, offset+o, end)
+        #     elif magic == 0x0000050:
+        #         # print(f"Parsing meshes found 0x50 @ {offset+o}")
+        #         meshes += CarMesh.from_file(file, offset + o + 0x50)
+        #     elif magic == 5: # CHOROQ HG 3
+        #         # Has offset table different than usual
+        #         # print(f"Parsing HG 3 offset found {offset+o}")
+        #         meshes += HG3CarMesh.from_file(file, offset + o)
+        #
+        #     else:
+        #         # print(f"Parsing meshes @ {offset+o}")
+        #         #meshes += CarMesh._fromFile(file, offset+o+16)
+        #         meshes += HG3CarMesh.from_file(file, offset + o)
 
-            U.BreadLong(file)
-            U.BreadLong(file)
-            textureCheck = U.readLong(file) #  This should be 00 at the end for textures (guesswork)
-            file.seek(offset+o, os.SEEK_SET)
+        print(f"Reading car model (full) from {file.tell()}")
+        texture_offset = sub_file_offsets[-2]
+        eof_offset = sub_file_offsets[-1]
+        sub_file_offsets = sub_file_offsets[:-2]
 
-            print(f"TextureCheck: pos: {offsetIndex}? {offsetIndex == len(subFileOffsets)-2} and {textureCheck} {textureCheck & 0xFF000000 == 0}")
-            if offsetIndex > 0 and offsetIndex == len(subFileOffsets)-2 and textureCheck & 0xFF000000 == 0:
-                textures += Texture.allFromFile(file, offset+o, end)
-            elif magic & 0x10120006 >= 0x10120006 or magic & 0x10400006 >= 0x10400006:
-                # File is possibly a texture
-                # print(f"Parsing texture @ {offset+o} {magic & 0x10120006} {magic & 0x10400006}")
-                # textures.append(Texture._fromFile(file, offset+o))
-                textures += Texture.allFromFile(file, offset+o, end)
-            elif magic == 0x0000050:
-                # print(f"Parsing meshes found 0x50 @ {offset+o}")
-                meshes += CarMesh._fromFile(file, offset+o+0x50)
-            elif magic == 5: # CHOROQ HG 3
-                # Has offset table different than usual
-                # print(f"Parsing HG 3 offset found {offset+o}")
-                meshes += HG3CarMesh._fromFile(file, offset+o)
-                    
+        meshes = []
+        textures = []
+
+        for o in sub_file_offsets:
+            # TODO: this check needs to be within a different part, probably for each mesh part
+            file.seek(offset+o, os.SEEK_SET)
+            test = U.readLong(file)
+            file.seek(-4, os.SEEK_CUR)
+
+            # Check if this is a DMA Cnt Tag, so use as is, if not handle variation
+            if test & 0xFF000000 != 0x10000000:
+                if test < 10:
+                    # This is a little block of unknown data, this value
+                    # is number of qwords, skip for now
+                    print(f"Skipping unknown block of qwords HG3 {file.tell()}")
+                    file.seek(test * 16, os.SEEK_CUR)
+                    print(f"Skipping unknown block of qwords HG3 {file.tell()}")
+
+            # TODO: this check might need to be here or another function like the check above
+            # Now check to see if there is a sub mesh offset table, or if it is just as is
+            file.seek(offset + 8, os.SEEK_SET)
+            meshFlagNoTableTest = U.readLong(file)
+            file.seek(offset, os.SEEK_SET)
+
+            if meshFlagNoTableTest == 0x01000101:  # Checks for setting Cycle
+                print(f"Skipping offset table for Car Mesh, as there is a mesh flag")
+                mesh = CarMesh.read_car_part(file, offset + o)
+                meshes.append(mesh)
             else:
-                # print(f"Parsing meshes @ {offset+o}")
-                #meshes += CarMesh._fromFile(file, offset+o+16)
-                meshes += HG3CarMesh._fromFile(file, offset+o)
+                mesh = CarMesh.from_file(file, offset + o)
+
+            if len(mesh) > 0:
+                meshes += mesh
+
+        texture, last = Texture.read_texture(file, offset + texture_offset)
+        textures.append(texture)
+        while not last:
+            texture, last = Texture.read_texture(file, file.tell())
+            textures.append(texture)
+
         return HG3CarModel("", meshes, textures)
 
 
@@ -166,7 +215,7 @@ class HG3CarMesh(CarMesh):
         self.meshColours     = meshColours
 
     @staticmethod
-    def _parseOffsets(file, offset):
+    def _parse_offsets(file, offset):
         file.seek(offset, os.SEEK_SET)
         hg3Offsets = []
         file.seek(12, os.SEEK_CUR)
@@ -200,7 +249,7 @@ class HG3CarMesh(CarMesh):
         return unkw0, nullF0, meshStartFlag
 
     @staticmethod
-    def _fromFile(file, offset, scale=1):
+    def from_file(file, offset, scale=1):
         # Check to see if there is a offset table, or just header
         file.seek(offset+8, os.SEEK_SET)
         meshFlagNoTableTest = U.readLong(file) 
@@ -210,7 +259,7 @@ class HG3CarMesh(CarMesh):
             print(f"Skipping offset table for Car Mesh, as there is a mesh flag")
             offsets = [0]
         else:
-            offsets = HG3CarMesh._parseOffsets(file, offset)
+            offsets = HG3CarMesh._parse_offsets(file, offset)
             
         meshes = []
         for o in offsets:
@@ -274,7 +323,7 @@ class HG3CarMesh(CarMesh):
                 unkw3 = U.BreadShort(file) # 0400
                 unkw4 = U.BreadShort(file) # 0015
                 # Add faces
-                faces = HG3CarMesh.createFaceList(vertCount)
+                faces = HG3CarMesh.create_face_list(vertCount)
                 for i in range(0, len(faces)):
                     vertices = faces[i]
                     meshFaces.append((vertices[0] + meshVertCount, vertices[1] + meshVertCount, vertices[2] + meshVertCount))
@@ -290,8 +339,8 @@ class HG3CarMesh(CarMesh):
                 meshes.append(HG3CarMesh(meshVertCount, meshVerts, meshNormals, meshUvs, meshFaces, meshColours))
         return meshes
 
-    def writeMeshToDBG(self, fout, startIndex = 0):
-        self.writeMeshToObj(fout)
+    def write_mesh_to_dbg(self, fout, start_index=0, material=None):
+        self.write_mesh_to_obj(fout)
         fout.write("#" + str(len(self.meshColours)) + " colours R/G/B/A\n")
         for i in range(0, len(self.meshFaces)):
             cr = '{:d}'.format(math.trunc(self.meshColours[i][0]))
@@ -303,7 +352,7 @@ class HG3CarMesh(CarMesh):
         
         return len(self.meshVerts)
 
-    def writeMeshToObj(self, fout, startIndex = 0):
+    def write_mesh_to_obj(self, fout, start_index = 0, material=None):
         # Write verticies
         for i in range(0, len(self.meshVerts)):
             vx = '{:.20f}'.format(self.meshVerts[i][0])
@@ -329,18 +378,21 @@ class HG3CarMesh(CarMesh):
         
         # Write mesh face order/list
         for i in range(0, len(self.meshFaces)):
-            fx = self.meshFaces[i][0] + startIndex
-            fy = self.meshFaces[i][1] + startIndex
-            fz = self.meshFaces[i][2] + startIndex
+            fx = self.meshFaces[i][0] + start_index
+            fy = self.meshFaces[i][1] + start_index
+            fz = self.meshFaces[i][2] + start_index
             
             fout.write(f"f {fx}/{fx}/{fx} {fy}/{fy}/{fy} {fz}/{fz}/{fz}\n")
         fout.write("#" + str(len(self.meshFaces)) + " faces\n")
-    
+        
+        fout.write(f"usemtl {material}\n")
+        fout.write("s off\n")
         return len(self.meshVerts)
 
-    def writeMeshToComb(self, fout, startIndex = 0):
+    def write_mesh_to_comb(self, fout, start_index=0, material=None):
         fout.write(f"vertex_count {len(self.meshVerts)}\n")
         fout.write(f"face_count {len(self.meshFaces)}\n")
+        fout.write(f"texture {material}\n")
         fout.write("end_header\n")
 
         # Write verticies, colours, normals
@@ -365,16 +417,16 @@ class HG3CarMesh(CarMesh):
         
         # Write mesh face order/list
         for i in range(0, len(self.meshFaces)):
-            fx = self.meshFaces[i][0]-1 + startIndex
-            fy = self.meshFaces[i][1]-1 + startIndex
-            fz = self.meshFaces[i][2]-1 + startIndex
+            fx = self.meshFaces[i][0] - 1 + start_index
+            fy = self.meshFaces[i][1] - 1 + start_index
+            fz = self.meshFaces[i][2] - 1 + start_index
             
             fout.write(f"4 {fx} {fy} {fz}\n")
         
         return len(self.meshVerts)
 
 
-    def writeMeshToPly(self, fout, startIndex = 0):
+    def write_mesh_to_ply(self, fout, start_index = 0):
         # Write header
         fout.write("ply\n")
         fout.write("format ascii 1.0\n")
@@ -393,7 +445,7 @@ class HG3CarMesh(CarMesh):
         fout.write("property float t\n")
         fout.write(f"element face {len(self.meshFaces)}\n")
         fout.write("property list uint8 int vertex_index\n")
-        #fout.write(f"element texture {len(self.meshUvs)}\n")
+        #fout.write(f"element texture {len(self.mesh_uvs)}\n")
         #fout.write("property list uint8 float texcoord\n")
         fout.write("end_header\n")
 
@@ -419,9 +471,9 @@ class HG3CarMesh(CarMesh):
         
         # Write mesh face order/list
         for i in range(0, len(self.meshFaces)):
-            fx = self.meshFaces[i][0]-1 + startIndex
-            fy = self.meshFaces[i][1]-1 + startIndex
-            fz = self.meshFaces[i][2]-1 + startIndex
+            fx = self.meshFaces[i][0] - 1 + start_index
+            fy = self.meshFaces[i][1] - 1 + start_index
+            fz = self.meshFaces[i][2] - 1 + start_index
             
             fout.write(f"4 {fx} {fy} {fz}\n")
 

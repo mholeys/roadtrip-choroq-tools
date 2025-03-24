@@ -13,6 +13,7 @@ from pathlib import Path
 import colorama
 from colorama import Fore, Back, Style
 
+
 def show_help():
     print(Fore.BLUE+"##############################################################################################")
     print(Fore.BLUE+"ChoroQ HG 2 extractor by Matthew Holey")
@@ -30,11 +31,8 @@ def show_help():
     print("<output folder>")
     # print("[makefolders]             : whether to create sub folders for each car : 1 = Yes")
     print("[type]                    : model output format")
-    print("                            -- 1 = OBJ only")
+    print("                            -- 1 = OBJ only grouped by texture")
     print("                            -- 2 = PLY only")
-    print("                            -- 3 = Experimental OBJ grouped by material")
-    print("                               This version will try and combine the meshes")
-    print("                               when they share the same material (usually texture)")
     print("                            --  <other> = BOTH ")
 
     print("The output folder structure will be as follows:")
@@ -65,143 +63,268 @@ def show_help():
     print(Fore.YELLOW+"          On my pc, on a HDD 5900RPM it takes ~15mins for OBJ.")
     print(Fore.YELLOW+"          Courses (obj): ~110K files ~450 MB")
     print(Fore.YELLOW+"          Courses (ply): ~110k files ~500 MB")
-    print(Fore.YELLOW+"          Courses ( 3 ): ~ 12K files ~180 MB")
+    print(Fore.YELLOW+"          Courses ( 3 ): ~ 12K files ~130 MB")
     print(Fore.YELLOW+"          Actions (obj): ~100K files ~400 MB")
     print(Fore.YELLOW+"          Actions (ply): ~100k files ~400 MB")
-    print(Fore.YELLOW+"          Actions ( 3 ): ~ 13K files ~150 MB")
+    print(Fore.YELLOW+"          Actions ( 3 ): ~ 14K files ~100 MB")
     print(Fore.YELLOW+"          Fields  (obj): ~600K files ~1.7 GB")
     print(Fore.YELLOW+"          Fields  (ply): ~730K files ~2.8 GB")
-    print(Fore.YELLOW+"          Fields  ( 3 ): ~300K files ~850 MB")
+    print(Fore.YELLOW+"          Fields  ( 3 ): ~230K files ~483 MB")
     print(Fore.YELLOW+"          Cars    (obj): ~1.5k files ~120 MB")
     print(Fore.YELLOW+"          Cars    (ply): ~1.5k files ~100 MB")
 
+
 def group_meshes_by_material(meshes):
     # Sort all meshes into meshes by type
-    numberOfMeshes = 0
-    meshByMaterial = {}
-    for i,level in enumerate(meshes):
+    number_of_meshes = 0
+    mesh_by_material = {}
+    for i, level in enumerate(meshes):
         for z, zRow in enumerate(level.chunks):
-            for x, ((meshes, data), meshesByData) in enumerate(zRow):
-                for dataIndex, (dd, mm) in meshesByData.items():
-                    if dd == []:
-                        continue
-                    dataKey = hex(dd[0]) + hex(dd[1])[2:] + hex(dd[2])[2:]
+            for x, meshesByData in enumerate(zRow):
+                for dataKey, mm in meshesByData.items():
                     # Add meshes that match this material to the list of meshes
-                    if dataKey not in meshByMaterial:
-                        meshByMaterial[dataKey] = []
-                    meshByMaterial[dataKey] += mm
-                    numberOfMeshes += 1
-                    print(len(meshByMaterial[dataKey]))
-    return meshByMaterial, numberOfMeshes
+                    if dataKey not in mesh_by_material:
+                        mesh_by_material[dataKey] = []
+                    mesh_by_material[dataKey] += mm
+                    number_of_meshes += 1
+                    print(len(mesh_by_material[dataKey]))
+
+    return mesh_by_material, number_of_meshes
     
 
-def save_course_type_grouped(meshByMaterial, numberOfMeshes, destFolder, fileNumber, outType, filePrefix):
+def save_course_type_grouped(mesh_by_material, number_of_meshes, dest_folder, file_number, out_type, file_prefix, textures):
     # Save all meshes into one file, based on their data/mat type
-    matIndex = 0
+    mat_index = 0
     print("Mesh by material keys")
-    print(meshByMaterial.keys())
+    print(mesh_by_material.keys())
     print("Number of meshes")
-    print(numberOfMeshes)
-    for key, mm in meshByMaterial.items():
+    print(number_of_meshes)
+
+    Path(f"{dest_folder}/matLinked/tex/").mkdir(parents=True, exist_ok=True)
+    mat_index = 0
+    done_textures = []
+    for key, mm in mesh_by_material.items():
+        # Export textures
+        material_name = f"{file_prefix}{file_number}-{mat_index}"
+        texture_path_relative = f"tex/t{file_number}-{mat_index}.png"
+        # save texture for this mesh
+        if key not in done_textures:
+            clut_address, texture_address = key
+
+            if texture_address == 0 or clut_address == 0:  # 0, 0 is often added, but with no meshes
+                if len(mm) != 0:
+                    print(
+                        f"Mat index {mat_index} has no texture {texture_address} or no clut {clut_address} meshes {len(mm)}")
+                    for m in mm:
+                        print(vars(m))
+            elif texture_address not in textures:
+                print(f"Texture addressing wrong, check value {texture_address}")
+                exit(2)
+            else:
+                texture = textures[texture_address]
+
+                if clut_address not in textures:
+                    # Check texture type
+                    if texture.bpp > 8:
+                        # This is possibly just an image, no clut, esp if bpp == 24 or 32
+                        # save texture as is, without using any CLUTs
+                        print(f"Clut addressing wrong, {clut_address} but image should be fine as is")
+                        print(f"{dest_folder}/matLinked/{texture_path_relative}")
+                        texture.write_texture_to_png(f"{dest_folder}/matLinked/{texture_path_relative}",
+                                                     use_palette=False)
+                    else:
+                        # This texture almost certainly needs a CLUT, as it would be B&W otherwise, unlikely
+                        print(f"Clut addressing wrong, check value {clut_address}")
+                else:
+                    # Fetch the texture, and the clut to use
+                    clut = textures[clut_address]
+                    print(
+                        f"Creating paletted image {texture_address} {texture_address:x} using {clut_address} {clut_address:x}")
+                    print(f"clut bpp: {clut.bpp}")
+                    if clut.bpp != 32 and clut.bpp != 24:
+                        print(f"Not using CLUT: as bpp {clut.bpp} is not right")
+                        print(f"{dest_folder}/matLinked/{texture_path_relative}")
+                        texture.write_texture_to_png(f"{dest_folder}/matLinked/{texture_path_relative}",
+                                                     use_palette=False)
+                    else:
+                        # Clut valid enough
+                        # Unswizzle the palette, as these are (should) be swizzled for the PS2
+                        unswizzled = Texture.unswizzle_bytes(clut)
+                        texture.palette = unswizzled  # Set the texture's palette accordingly
+                        texture.palette_width = clut.width
+                        texture.palette_height = clut.height
+                        try:
+                            # Save the texture using the given clut
+                            print(f"{dest_folder}/matLinked/{texture_path_relative}")
+                            texture.write_texture_to_png(f"{dest_folder}/matLinked/{texture_path_relative}")
+                            print(
+                                f"Saved texture for material group {mat_index} t{file_number}-{mat_index}.png")
+                            print()
+                        except Exception as e:
+                            print(
+                                f"Failed to write texture probably decoded badly Course:{file_number} Texture: {texture_address} {clut_address} {texture}")
+                            print(
+                                f"Info: W: {texture.width} x H:{texture.height}  pW: {texture.palette_width} x pH: {texture.palette_height}")
+                            print(e)
+
+                # create material for this texture, for obj
+                if out_type == "obj" or out_type == "obj-combined":
+                    with open(f"{dest_folder}/matLinked/{material_name}.mtl", "w") as fout:
+                        Texture.save_material_file_obj(fout, material_name, texture_path_relative)
+
+                done_textures.append(key)
+
         # If you come across this, this is a custom file format I have made, expect this to change over time
         # you will have to modify this file to get this to output
-        if outType == "comb":
-            with open(f"{destFolder}/matLinked/{filePrefix}{fileNumber}-{matIndex}.{outType}", "w") as fout:
+        if out_type == "comb":
+            with open(f"{dest_folder}/matLinked/{file_prefix}{file_number}-{mat_index}.{out_type}", "w") as fout:
                 fout.write("comb - mesh data format\n")
                 fout.write(f"meshes {len(mm)}\n")
                 fout.write(f"type field\n")
 
                 for m, mesh in enumerate(mm):
                     fout.write(f"s z-{m}\n") # Start of a mesh
-                    mesh.writeMeshToType(outType, fout)
+                    mesh.write_mesh_to_type(out_type, fout, material=texture_path_relative)
                     fout.write(f"e z-{m}\n") # End of a mesh
-        elif outType == "obj":
-            with open(f"{destFolder}/matLinked/{filePrefix}{fileNumber}-{matIndex}.{outType}", "w") as fout:
-                vertCount = 0
+        elif out_type == "obj":
+            with open(f"{dest_folder}/matLinked/{file_prefix}{file_number}-{mat_index}.{out_type}", "w") as fout:
+                vert_count = 0
                 for m, mesh in enumerate(mm):
                     fout.write(f"o {m}\n") # Start of an object
-                    vertCount += mesh.writeMeshToType(outType, fout, vertCount)
-        matIndex += 1
+                    vert_count += mesh.write_mesh_to_type(out_type, fout, vert_count, material_name)
 
-def save_course_type(meshes, destFolder, fileNumber, outType, filePrefix):
+        mat_index += 1
+
+
+def save_course_type(meshes, dest_folder, file_number, out_type, file_prefix):
     # Export the main level mesh data
-    for i,level in enumerate(meshes):
+    for i, level in enumerate(meshes):
         for z, zRow in enumerate(level.chunks):
-            Path(f"{destFolder}/").mkdir(parents=True, exist_ok=True)
+            Path(f"{dest_folder}/").mkdir(parents=True, exist_ok=True)
             for x, ((meshes, data), _) in enumerate(zRow):
                 for m, mesh in enumerate(meshes):
-                    with open(f"{destFolder}/{filePrefix}{fileNumber}-{z}-{x}-{m}.{outType}", "w") as fout:
-                        mesh.writeMeshToType(outType, fout)
+                    with open(f"{dest_folder}/{file_prefix}{file_number}-{z}-{x}-{m}.{out_type}", "w") as fout:
+                        mesh.write_mesh_to_type(out_type, fout)
+
 
 # Open parse, and extract the common data, for fields/courses/actions
-def process_course_type(courseFile, destFolder, fileNumber, outType, filePrefix, mergeByData = False):
-    with open(courseFile, "rb") as f: # Open input course data file
+def process_course_type(course_file, dest_folder, file_number, out_type, file_prefix):
+    with open(course_file, "rb") as f:  # Open input course data file
         # Check that the output folders exist (make them)
-        Path(f"{destFolder}/").mkdir(parents=True, exist_ok=True)
-        Path(f"{destFolder}/colliders").mkdir(parents=True, exist_ok=True)
+        Path(f"{dest_folder}/").mkdir(parents=True, exist_ok=True)
+        Path(f"{dest_folder}/colliders").mkdir(parents=True, exist_ok=True)
 
         # Set logging output
-        with open(f"{destFolder}/log.log", "w") as sys.stdout:
+        with open(f"{dest_folder}/log.log", "w") as sys.stdout:
             f.seek(0, os.SEEK_END)
-            fileSize = f.tell()
+            file_size = f.tell()
             f.seek(0, os.SEEK_SET)
             # Parse the course
-            course = CourseModel.fromFile(f, 0, fileSize)
-        
-            if mergeByData:
-                # Need to group the meshes by the "data/material" info
-                Path(f"{destFolder}/matLinked").mkdir(parents=True, exist_ok=True)
-                meshByMaterial, numberOfMeshes = group_meshes_by_material(course.meshes)
-                save_course_type_grouped(meshByMaterial, numberOfMeshes, destFolder, fileNumber, outType, filePrefix)
-            else:
-                save_course_type(course.meshes, destFolder, fileNumber, outType, filePrefix)
+            course = CourseModel.read_course(f)
+
+            # Need to group the meshes by the "data/material" info
+            Path(f"{dest_folder}/matLinked").mkdir(parents=True, exist_ok=True)
+            mesh_by_material, number_of_meshes = group_meshes_by_material(course.meshes)
+            save_course_type_grouped(mesh_by_material, number_of_meshes, dest_folder, file_number, out_type, file_prefix, course.textures)
 
             # Export all maps
-            for i,mesh in enumerate(course.mapMeshes):
-                with open(f"{destFolder}/{filePrefix}{fileNumber}-map{i}.{outType}", "w") as fout:
-                    mesh.writeMeshToType(outType, fout)
+            for i, mesh in enumerate(course.map_meshes):
+                with open(f"{dest_folder}/{file_prefix}{file_number}-map{i}.{out_type}", "w") as fout:
+                    mesh.write_mesh_to_type(out_type, fout)
             # Export any additional objects (e.g barrels)
-            for e,extra in enumerate(course.extras):
-                for i,mesh in enumerate(extra.meshes):
-                    with open(f"{destFolder}/{filePrefix}{fileNumber}-extra{e}-{i}.{outType}", "w") as fout:
-                        mesh.writeMeshToType(outType, fout)
-            for collidersByMat in course.colliders:
-                for mat,colliders in collidersByMat.items():
-                    for i,collider in enumerate(colliders):
-                        with open(f"{destFolder}/colliders/{filePrefix}{fileNumber}-collider{i}.{outType}", "w") as fout:
-                            collider.writeMeshToType(outType, fout)
-            
-            if len(course.textures) > 0:
-                Path(f"{destFolder}/tex/").mkdir(parents=True, exist_ok=True)
-            for i,texture in enumerate(course.textures):
-                try:
-                    texture.writeTextureToPNG(f"{destFolder}/tex/t{fileNumber}-{i}.png")
-                except Exception as E:
-                    print(f"Failed to write texture/palette probably decoded badly Course:{fileNumber} Texture:{i} {texture} {E}")
+            for e, extra in enumerate(course.extras):
+                for i, mesh in enumerate(extra.meshes):
+                    with open(f"{dest_folder}/{file_prefix}{file_number}-extra{e}-{i}.{out_type}", "w") as fout:
+                        mesh.write_mesh_to_type(out_type, fout)
+                for i, texture in enumerate(extra.textures):
                     try:
-                        print(f"{texture} W{texture.width} H{texture.height} PW{texture.pwidth} PH{texture.pheight} T{texture.texture} P{texture.palette} FA{texture.fixAlpha}")
-                        texture.writeTextureToPNG(f"{destFolder}/tex/t{fileNumber}-{i}.png", usepalette=False)
-                        texture.writePaletteToPNG(f"{destFolder}/tex/p{fileNumber}-{i}.png")
-                    except Exception as E:
-                        print(f"Failed to write raw texture/palette probably decoded badly Course:{fileNumber} Texture:{i} {texture} {E}")
-            for e,extra in enumerate(course.extras):
-                for i,texture in enumerate(extra.textures):
-                    try:
-                        texture.writeTextureToPNG(f"{destFolder}/tex/t{fileNumber}-e{e}-{i}.png")
+                        texture.write_texture_to_png(f"{dest_folder}/tex/t{file_number}-e{e}-{i}.png")
                     except:
-                        print(f"Failed to write texture/palette probably decoded badly Course:{fileNumber} Texture:{i} {texture}")
-            if len(course.extraFields) > 0:
-                if mergeByData:
-                    Path(f"{destFolder}/extras/matLinked").mkdir(parents=True, exist_ok=True)
-                    meshByMaterial, numberOfMeshes = group_meshes_by_material(course.extraFields)
-                    save_course_type_grouped(meshByMaterial, numberOfMeshes, f"{destFolder}/extras/", fileNumber, outType, filePrefix+"-E")
-                else:
-                    Path(f"{destFolder}/extras/").mkdir(parents=True, exist_ok=True)
-                    save_course_type(course.extraFields, f"{destFolder}/extras/", fileNumber, outType, filePrefix+"-E")
+                        print(f"Failed to write texture/palette probably decoded badly Course:Extra:{file_number} Texture:{i} {texture}")
+            collider_mat_index = 0
+            for mat, colliders in course.colliders.items():
+                # If you come across this, this is a custom file format I have made, expect this to change over time
+                # you will have to modify this file to get this to output
+                if out_type == "comb":
+                    with open(f"{dest_folder}/colliders/{file_prefix}{file_number}-{collider_mat_index}.{out_type}",
+                              "w") as fout:
+                        fout.write("comb - mesh data format\n")
+                        fout.write(f"meshes {len(colliders)}\n")
+                        fout.write(f"type collider\n")
+                        for i, collider in enumerate(colliders):
+                            fout.write(f"s {i}\n")  # Start of a mesh
+                            collider.write_mesh_to_type(out_type, fout)
+                            fout.write(f"e {i}\n")  # End of a mesh
+
+                elif out_type == "obj":
+                    with open(f"{dest_folder}/colliders/{file_prefix}{file_number}-{collider_mat_index}.{out_type}", "w") as fout:
+                        vert_count = 0
+                        for i, collider in enumerate(colliders):
+                            fout.write(f"o {i}\n")  # Start of an object
+                            vert_count += collider.write_mesh_to_type(out_type, fout, vert_count)
+                collider_mat_index += 1
+
+            # Handle post colliders (thinks like fence posts, and tree centres)
+            if len(course.post_colliders) > 0:
+                if out_type == "comb":
+                    with open(f"{dest_folder}/colliders/{file_prefix}{file_number}-posts.{out_type}",
+                              "w") as fout:
+                        fout.write("comb - mesh data format\n")
+                        fout.write(f"meshes {len(course.post_colliders)}\n")
+                        fout.write(f"type post-collider\n")
+                        for p, post in enumerate(course.post_colliders):
+                            fout.write(f"s {p}\n")  # Start of a mesh
+                            post.write_mesh_to_type(out_type, fout)
+                            fout.write(f"e {p}\n")  # End of a mesh
+                elif out_type == "obj":
+                    with open(f"{dest_folder}/colliders/{file_prefix}{file_number}-posts.{out_type}",
+                              "w") as fout:
+                        for p, post in enumerate(course.post_colliders):
+                            fout.write(f"o {p}\n")  # Start of an object
+                            post.write_mesh_to_type(out_type, fout)
+
+            if len(course.extra_fields) > 0:
+                Path(f"{dest_folder}/extras/matLinked").mkdir(parents=True, exist_ok=True)
+                Path(f"{dest_folder}/extras/colliders").mkdir(parents=True, exist_ok=True)
+                mesh_by_material, number_of_meshes = group_meshes_by_material(course.extra_fields)
+                save_course_type_grouped(mesh_by_material, number_of_meshes, f"{dest_folder}/extras/", file_number, out_type, file_prefix + "-E", course.textures)
+                collider_mat_index = 0
+
+                for ci, col in enumerate(course.extra_field_colliders):
+                    if isinstance(col, list):
+                        # Probably post colliders
+                        for c in col:
+                            # TODO: save posts
+                            pass
+                    else:
+                        for mat, colliders in col.items():
+                            # If you come across this, this is a custom file format I have made,
+                            # expect this to change over time you will have to modify this file
+                            # to get this to output
+                            if out_type == "comb":
+                                with open(f"{dest_folder}/extras/colliders/{file_prefix}{file_number}-{ci}-{collider_mat_index}.{out_type}",
+                                          "w") as fout:
+                                    fout.write("comb - mesh data format\n")
+                                    fout.write(f"meshes {len(colliders)}\n")
+                                    fout.write(f"type collider\n")
+                                    for i, collider in enumerate(colliders):
+                                        fout.write(f"s {i}\n")  # Start of a mesh
+                                        collider.write_mesh_to_type(out_type, fout)
+                                        fout.write(f"e {i}\n")  # End of a mesh
+
+                            elif out_type == "obj":
+                                with open(f"{dest_folder}/extras/colliders/{file_prefix}{file_number}-{ci}-{collider_mat_index}.{out_type}",
+                                          "w") as fout:
+                                    vert_count = 0
+                                    for i, collider in enumerate(colliders):
+                                        fout.write(f"o {i}\n")  # Start of an object
+                                        vert_count += collider.write_mesh_to_type(out_type, fout, vert_count)
+                            collider_mat_index += 1
                 
         sys.stdout = sys.__stdout__
 
-def process_courses(source, dest, folder, outputFormats, mergeByData = False):
+
+def process_courses(source, dest, folder, output_formats):
     if not Path(f"{source}/{folder}").is_dir():
         print(f"No {folder}s to process, folder {folder} missing")
         return
@@ -210,14 +333,14 @@ def process_courses(source, dest, folder, outputFormats, mergeByData = False):
     with os.scandir(f"{source}/{folder}") as it:
         for entry in it:
             if not entry.name.startswith('.') and entry.is_file():
-                cNumber = entry.name[0 : entry.name.find('.')]
-                cPrefix = cNumber[0]
-                cNumber = cNumber[1:]
+                c_number = entry.name[0 : entry.name.find('.')]
+                c_prefix = c_number[0]
+                c_number = c_number[1:]
                 print(f"Processing {entry.name}")
-                for outType in outputFormats:
-                    courseOutputFolder = f"{dest}/{folder}/{cPrefix}{cNumber}{outType}"
+                for outType in output_formats:
+                    course_output_folder = f"{dest}/{folder}/{c_prefix}{c_number}{outType}"
                     try:
-                        process_course_type(entry, courseOutputFolder, cNumber, outType, cPrefix, mergeByData)
+                        process_course_type(entry, course_output_folder, c_number, outType, c_prefix)
                     except KeyboardInterrupt:
                         break
                     except Exception as e:
@@ -225,22 +348,31 @@ def process_courses(source, dest, folder, outputFormats, mergeByData = False):
                         sys.stdout = sys.__stdout__
                         print(f"Failed to process file {entry.path}")
 
-def process_fields(source, dest, outputFormats, mergeByData = False):
+
+def process_fields(source, dest, output_formats, merge_by_data=False):
     if not Path(f"{source}/FLD").is_dir():
-        print("No fields to process, folder FLD missing")
+        print("FLD folder missing, assuming HG3")
+        # for town in ["00", "00S01", "01", "02", "03"]:
+        #     town_number = f"{town}"
+        #     town_file = f"{source}/SYS/T{town_number}.BIN"
+        #     print(f"Processing {town_file}")
+        #     for out_type in output_formats:
+        #         field_output_folder = f"{dest}/TOWN/T{town_number}{out_type}"
+        #         process_course_type(town_file, field_output_folder, town_number, out_type, "T")
         return
     print("Processing fields (FLD)")
-    for fx in [1, 2, 3]:
+    for fx in [0, 1, 2, 3]:
         for fy in [0, 1, 2, 3]:
             for fz in [0, 1, 2, 3]:
-                fieldNumber = f"{fx}{fy}{fz}"
-                fieldFile = f"{source}/FLD/{fieldNumber}.BIN"
-                print(f"Processing {fieldFile}")
-                for outType in outputFormats:
-                    fieldOutputFolder = f"{dest}/FIELD/F{fieldNumber}{outType}"
-                    process_course_type(fieldFile, fieldOutputFolder, fieldNumber, outType, "F", mergeByData)
+                field_number = f"{fx}{fy}{fz}"
+                field_file = f"{source}/FLD/{field_number}.BIN"
+                print(f"Processing {field_file}")
+                for out_type in output_formats:
+                    field_output_folder = f"{dest}/FIELD/F{field_number}{out_type}"
+                    process_course_type(field_file, field_output_folder, field_number, out_type, "F")
 
-def process_cars(source, dest, outputFormats):
+
+def process_cars(source, dest, output_formats):
     print("Processing cars")
     # Default to hg2 cars
     version = 2
@@ -254,94 +386,123 @@ def process_cars(source, dest, outputFormats):
             with os.scandir(carFolder) as it:
                 for entry in it:
                     if not entry.name.startswith('.') and entry.is_file():
-                        process_file(entry, dest, outputFormats, version)
+                        process_file(entry, dest, output_formats, version)
 
-def process_file(entry, folderOut, outputFormats, version):
+
+def process_file(entry, folder_out, output_formats, version):
     if type(entry) is str:
-        entry = pathlib.Path(entry)
+        entry = Path(entry)
     basename = entry.name[0 : entry.name.find('.')]
     print(f"Processing {entry}")
     with open(entry, "rb") as f:
-        outfolder = f"{folderOut}/CARS/{basename}"
-        Path(outfolder).mkdir(parents=True, exist_ok=True)
-        with open(f"{outfolder}/log.log", "w") as sys.stdout:
+        out_folder = f"{folder_out}/CARS/{basename}"
+        Path(out_folder).mkdir(parents=True, exist_ok=True)
+        with open(f"{out_folder}/log.log", "w") as sys.stdout:
             f.seek(0, os.SEEK_END)
-            fileSize = f.tell()
+            file_size = f.tell()
             f.seek(0, os.SEEK_SET)
             if version == 2:
-                car = CarModel.fromFile(f, 0, fileSize)
+                car = CarModel.read_car(f, 0, file_size)
             elif version == 3:
-                car = HG3CarModel.fromFile(f, 0, fileSize)
-            for i,mesh in enumerate(car.meshes):
-                for outType in outputFormats:
-                    with open(f"{outfolder}/{basename}-{i}.{outType}", "w") as fout:
-                        mesh.writeMeshToType(outType, fout)
-            for i,tex in enumerate(car.textures):
-                tex.writeTextureToPNG(f"{outfolder}/{basename}-{i}.png")
-                # tex.writePaletteToPNG(f"{outfolder}/{basename}-{i}-p.png")
+                car = HG3CarModel.from_file(f, 0, file_size)
+
+            # Get texture, and fix clut/palette
+            address, texture = car.textures[0]
+            clut_address, clut = car.textures[1]
+            # assign palette
+            unswizzled = Texture.unswizzle_bytes(clut)
+            texture.palette = unswizzled  # Set the texture's palette accordingly
+            texture.palette_width = clut.width
+            texture.palette_height = clut.height
+
+            # Save texture and material for use in mesh
+            texture.write_texture_to_png(f"{out_folder}/{basename}.png")
+            # texture.writePaletteToPNG(f"{out_folder}/{basename}-{i}-p.png")
+            texture_path = f"{basename}.png"
+            with open(f"{out_folder}/{basename}.mtl", "w") as fout:
+                Texture.save_material_file_obj(fout, basename, texture_path)
+
+            for i, mesh in enumerate(car.meshes):
+                for outType in output_formats:
+                    with open(f"{out_folder}/{basename}-{i}.{outType}", "w") as fout:
+                        if outType == "comb":
+                            mesh.write_mesh_to_type(outType, fout, material=texture_path)
+                        else:
+                            mesh.write_mesh_to_type(outType, fout, material=basename)
+
         sys.stdout = sys.__stdout__
-        
-def process_items(source, dest, outputFormats):
+
+
+def process_items(source, dest, output_formats):
     print("Processing items")
 
-    itemFolder = f"{source}/ITEM"
-    if Path(itemFolder).is_dir():
-        with os.scandir(itemFolder) as it:
+    item_folder = f"{source}/ITEM"
+    if Path(item_folder).is_dir():
+        with os.scandir(item_folder) as it:
             for entry in it:
                 if not entry.name.startswith('.') and entry.is_file():
                     if type(entry) is str:
-                        entry = pathlib.Path(entry)
+                        entry = Path(entry)
                     basename = entry.name[0 : entry.name.find('.')]
-                    outfolder = f"{folderOut}/ITEM/{basename}"
-                    Path(outfolder).mkdir(parents=True, exist_ok=True)
+                    out_folder = f"{dest}/ITEM/{basename}"
+                    Path(out_folder).mkdir(parents=True, exist_ok=True)
                     print(f"Processing {entry}")
                     with open(entry, "rb") as f:
-                        with open(f"{outfolder}/log.log", "w") as sys.stdout:
-                            textures = Texture.allFromFile(f, 0, 0xFFFFFFFF)
-                            for i,tex in enumerate(textures):
-                                tex.writeTextureToPNG(f"{outfolder}/{basename}-{i}.png")
+                        with open(f"{out_folder}/log.log", "w") as sys.stdout:
+                            textures = Texture.all_from_file(f, 0)
+                            for i,(address,tex) in enumerate(textures):
+                                if tex is None:
+                                    continue
+                                tex.write_texture_to_png(f"{out_folder}/{basename}-{address:x}.png")
                         sys.stdout = sys.__stdout__
 
-def process_shops(source, dest, outputFormats):
+
+def process_shops(source, dest, output_formats):
     print("Processing shops")
 
-    itemFolder = f"{source}/SHOP"
+    item_folder = f"{source}/SHOP"
     # HG 3 does not have "SHOP" folder
-    if Path(itemFolder).is_dir():
-        with os.scandir(itemFolder) as it:
+    if Path(item_folder).is_dir():
+        with os.scandir(item_folder) as it:
             for entry in it:
                 if not entry.name.startswith('.') and entry.is_file():
                     if type(entry) is str:
-                        entry = pathlib.Path(entry)
+                        entry = Path(entry)
                     basename = entry.name[0 : entry.name.find('.')]
-                    outfolder = f"{folderOut}/ITEM/{basename}"
-                    Path(outfolder).mkdir(parents=True, exist_ok=True)
-                    print(f"Processing {entry} to {outfolder}")
+                    out_folder = f"{folderOut}/ITEM/{basename}"
+                    Path(out_folder).mkdir(parents=True, exist_ok=True)
+                    print(f"Processing {entry} to {out_folder}")
                     with open(entry, "rb") as f:
-                        with open(f"{outfolder}/log.log", "w") as sys.stdout:
+                        with open(f"{out_folder}/log.log", "w") as sys.stdout:
                             if basename == "GARAGE":
                                 # GARAGE is different
-                                garage = GarageModel.fromFile(f, 0)
-                                for ei, entry in enumerate(garage.entries):
-                                    for i,mesh in enumerate(entry.meshes):
-                                        for outType in outputFormats:
-                                            with open(f"{outfolder}/{basename}-{ei}-{i}.{outType}", "w") as fout:
-                                                mesh.writeMeshToType(outType, fout)
-                                    for i,tex in enumerate(entry.textures):
-                                        try:
-                                            tex.writeTextureToPNG(f"{outfolder}/{basename}-{ei}-{i}.png")
-                                        except Exception as E:
-                                            print(f"Failed to write texture/palette probably decoded badly Garage[{ei}]:{entry} Texture:{i} {tex} {E}")
+                                # garage = GarageModel.from_file(f, 0)
+                                # for ei, g_entry in enumerate(garage.textures):
+                                #     for i, mesh in enumerate(g_entry.meshes):
+                                #         for outType in output_formats:
+                                #             with open(f"{out_folder}/{basename}-{ei}-{i}.{outType}", "w") as fout:
+                                #                 mesh.write_mesh_to_type(outType, fout)
+                                #     for i, tex in enumerate(g_entry.textures):
+                                #         try:
+                                #             tex.write_texture_to_png(f"{out_folder}/{basename}-{ei}-{i}.png")
+                                #         except Exception as E:
+                                #             print(f"Failed to write texture/palette probably decoded badly Garage[{ei}]:{g_entry} Texture:{i} {tex} {E}")
+                                pass
+                                # TODO: need to rewrite now dma tags are understood better
                             else:
-                                shops = Shop.fromFile(f, 0)
+                                shops = Shop.from_file(f, 0)
                                 print(f"Done shop {entry}")
-                                for s,shop in enumerate(shops.entries):
-                                    for i,tex in enumerate(shop):
-                                        try:
-                                            tex.writeTextureToPNG(f"{outfolder}/{basename}-{s}-{i}.png")
-                                        except Exception as E:
-                                            print(f"Failed to write texture/palette probably decoded badly Shop[{s}]:{entry} Texture:{i} {tex} {E}")
+                                for i, tex in enumerate(shops.textures):
+                                    if tex is None:
+                                        continue
+                                    # for i, tex in enumerate(shop):
+                                    try:
+                                        tex.write_texture_to_png(f"{out_folder}/{basename}-{i}.png")
+                                    except Exception as E:
+                                        print(f"Failed to write texture/palette probably decoded badly Shop[{entry}]: Texture:{i} {tex} {E}")
+                                        raise E
                         sys.stdout = sys.__stdout__
+
 
 if __name__ == '__main__':
     colorama.init()
@@ -354,59 +515,44 @@ if __name__ == '__main__':
         exit(1)
     
     obj = False
-    obj_grouped = False
     ply = True
     if len(sys.argv) == 4:
         obj = True if sys.argv[3] == "1" else False
         ply = True if sys.argv[3] == "2" else False
-        obj_grouped = True if sys.argv[3] == "3" else False
     elif len(sys.argv) > 4:
         show_help()
-        print(Fore.RED +"ERROR: " +Style.RESET_ALL+ "Too many args")
+        print(Fore.RED + "ERROR: " + Style.RESET_ALL + "Too many args")
         exit(1)
 
     os.makedirs(folderOut, exist_ok=True)
     if not os.path.isdir(folderOut):
-        print(Fore.RED +"ERROR: " +Style.RESET_ALL+ "Failed to create or use output folder")
+        print(Fore.RED + "ERROR: " + Style.RESET_ALL + "Failed to create or use output folder")
         exit(1)
 
     if os.path.isfile(folderIn):
-        print(Fore.RED +"ERROR: " +Style.RESET_ALL+ "This tool is for extracting all game data, not just a single file, see help")
+        print(Fore.RED + "ERROR: " + Style.RESET_ALL + "This tool is for extracting all game data, not just a single file, see help")
         exit(1)
 
     outputFormats = []
-    if obj == True:
+    if obj:
         outputFormats.append("obj")
-    if ply == True:
-        outputFormats.append("ply")  
-    if obj_grouped == True:
-        outputFormats.append("obj")
+    if ply:
+        outputFormats.append("ply")
 
     if len(sys.argv) == 4 and sys.argv[3] == "M":
         obj = False
         ply = False
-        obj_grouped = True
-        outputFormats = ["comb"] 
-
-    # outputFormats = ["comb"]
-    # obj_grouped = True
+        outputFormats = ["comb"]
 
     if os.path.isdir(folderIn):
-        process_courses(folderIn, folderOut, "COURSE", outputFormats, obj_grouped)
-        process_courses(folderIn, folderOut, "ACTION", outputFormats, obj_grouped)
-        process_fields(folderIn, folderOut, outputFormats, obj_grouped)
-        process_cars(folderIn, folderOut, outputFormats)
-        process_items(folderIn, folderOut, outputFormats)
-        process_shops(folderIn, folderOut, outputFormats)
+        process_courses(folderIn, folderOut, "COURSE", outputFormats)
+        process_courses(folderIn, folderOut, "ACTION", outputFormats)
+        process_fields(folderIn, folderOut, outputFormats)
+        # process_cars(folderIn, folderOut, outputFormats)
+        # process_items(folderIn, folderOut, outputFormats)
+        # process_shops(folderIn, folderOut, outputFormats)
 
     else:
-        print(Fore.RED + "ERROR: " +Style.RESET_ALL+ "Failed to read source folder")
+        print(Fore.RED + "ERROR: " + Style.RESET_ALL + "Failed to read source folder")
         exit(1)
-    
-
-    
-
-
-
-    
     
