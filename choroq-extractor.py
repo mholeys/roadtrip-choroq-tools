@@ -1,7 +1,7 @@
 from choroq.texture import Texture
 from choroq.car import CarModel, CarMesh
 from choroq.car_hg3 import HG3CarModel, HG3CarMesh
-from choroq.course import CourseModel
+from choroq.course import CourseModel, Course
 from choroq.garage import GarageModel
 from choroq.shop import Shop
 from choroq.quickpic import QuickPic
@@ -471,7 +471,7 @@ def process_shops(source, dest, output_formats):
                     if type(entry) is str:
                         entry = Path(entry)
                     basename = entry.name[0 : entry.name.find('.')]
-                    out_folder = f"{folderOut}/ITEM/{basename}"
+                    out_folder = f"{folder_out}/ITEM/{basename}"
                     Path(out_folder).mkdir(parents=True, exist_ok=True)
                     print(f"Processing {entry} to {out_folder}")
                     with open(entry, "rb") as f:
@@ -506,11 +506,73 @@ def process_shops(source, dest, output_formats):
                         sys.stdout = sys.__stdout__
 
 
+def process_sys(source, dest, output_formats):
+    print("Processing items")
+
+    sys_folder = f"{source}/SYS"
+    if Path(sys_folder).is_dir():
+        with os.scandir(sys_folder) as it:
+            for entry in it:
+                if not entry.name.startswith('.') and entry.is_file():
+                    if type(entry) is str:
+                        entry = Path(entry)
+
+                    basename = entry.name[0: entry.name.find('.')]
+                    extension = entry.name[entry.name.find('.')+1:]
+                    out_folder = f"{dest}/SYS/{entry.name}"
+                    Path(out_folder).mkdir(parents=True, exist_ok=True)
+                    print(f"Processing {entry}")
+                    with open(entry, "rb") as f:
+                        with open(f"{out_folder}/log.log", "w") as sys.stdout:
+                            if extension == "GSL" or entry.name == "PUTI.BIN":
+                                textures = Texture.all_from_file(f, 0)
+                                for i in range(0, len(textures)):
+                                    address, texture = textures[i]
+                                    if texture is None:
+                                        continue
+                                    print(f"{address}: {i} bpp: {texture.bpp} {texture.width}x{texture.height}")
+                                    if texture.bpp <= 8:
+                                        # Get next image as clut
+                                        clut_address, clut = textures[i+1]
+                                        print(f"Using clut to merge, bpp: {clut.bpp} {clut.width}x{clut.height}")
+                                        print(f"{clut_address}: {i}")
+                                        # texture.write_texture_to_png(f"{out_folder}/{entry.name}-{address:x}-raw.png")
+                                        if clut is None:
+                                            texture.write_texture_to_png(f"{out_folder}/{entry.name}-{address:x}.png")
+                                            continue
+                                        # clut.write_texture_to_png(f"{out_folder}/{entry.name}-{clut_address:x}-raw.png")
+                                        # Set the texture's palette accordingly
+                                        unswizzled = Texture.unswizzle_bytes(clut)
+                                        texture.palette = unswizzled
+                                        texture.palette_width = clut.width
+                                        texture.palette_height = clut.height
+
+                                        texture.write_texture_to_png(f"{out_folder}/{entry.name}-{address:x}.png")
+                            elif extension == "E3D" and basename != "TAKARA":
+                                meshes = Course.read_course_meshes(f, 0)
+                                textures = {}
+                                with open(f"{entry.path[0: entry.path.find('.E3D')]}.GSL", "rb") as ftextures:
+                                    textures_read = Texture.all_from_file(ftextures, 0)
+                                    # Convert to dict
+                                    for (address, texture) in textures_read:
+                                        textures[address] = texture
+
+                                # Need to group the meshes by the "data/material" info
+                                mesh_by_material, number_of_meshes = group_meshes_by_material(meshes)
+                                for out_type in output_formats:
+                                    save_course_type_grouped(mesh_by_material, number_of_meshes, out_folder,
+                                                             basename, out_type, "", textures)
+                            elif extension == "BIN":
+                                process_file(entry, out_folder, output_formats, 2)
+
+                        sys.stdout = sys.__stdout__
+
+
 if __name__ == '__main__':
     colorama.init()
     if len(sys.argv) >= 3:
-        folderIn = sys.argv[1]
-        folderOut = sys.argv[2]
+        folder_in = sys.argv[1]
+        folder_out = sys.argv[2]
     else:
         show_help()
         print(Fore.RED +"ERROR: " + Style.RESET_ALL + "Not enough args")
@@ -526,33 +588,35 @@ if __name__ == '__main__':
         print(Fore.RED + "ERROR: " + Style.RESET_ALL + "Too many args")
         exit(1)
 
-    os.makedirs(folderOut, exist_ok=True)
-    if not os.path.isdir(folderOut):
+    os.makedirs(folder_out, exist_ok=True)
+    if not os.path.isdir(folder_out):
         print(Fore.RED + "ERROR: " + Style.RESET_ALL + "Failed to create or use output folder")
         exit(1)
 
-    if os.path.isfile(folderIn):
+    if os.path.isfile(folder_in):
         print(Fore.RED + "ERROR: " + Style.RESET_ALL + "This tool is for extracting all game data, not just a single file, see help")
         exit(1)
 
-    outputFormats = []
+    output_formats = []
     if obj:
-        outputFormats.append("obj")
+        output_formats.append("obj")
     if ply:
-        outputFormats.append("ply")
+        output_formats.append("ply")
 
     if len(sys.argv) == 4 and sys.argv[3] == "M":
         obj = False
         ply = False
-        outputFormats = ["comb"]
+        output_formats = ["comb"]
 
-    if os.path.isdir(folderIn):
-        process_courses(folderIn, folderOut, "COURSE", outputFormats)
-        process_courses(folderIn, folderOut, "ACTION", outputFormats)
-        process_fields(folderIn, folderOut, outputFormats)
-        process_cars(folderIn, folderOut, outputFormats)
-        # process_items(folderIn, folderOut, outputFormats)
-        # process_shops(folderIn, folderOut, outputFormats)
+    if os.path.isdir(folder_in):
+        process_courses(folder_in, folder_out, "COURSE", output_formats)
+        process_courses(folder_in, folder_out, "ACTION", output_formats)
+        process_fields(folder_in, folder_out, output_formats)
+        process_cars(folder_in, folder_out, output_formats)
+        # These are other bits from the game, might be useful for some
+        process_items(folder_in, folder_out, output_formats)
+        process_shops(folder_in, folder_out, output_formats)
+        process_sys(folder_in, folder_out, output_formats)
 
     else:
         print(Fore.RED + "ERROR: " + Style.RESET_ALL + "Failed to read source folder")

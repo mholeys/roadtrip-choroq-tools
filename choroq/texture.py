@@ -124,7 +124,7 @@ class Texture:
 
                 texture, unswizzled = Texture._read_texture(file, length, bpp)
                 print(file.tell())
-                print(texture)
+                # print(texture)
                 # if bpp <= 8:
                 #     colours, psize = Texture._paletteFromFile(file, offset + length + headerLength, fixAlpha)
                 # else:
