@@ -157,14 +157,16 @@ def save_course_type_grouped(mesh_by_material, number_of_meshes, dest_folder, fi
                             # Save the texture using the given clut
                             print(f"{dest_folder}/matLinked/{texture_path_relative}")
                             texture.write_texture_to_png(f"{dest_folder}/matLinked/{texture_path_relative}")
-                            print(
-                                f"Saved texture for material group {mat_index} t{file_number}-{mat_index}.png")
+                            print(f"Saved texture for material group {mat_index} t{file_number}-{mat_index}.png")
                             print()
                         except Exception as e:
-                            print(
-                                f"Failed to write texture probably decoded badly Course:{file_number} Texture: {texture_address} {clut_address} {texture}")
-                            print(
-                                f"Info: W: {texture.width} x H:{texture.height}  pW: {texture.palette_width} x pH: {texture.palette_height}")
+                            try:
+                                texture.write_texture_to_png(f"{dest_folder}/matLinked/failed-{texture_path_relative}", use_palette=False)
+                                clut.write_texture_to_png(f"{dest_folder}/matLinked/clut-{texture_path_relative}")
+                            except:
+                                print("Failed to write raw")
+                            print(f"Failed to write texture probably decoded badly Course:{file_number} Texture: {texture_address} {clut_address} {texture}")
+                            print(f"Info: W: {texture.width} x H:{texture.height}  pW: {texture.palette_width} x pH: {texture.palette_height}")
                             print(e)
 
                 # create material for this texture, for obj
@@ -236,11 +238,30 @@ def process_course_type(course_file, dest_folder, file_number, out_type, file_pr
                 for i, mesh in enumerate(extra.meshes):
                     with open(f"{dest_folder}/{file_prefix}{file_number}-extra{e}-{i}.{out_type}", "w") as fout:
                         mesh.write_mesh_to_type(out_type, fout)
-                for i, texture in enumerate(extra.textures):
-                    try:
-                        texture.write_texture_to_png(f"{dest_folder}/tex/t{file_number}-e{e}-{i}.png")
-                    except:
-                        print(f"Failed to write texture/palette probably decoded badly Course:Extra:{file_number} Texture:{i} {texture}")
+                for i in range(0, len(extra.textures)):
+                    address, texture = extra.textures[i]
+                    if texture is None:
+                        continue
+                    print(f"{address}: {i} bpp: {texture.bpp} {texture.width}x{texture.height}")
+                    if texture.bpp <= 8:
+                        # Get next image as clut
+                        clut_address, clut = extra.textures[i + 1]
+                        print(f"Using clut to merge, bpp: {clut.bpp} {clut.width}x{clut.height}")
+                        print(f"{clut_address}: {i}")
+                        # texture.write_texture_to_png(f"{out_folder}/{entry.name}-{address:x}-raw.png")
+                        if clut is None:
+                            texture.write_texture_to_png(f"{dest_folder}/t{file_number}-e{e}-{address:x}-{i}.png")
+                            continue
+                        # clut.write_texture_to_png(f"{dest_folder}/t{file_number}-{clut_address:x}-raw.png")
+                        # Set the texture's palette accordingly
+                        unswizzled = Texture.unswizzle_bytes(clut)
+                        texture.palette = unswizzled
+                        texture.palette_width = clut.width
+                        texture.palette_height = clut.height
+                        try:
+                            texture.write_texture_to_png(f"{dest_folder}/t{file_number}-e{e}-{address:x}.png")
+                        except e:
+                            print(f"Failed to write texture/palette probably decoded badly Course:Extra:{file_number} Texture:{address:x}/{i} {texture}")
             collider_mat_index = 0
             for mat, colliders in course.colliders.items():
                 # If you come across this, this is a custom file format I have made, expect this to change over time
