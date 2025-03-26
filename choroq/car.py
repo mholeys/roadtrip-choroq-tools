@@ -343,7 +343,7 @@ class CarMesh(AMesh):
                         normals.append((nx, ny, nz))
                         uvs.append((tu, 1 - tv, tw))
 
-                    faces = CarMesh.create_face_list(nloop, 3, vert_count_offset=vert_count_offset)
+                    faces = CarMesh.create_face_list(nloop, 1, vert_count_offset=vert_count_offset)
                     print(f"Got to after verts {file.tell()}")
                 else:
                     for loop in range(nloop):

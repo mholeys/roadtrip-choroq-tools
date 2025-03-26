@@ -570,7 +570,7 @@ class Course:
                             normals.append((nx, ny, nz))
                             uvs.append((tu, 1 - tv, tw))
 
-                    faces = CourseMesh.create_face_list(nloop, 3)
+                    faces = CourseMesh.create_face_list(nloop, 1)
                     print(f"Got to after verts {file.tell()}")
                 else:
                     for loop in range(nloop):
