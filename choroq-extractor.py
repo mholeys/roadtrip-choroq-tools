@@ -160,14 +160,21 @@ def save_course_type_grouped(mesh_by_material, number_of_meshes, dest_folder, fi
                             print(f"Saved texture for material group {mat_index} t{file_number}-{mat_index}.png")
                             print()
                         except Exception as e:
-                            try:
-                                texture.write_texture_to_png(f"{dest_folder}/matLinked/failed-{texture_path_relative}", use_palette=False)
-                                clut.write_texture_to_png(f"{dest_folder}/matLinked/clut-{texture_path_relative}")
-                            except:
-                                print("Failed to write raw")
-                            print(f"Failed to write texture probably decoded badly Course:{file_number} Texture: {texture_address} {clut_address} {texture}")
-                            print(f"Info: W: {texture.width} x H:{texture.height}  pW: {texture.palette_width} x pH: {texture.palette_height}")
-                            print(e)
+                            if isinstance(e, ValueError):
+                                if len(e.args) == 1 and e.args[0] == "invalid palette size":
+                                    # Assume this is a normal b&w texture and the clut is probably just a different tex
+                                    print(f"Not using CLUT: as bpp {clut.bpp} is not right")
+                                    print(f"{dest_folder}/matLinked/{texture_path_relative}")
+                                    texture.palette = []
+                                    texture.palette_width = 0
+                                    texture.palette_height = 0
+                                    texture.write_texture_to_png(f"{dest_folder}/matLinked/{texture_path_relative}", use_palette=False)
+                            else:
+                                texture.write_texture_to_png(f"{dest_folder}/matLinked/failed-t{file_number}-{mat_index}-{texture_address:x}.png", use_palette=False)
+                                clut.write_texture_to_png(f"{dest_folder}/matLinked/failed-clut-t{file_number}-{mat_index}-{clut_address:x}.png")
+                                print(f"Failed to write texture probably decoded badly Course:{file_number} Texture: {texture_address} {clut_address} {texture}")
+                                print(f"Info: W: {texture.width} x H:{texture.height}  pW: {texture.palette_width} x pH: {texture.palette_height}")
+                                print(e)
 
                 # create material for this texture, for obj
                 if out_type == "obj" or out_type == "obj-combined":
