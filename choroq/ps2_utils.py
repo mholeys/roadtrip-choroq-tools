@@ -969,7 +969,7 @@ def VifGetUnpackSize(cmd, num, immediate):
             return singleLength * 2 * num # Pads Z/W with unknown data
         # V2-16
         elif vn == 1 and v1 == 1: 
-            length = singleLength * num * 4  # Converts 16 bits into 32 bits, padding Z/w
+            return singleLength * num * 4  # Converts 16 bits into 32 bits, padding Z/w
         # V3-32
         elif vn == 2 and v1 == 0: 
             return (singleLength + elementLength) * num # Pads W with unknown data
@@ -978,7 +978,7 @@ def VifGetUnpackSize(cmd, num, immediate):
             return singleLength * num # Just 1-1 copy
         # V4-16
         elif vn == 3 and v1 == 1: 
-            length = singleLength * num * 2 # Converts 16 bits into 32 bits
+            return singleLength * num * 2 # Converts 16 bits into 32 bits
         else:
             print(F"Cannot parse this unpack, not implemented output size")
             exit(91)
@@ -1486,7 +1486,7 @@ def gifHandlePacked(file, gifTag, index, descriptor, gsState):
         # TODO: implement fixed to float
         print("Not finished")
         gsState.UV['u'] = u
-        gsState.UV['u'] = v
+        gsState.UV['v'] = v
         pass
     elif descriptor == GIF_REG_DESCRIPTOR_XYZF2:
         # 16 bit fixed point x/y
@@ -1763,7 +1763,7 @@ class GsState:
         self.TEXFLUSH = 0
         self.TRXPOS = 0
         self.TRXREG = parseTrxReg(0)
-        self.TRXDIR = parseTrxDir(9)
+        self.TRXDIR = parseTrxDir(0)
         self.UV = {}
         self.XYOFFSET_1 = 0
         self.XYOFFSET_2 = 0
@@ -1822,7 +1822,7 @@ class GsState:
             self.TEX1_2 = parseTex1_X(data)
             print(self.TEX1_2)
         elif addr == 0x16: 
-            self.TEX0_1 = parseTex2_X(data, self)
+            self.TEX0_1 = parseTex0_X(data, self)
             print(self.TEX0_1)
         elif addr == 0x17: 
             self.TEX2_1 = parseTex2_X(data, self)
@@ -2062,7 +2062,7 @@ def parseTex1_X(value):
         "MMIN": mmin,
         "MTBA": mipmapTextureBaseAddrMethod,
         "L": lodLparam,
-        "L": lodKparam,
+        "K": lodKparam,
     }
 
 def parseTex2_X(value, gs):
@@ -2123,13 +2123,13 @@ def parseTrxPos(value):
     srcXCoord = value & 0x7FF
     srcYCoord = (value >> 16) & 0x7FF
     dstXCoord = (value >> 32) & 0x7FF
-    dstXCoord = (value >> 48) & 0x7FF
+    dstYCoord = (value >> 48) & 0x7FF
     transmissionOrder = (value >> 59) & 0x3
     return {
         "SSAX": srcXCoord,
         "SSAY": srcYCoord,
         "DSAX": dstXCoord,
-        "DSAY": dstXCoord,
+        "DSAY": dstYCoord,
         "DIR": transmissionOrder,
     }
 
@@ -2196,14 +2196,14 @@ def parseMiptBp2_X(value):
     TBP5 = (value >> 20) & 0x3FFF
     TBW5 = (value >> 34) & 0x3F
     TBP6 = (value >> 40) & 0x3FFF
-    TBW7 = (value >> 54) & 0x3F
+    TBW6 = (value >> 54) & 0x3F
     return {
         "TBP4": TBP4,
         "TBW4": TBW4,
         "TBP5": TBP5,
         "TBW5": TBW5,
         "TBP6": TBP6,
-        "TBW7": TBW7,
+        "TBW6": TBW6,
     }
 
 def parseFogCol(value):

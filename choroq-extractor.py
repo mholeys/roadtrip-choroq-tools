@@ -13,6 +13,10 @@ from pathlib import Path
 import colorama
 from colorama import Fore, Back, Style
 
+# Set to true if you want 16x16 grid of collision mesh's (probably not that useful for most people)
+OUTPUT_CHUNKED_COLLIDER = True
+# Output obj files wih "o" lines, to split sections of the read mesh
+OUTPUT_GROUPED_OBJS = True
 
 def show_help():
     print(Fore.BLUE+"##############################################################################################")
@@ -33,7 +37,6 @@ def show_help():
     print("[type]                    : model output format")
     print("                            -- 1 = OBJ only grouped by texture")
     print("                            -- 2 = PLY only")
-    print("                            --  <other> = BOTH ")
 
     print("The output folder structure will be as follows:")
     print("<output dir>/")
@@ -199,7 +202,8 @@ def save_course_type_grouped(mesh_by_material, number_of_meshes, dest_folder, fi
             with open(f"{dest_folder}/matLinked/{file_prefix}{file_number}-{mat_index}.{out_type}", "w") as fout:
                 vert_count = 0
                 for m, mesh in enumerate(mm):
-                    fout.write(f"o {m}\n") # Start of an object
+                    if OUTPUT_GROUPED_OBJS:
+                        fout.write(f"o {m}\n") # Start of an object
                     vert_count += mesh.write_mesh_to_type(out_type, fout, vert_count, material_name)
 
         mat_index += 1
@@ -270,7 +274,7 @@ def process_course_type(course_file, dest_folder, file_number, out_type, file_pr
                         except e:
                             print(f"Failed to write texture/palette probably decoded badly Course:Extra:{file_number} Texture:{address:x}/{i} {texture}")
             collider_mat_index = 0
-            for mat, colliders in course.colliders.items():
+            for mat, colliders in course.colliders_by_mat.items():
                 # If you come across this, this is a custom file format I have made, expect this to change over time
                 # you will have to modify this file to get this to output
                 if out_type == "comb":
@@ -288,9 +292,18 @@ def process_course_type(course_file, dest_folder, file_number, out_type, file_pr
                     with open(f"{dest_folder}/colliders/{file_prefix}{file_number}-{collider_mat_index}.{out_type}", "w") as fout:
                         vert_count = 0
                         for i, collider in enumerate(colliders):
-                            fout.write(f"o {i}\n")  # Start of an object
+                            if OUTPUT_GROUPED_OBJS:
+                                fout.write(f"o {i}\n")  # Start of an object
                             vert_count += collider.write_mesh_to_type(out_type, fout, vert_count)
                 collider_mat_index += 1
+            if out_type == "obj" and OUTPUT_CHUNKED_COLLIDER:
+                Path(f"{dest_folder}/colliders/all").mkdir(parents=True, exist_ok=True)
+                for z, z_row in enumerate(course.colliders):
+                    for x, collider in enumerate(z_row):
+                        with open(f"{dest_folder}/colliders/all/{file_prefix}{file_number}-{z}-{x}.{out_type}", "w") as fout:
+                            if OUTPUT_GROUPED_OBJS:
+                                fout.write(f"o {z}-{x}\n")  # Start of an object
+                            collider.write_mesh_to_type(out_type, fout)
 
             # Handle post colliders (thinks like fence posts, and tree centres)
             if len(course.post_colliders) > 0:
@@ -308,7 +321,8 @@ def process_course_type(course_file, dest_folder, file_number, out_type, file_pr
                     with open(f"{dest_folder}/colliders/{file_prefix}{file_number}-posts.{out_type}",
                               "w") as fout:
                         for p, post in enumerate(course.post_colliders):
-                            fout.write(f"o {p}\n")  # Start of an object
+                            if OUTPUT_GROUPED_OBJS:
+                                fout.write(f"o {p}\n")  # Start of an object
                             post.write_mesh_to_type(out_type, fout)
 
             if len(course.extra_fields) > 0:
@@ -345,7 +359,8 @@ def process_course_type(course_file, dest_folder, file_number, out_type, file_pr
                                           "w") as fout:
                                     vert_count = 0
                                     for i, collider in enumerate(colliders):
-                                        fout.write(f"o {i}\n")  # Start of an object
+                                        if OUTPUT_GROUPED_OBJS:
+                                            fout.write(f"o {i}\n")  # Start of an object
                                         vert_count += collider.write_mesh_to_type(out_type, fout, vert_count)
                             collider_mat_index += 1
                 

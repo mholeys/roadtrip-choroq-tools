@@ -116,7 +116,7 @@ import choroq.ps2_utils as PS2
 
 class CourseModel:
 
-    def __init__(self, name, meshes=None, textures=None, colliders=None, post_colliders=None, map_meshes=None,
+    def __init__(self, name, meshes=None, textures=None, colliders=None, colliders_by_mat=None, post_colliders=None, map_meshes=None,
                  extras=None, extra_fields=None, extra_field_colliders=None):
         if meshes is None:
             meshes = []
@@ -124,6 +124,8 @@ class CourseModel:
             textures = []
         if colliders is None:
             colliders = []
+        if colliders_by_mat is None:
+            colliders_by_mat = []
         if post_colliders is None:
             post_colliders = []
         if map_meshes is None:
@@ -137,6 +139,7 @@ class CourseModel:
         self.name = name
         self.meshes = meshes
         self.colliders = colliders
+        self.colliders_by_mat = colliders_by_mat
         self.post_colliders = post_colliders
         self.map_meshes = map_meshes
         self.textures = textures
@@ -170,7 +173,7 @@ class CourseModel:
 
         print("Reading course: Colliders")
         # 4 point colliders, used for things like walls and fence posts
-        colliders, post_colliders = CourseCollider.from_file(file, collider_offset)
+        colliders_by_mat, post_colliders, colliders = CourseCollider.from_file(file, collider_offset)
 
         # The name maps, and extras could/should probably be renamed
         maps = []
@@ -202,7 +205,7 @@ class CourseModel:
                     # Only has a mesh
                     maps += CarMesh.from_file(file, o)
 
-        return CourseModel("", meshes, textures, colliders, post_colliders, maps, extras, extra_fields, extra_field_colliders)
+        return CourseModel("", meshes, textures, colliders, colliders_by_mat, post_colliders, maps, extras, extra_fields, extra_field_colliders)
     
     @staticmethod
     def read_course_textures(file, offset, length):
@@ -360,7 +363,7 @@ class Course:
             # print(f"VIF: in:{expected_length_in_packets}, out:{expected_length_out}, {vif_expanded_data}")
             # print(vars(vif_state))
             if vif_state.ExecAddr != 0:
-                # Call to run a subroutine/program on the VU1 microprogram
+                # Call to run a subroutine/program on the VU1 microprogram, i.e use the data
                 if (vif_state.ExecAddr == 64
                         or vif_state.ExecAddr == 48
                         or (hg3 and vif_state.ExecAddr == 96)
@@ -728,7 +731,9 @@ class CourseMesh(AMesh):
         #     nz = '{:.20f}'.format(self.mesh_normals[i][2])
         #     fout.write("vn " + nx + " " + ny + " " + nz + "\n")
         # fout.write("#" + str(len(self.mesh_normals)) + " vertex normals\n")
-        
+        for i in range(0, len(self.mesh_normals)):
+            fout.write("vn 0 0 0\n")
+        fout.write("#" + str(len(self.mesh_normals)) + " vertex normals\n")
         # Write texture coordinates (uv)
         for i in range(0, len(self.mesh_uvs)):
             tu = '{:.20f}'.format(self.mesh_uvs[i][0])
@@ -904,6 +909,10 @@ class CourseMesh(AMesh):
         return len(self.mesh_verts)
         
 
+# I believe this is referenced as "PMP format" by the developers ("Old style PMP format") but might be the other
+# offset table
+# If the first offset is 1536 it will print "Old style PMP format" (untested)
+# If the first offset is 1544 it will load, otherwise an error "PMP Format Error!"
 class CourseCollider(AMesh):
 
     def __init__(self, mesh_vert_count=None, mesh_verts=None, mesh_normals=None, mesh_faces=None, collider_properties=None):
@@ -1001,6 +1010,8 @@ class CourseCollider(AMesh):
                 mesh_vert_count = 0
                 collider_properties = None
 
+                mesh_faces_all = []
+
                 count = 0
 
                 while count < shorts[index]:
@@ -1042,6 +1053,7 @@ class CourseCollider(AMesh):
                     for i in range(0, len(faces)):
                         vertices = faces[i]
                         mesh_faces.append((vertices[0] + mesh_vert_count, vertices[1] + mesh_vert_count, vertices[2] + mesh_vert_count))
+                        mesh_faces_all.append((vertices[0] + mesh_vert_count, vertices[1] + mesh_vert_count, vertices[2] + mesh_vert_count))
                         # mesh_faces.append((vertices[0], vertices[1], vertices[2]))
                     
                     mesh_vert_count += len(verts)
@@ -1058,14 +1070,13 @@ class CourseCollider(AMesh):
                     # Store collider by material
                     colliders_by_mat[collider_properties].append(CourseCollider(len(verts), verts, normals, faces, collider_properties))
 
-                    # colliders.append(CourseCollider(mesh_vert_count, mesh_verts, mesh_normals, mesh_faces))
                     mesh_faces = []
                 print(f"Got {mesh_vert_count} {count} vs {shorts[index]}")
                 if count != shorts[index]:
                     print(f"Number of colliders read is different")
                 
-                # colliders.append(CourseCollider(mesh_vert_count, mesh_verts, mesh_normals, mesh_faces, collider_properties))
-
+                z_row.append(CourseCollider(mesh_vert_count, mesh_verts, mesh_normals, mesh_faces_all, collider_properties))
+            colliders.append(z_row)
         if sum(shorts) != collider_count:
             print(f"Number of colliders read is different {sum(shorts)} {collider_count}")
 
@@ -1076,7 +1087,7 @@ class CourseCollider(AMesh):
             print(f"Reading last colliders (4 point) at {file.tell()} should have {last_size} floats len {last_size * 16}")
             post_colliders += CoursePostCollider.parse_post_collider(file, last_size, scale)
 
-        return colliders_by_mat, post_colliders
+        return colliders_by_mat, post_colliders, colliders
 
     @staticmethod
     def parse_chunk(file, vert_count, scale):
@@ -1102,7 +1113,7 @@ class CourseCollider(AMesh):
         else:
             print("NOT READING NORMALS")
 
-        faces = CourseCollider.create_face_list(vert_count)
+        faces = CourseCollider.create_face_list(vert_count, 3)
         return verts, normals, faces
 
     def write_mesh_to_obj(self, fout, start_index = 0, material=None):
@@ -1122,13 +1133,17 @@ class CourseCollider(AMesh):
             fout.write("vn " + nx + " " + ny + " " + nz + "\n")
         fout.write("#" + str(len(self.mesh_normals)) + " vertex normals\n")
         
+        # Write empty uvs
+        for i in range(0, len(self.mesh_verts)):
+            fout.write("vt 0 0\n")
+
         # Write mesh face order/list
         for i in range(0, len(self.mesh_faces)):
             fx = self.mesh_faces[i][0] + start_index
             fy = self.mesh_faces[i][1] + start_index
             fz = self.mesh_faces[i][2] + start_index
             
-            fout.write(f"f {fx} {fy} {fz}\n")
+            fout.write(f"f {fx}/{fx}/{fx} {fy}/{fy}/{fy} {fz}/{fz}/{fz}\n")
         fout.write("#" + str(len(self.mesh_faces)) + " faces\n")
 
         fout.write(f"usemtl {material}\n")
