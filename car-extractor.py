@@ -9,13 +9,15 @@ import pathlib
 import colorama
 from colorama import Fore, Back, Style
 
+
 def show_help():
     print("##############################################################################################")
     print("ChoroQ car extractor by Matthew Holey")
     print("##############################################################################################")
     print("")
     print("Extracts RoadTrip Adventure car model/textures and accessories from Qxx.BIN files")
-    print("Works on the UK/EU version of the game aka ChoroQ 2 HG")
+    print("Tested on the UK/EU version of the game aka ChoroQ HG 2")
+    print("Also Tested on the UK/EU version of the game ChoroQ HG 3")
     print("Textures are in PNG format, and the texture palette is also exported as PNG marked \"-p\"")
     print("Models will be exported as OBJ and PLY unless stated otherwise, OBJ does not contain colours")
     print("")
@@ -31,6 +33,7 @@ def show_help():
     print("                            -- 2 = HG 2")
     print("                            -- 3 = HG 3")
 
+
 def process_file(entry, folder_out, obj = True, ply = True, gameVersion = 2):
     if type(entry) is str:
         entry = pathlib.Path(entry)
@@ -41,10 +44,10 @@ def process_file(entry, folder_out, obj = True, ply = True, gameVersion = 2):
         f.seek(0, os.SEEK_END)
         file_size = f.tell()
         f.seek(0, os.SEEK_SET)
-        if gameVersion == 2:
-            car = CarModel.read_car(f, 0, file_size)
-        elif gameVersion == 3:
-            car = HG3CarModel.from_file(f, 0, file_size)
+        # if gameVersion == 2:
+        car = CarModel.read_car(f, 0, file_size)
+        # elif gameVersion == 3:
+        #     car = HG3CarModel.from_file(f, 0, file_size)
 
         # Get texture, and fix clut/palette
         address, texture = car.textures[0]
@@ -114,6 +117,8 @@ if __name__ == '__main__':
     if os.path.isdir(folder_in):
         with os.scandir(folder_in) as it:
             for entry in it:
+                if entry.name.startswith('FASHION') or entry.name.startswith('FROG') or entry.name.startswith('STICKER'):
+                    continue
                 if not entry.name.startswith('.') and entry.is_file():
                     process_file(entry, folderOut, obj, ply, gameVersion)
     

@@ -138,17 +138,43 @@ class CarMesh(AMesh):
         return 16, offset1, offset2
 
     @staticmethod
+    def _parse_hg3_offsets(file, offset):
+        file.seek(offset, os.SEEK_SET)
+        # Header is as follows
+        # byte/long (number of offsets in this mesh)
+        # Jump 4 bytes to the start of the table
+        # long is some sort of count, per offset
+        # long is the offset (relative from here)
+
+        offset_count = U.readLong(file)
+        U.BreadLong(file)
+        counts = []
+        offsets = []
+        for o in range(0, offset_count):
+            counts.append(U.readLong(file))
+            offsets.append(U.readLong(file))
+            # offsets are 8 apart, I think to align with the offset table count
+            file.seek(8, os.SEEK_CUR)
+
+        return counts, offsets
+
+    @staticmethod
     def from_file(file, offset, scale=1):
-        file.seek(offset, os.SEEK_CUR)
+        file.seek(offset, os.SEEK_SET)
         print(f"reading car mesh {offset}")
         offsets = CarMesh._parse_offsets(file, offset)
         meshes = []
         hg3 = False
-        if offsets[1] == 1:
+        if 1 <= offsets[1] <= 5:
             hg3 = True
+            # Re-read offsets with different method
+            counts, offsets = CarMesh._parse_hg3_offsets(file, offset)
         for o in offsets:
-            # Some offsets are 1 or similar, for HG3 guessing they are not offsets
             if o < 16:
+                if hg3:
+                    # Some HG3 offsets in the different table are empty
+                    continue
+                # Not in HG2 though, so we are probably at an invalid location
                 break
             print(offset)
             print(o)
@@ -287,7 +313,7 @@ class CarMesh(AMesh):
             nloop = PS2.gifGetNLoop(gif_tag)
             eop = PS2.gifGetEop(gif_tag)
             pre = PS2.gifGetPrimEnable(gif_tag)
-            prim = PS2.gifGetPrim(gif_tag)
+            prim = PS2.parsePRIM(PS2.gifGetPrim(gif_tag))
             mode = PS2.gifGetMode(gif_tag)
             nreg = PS2.gifGetNReg(gif_tag)
             descriptors = PS2.gifGetRegisterDescriptors(gif_tag)
@@ -322,7 +348,7 @@ class CarMesh(AMesh):
                         vx, vy, vz = U.readXYZ(file)
                         vw = U.readFloat(file)
 
-                        if hg3:
+                        if hg3 and exec_type == 80:
                             nx, ny, nz, nw = 0, 0, 0, 0
                         else:
                             # Unsure on what these are, but they are not normals
