@@ -117,7 +117,7 @@ if __name__ == '__main__':
     if os.path.isdir(folder_in):
         with os.scandir(folder_in) as it:
             for entry in it:
-                if entry.name.startswith('FASHION') or entry.name.startswith('FROG') or entry.name.startswith('STICKER'):
+                if entry.name in ["FASHION.BIN", "FROG.BIN", "STICKER.BIN", "WHEEL.BIN"]:
                     continue
                 if not entry.name.startswith('.') and entry.is_file():
                     process_file(entry, folderOut, obj, ply, gameVersion)
