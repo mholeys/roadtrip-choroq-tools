@@ -78,6 +78,8 @@ Sub-File structure:
 The car file format uses a similar system to the Field/Course/Action meshes, it uses DMA/VIF/GIF tags, and has different EXECADDRes (so a different VU1 program executes)
 
 ### Extracting car models
+**Currently this is not working, I will get this back working as I know that the cars are more popular than the world/courses. For now use the choroq-extractor.py following the steps below, as that can extract everything. Add comments to the bottom lines of the code to disable the fields/courses/rest extraction**
+
 See the car-extractor.py file:
 ``` python car-extractor.py <input folder> <output folder> [makedirs] [type]```
 

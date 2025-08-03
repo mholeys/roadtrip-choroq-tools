@@ -406,6 +406,8 @@ class CarMesh(AMesh):
         return len(self.meshVerts)
 
     def write_mesh_to_obj(self, fout, start_index = 0, material=None):
+        fout.write(f"usemtl {material}\n")
+        fout.write("s off\n")
         # Write vertices
         for i in range(0, len(self.meshVerts)):
             vx = '{:.20f}'.format(self.meshVerts[i][0])
@@ -437,9 +439,6 @@ class CarMesh(AMesh):
             
             fout.write(f"f {fx}/{fx}/{fx} {fy}/{fy}/{fy} {fz}/{fz}/{fz}\n")
         fout.write("#" + str(len(self.meshFaces)) + " faces\n")
-
-        fout.write(f"usemtl {material}\n")
-        fout.write("s off\n")
     
         return len(self.meshVerts)
 
