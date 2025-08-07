@@ -69,19 +69,24 @@ def show_help():
     print("   - WHEEL/ # Folder with models/textures for the wheels")
 
     print(Fore.YELLOW+" WARNING: This may produce a large number of files, and take some time,")
-    print(Fore.YELLOW+"          with all data currently supported this will be around PLY: 4GB or OBJ: 3GB.")
+    print(Fore.YELLOW+"          with all data currently supported this will be around OBJ: 2GB.")
     print(Fore.YELLOW+"          On my pc, on a HDD 5900RPM it takes ~15mins for OBJ.")
-    print(Fore.YELLOW+"          Courses (obj): ~110K files ~450 MB")
-    print(Fore.YELLOW+"          Courses (ply): ~110k files ~500 MB")
+    print(Fore.YELLOW+"          Courses (obj): ~7.2k files ~160 MB")
+    print(Fore.YELLOW+"          Courses (obj+C): ~7.2k files ~230 MB")
+    # print(Fore.YELLOW+"          Courses (ply): ~110k files ~500 MB")
     print(Fore.YELLOW+"          Courses ( 3 ): ~ 12K files ~130 MB")
-    print(Fore.YELLOW+"          Actions (obj): ~100K files ~400 MB")
-    print(Fore.YELLOW+"          Actions (ply): ~100k files ~400 MB")
+    print(Fore.YELLOW+"          Actions (obj): ~7.5K files ~130 MB")
+    print(Fore.YELLOW+"          Actions (obj+C): ~7.5K files ~190 MB")
+    # print(Fore.YELLOW+"          Actions (ply): ~100k files ~400 MB")
     print(Fore.YELLOW+"          Actions ( 3 ): ~ 14K files ~100 MB")
-    print(Fore.YELLOW+"          Fields  (obj): ~600K files ~1.7 GB")
-    print(Fore.YELLOW+"          Fields  (ply): ~730K files ~2.8 GB")
+    print(Fore.YELLOW+"          Fields  (obj): ~22K files ~1.7 GB")
+    print(Fore.YELLOW+"          Fields  (obj+C): ~22K files ~1.25 GB")
+    # print(Fore.YELLOW+"          Fields  (ply): ~730K files ~2.8 GB")
     print(Fore.YELLOW+"          Fields  ( 3 ): ~230K files ~483 MB")
-    print(Fore.YELLOW+"          Cars    (obj): ~1.5k files ~120 MB")
-    print(Fore.YELLOW+"          Cars    (ply): ~1.5k files ~100 MB")
+    print(Fore.YELLOW+"          Cars    (obj): ~1.7k files ~120 MB")
+    print(Fore.YELLOW+"          Cars    (obj+C): ~1.7k files ~160 MB")
+    # print(Fore.YELLOW+"          Cars    (ply): ~1.5k files ~100 MB")
+    print(Fore.YELLOW + "        HG3: with all data currently supported this will be around OBJ: 1.2GB.")
 
 
 def group_meshes_by_material(meshes):
@@ -398,21 +403,27 @@ def process_courses(source, dest, folder, output_formats):
     print(f"Processing {folder}s")
     with os.scandir(f"{source}/{folder}") as it:
         for entry in it:
-            if not entry.name.startswith('.') and entry.is_file():
-                c_number = entry.name[0 : entry.name.find('.')]
-                c_prefix = c_number[0]
-                c_number = c_number[1:]
-                print(f"Processing {entry.name}")
-                for outType in output_formats:
-                    course_output_folder = f"{dest}/{folder}/{c_prefix}{c_number}{outType}"
-                    try:
-                        process_course_type(entry, course_output_folder, c_number, outType, c_prefix)
-                    except KeyboardInterrupt:
-                        break
-                    except Exception as e:
-                        print(e)
-                        sys.stdout = sys.__stdout__
-                        print(f"Failed to process file {entry.path}")
+            process_course(entry, dest, folder, output_formats)
+
+
+def process_course(entry, dest, folder, output_formats):
+    if type(entry) is str:
+        entry = Path(entry)
+    if not entry.name.startswith('.') and entry.is_file():
+        c_number = entry.name[0: entry.name.find('.')]
+        c_prefix = c_number[0]
+        c_number = c_number[1:]
+        print(f"Processing {entry.name}")
+        for outType in output_formats:
+            course_output_folder = f"{dest}/{folder}/{c_prefix}{c_number}{outType}"
+            try:
+                process_course_type(entry, course_output_folder, c_number, outType, c_prefix)
+            except KeyboardInterrupt:
+                break
+            except Exception as e:
+                print(e)
+                sys.stdout = sys.__stdout__
+                print(f"Failed to process file {entry.path}")
 
 
 def process_fields(source, dest, output_formats, merge_by_data=False):
@@ -499,8 +510,6 @@ def process_file(entry, folder_out, output_formats, version, is_car=False):
             texture.write_texture_to_png(f"{out_folder}/{basename}.png")
             # texture.writePaletteToPNG(f"{out_folder}/{basename}-{i}-p.png")
             texture_path = f"{basename}.png"
-            with open(f"{out_folder}/{basename}.mtl", "w") as fout:
-                Texture.save_material_file_obj(fout, basename, texture_path)
 
             mesh_section_names = ["body", "lights", "brake-light", "lp-body", "lp-lights", "spoiler", "spoiler2", "jets", "sticker"]
             # this varies by car currently (HG3) so it is not implemented
@@ -521,6 +530,9 @@ def process_file(entry, folder_out, output_formats, version, is_car=False):
                             mesh.write_mesh_to_type(outType, fout, material=texture_path)
                         else:
                             mesh.write_mesh_to_type(outType, fout, material=basename)
+                    if outType == "obj" or outType == "obj+colour":
+                        with open(f"{out_folder}/{basename}-{mesh_path}.mtl", "w") as fout:
+                            Texture.save_material_file_obj(fout, basename, texture_path)
         sys.stdout = sys.__stdout__
 
 

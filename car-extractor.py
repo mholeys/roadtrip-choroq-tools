@@ -62,8 +62,7 @@ def process_file(entry, folder_out, obj=True, ply=True, gameVersion = 2, with_co
         texture.write_texture_to_png(f"{out_folder}{basename}.png")
         # texture.writePaletteToPNG(f"{out_folder}/{basename}-{i}-p.png")
         texture_path = f"{basename}.png"
-        with open(f"{out_folder}{basename}.mtl", "w") as fout:
-            Texture.save_material_file_obj(fout, basename, texture_path)
+
 
         mesh_section_names = ["body", "lights", "brake-light", "lp-body", "lp-lights", "spoiler", "spoiler2", "jets",
                               "sticker"]
@@ -78,6 +77,8 @@ def process_file(entry, folder_out, obj=True, ply=True, gameVersion = 2, with_co
             if obj:
                 with open(f"{out_folder}{basename}-{mesh_path}.obj", "w") as fout:
                     mesh.write_mesh_to_obj(fout, material=basename, with_colours=with_colour)
+                with open(f"{out_folder}{basename}-{mesh_path}.mtl", "w") as fout:
+                    Texture.save_material_file_obj(fout, basename, texture_path)
             if ply:
                 with open(f"{out_folder}{basename}-{mesh_path}.ply", "w") as fout:
                     mesh.write_mesh_to_ply(fout)
