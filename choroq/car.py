@@ -393,7 +393,7 @@ class CarMesh(AMesh):
         return verts, normals, uvs, faces, colours, count
 
     def write_mesh_to_dbg(self, fout, start_index=0, material=None):
-        self.write_mesh_to_obj(fout)
+        self.write_mesh_to_obj(fout, start_index, material, False)
         fout.write("#" + str(len(self.meshColours)) + " colours R/G/B/A\n")
         for i in range(0, len(self.meshFaces)):
             cr = '{:d}'.format(math.trunc(self.meshColours[i][0]))
@@ -405,7 +405,7 @@ class CarMesh(AMesh):
         
         return len(self.meshVerts)
 
-    def write_mesh_to_obj(self, fout, start_index = 0, material=None):
+    def write_mesh_to_obj(self, fout, start_index=0, material=None, with_colours=False):
         fout.write(f"usemtl {material}\n")
         fout.write("s off\n")
         # Write vertices
@@ -413,7 +413,15 @@ class CarMesh(AMesh):
             vx = '{:.20f}'.format(self.meshVerts[i][0])
             vy = '{:.20f}'.format(self.meshVerts[i][1])
             vz = '{:.20f}'.format(self.meshVerts[i][2])
-            fout.write("v " + vx + " " + vy + " " + vz + "\n")
+            if with_colours:
+                # Some programs support additional data, e.g colors after x/y/z
+                # the following section can be used to export with colors (blender supports first set)
+                r = '{:.20f}'.format(self.meshColours[i][0] / 255.0)
+                g = '{:.20f}'.format(self.meshColours[i][1] / 255.0)
+                b = '{:.20f}'.format(self.meshColours[i][2] / 255.0)
+                fout.write(f"v {vx} {vy} {vz} {r} {g} {b}\n")
+            else:
+                fout.write(f"v {vx} {vy} {vz}\n")
         fout.write("#" + str(len(self.meshVerts)) + " vertices\n")
             
         # Write normals

@@ -77,7 +77,7 @@ class ChoroQCombImporter(Operator, ImportHelper):
             MeshMat = mat
         
         mesh1 = bpy.data.meshes.new(f"Mesh")
-        mesh1.use_auto_smooth = True
+#        mesh1.use_auto_smooth = True
         
         if posc != None:
             CurCollection = bpy.data.collections.new(F"{posc}{posb}{posa}")#Make Collection per comb loaded
@@ -92,6 +92,7 @@ class ChoroQCombImporter(Operator, ImportHelper):
         # s z8-x0-0
         # vertex_count 6
         # face_count 4
+        # texture texturex
         # end_header
 
         simple_format = False
@@ -121,6 +122,7 @@ class ChoroQCombImporter(Operator, ImportHelper):
         normalList = []
         faceList = []
         colorList = []
+        ncolorList = [] # night colors
         uvList = []
         
         vertsRead = 0
@@ -150,14 +152,16 @@ class ChoroQCombImporter(Operator, ImportHelper):
 
             vertCount = int(f.readline().split(' ')[1])
             faceCount = int(f.readline().split(' ')[1])
+            textureName = f.readline().split(' ')[1]
             #print(f"verts {vert_count} faces {faceCount}")
             f.readline() # End header
             
             for vert in range(vertCount):
-                v, n, c, uv, e = ChoroQCombImporter.read_point(f, combType)
+                v, n, c, nightc, uv, e = ChoroQCombImporter.read_point(f, combType)
                 vertList.append(Vector(v))
                 normalList.append(n)
                 colorList.append(c)
+                ncolorList.append(nightc)
                 uvList.append(uv)
             for face in range(faceCount):
                 face = ChoroQCombImporter.read_face(f, combType)
@@ -169,6 +173,36 @@ class ChoroQCombImporter(Operator, ImportHelper):
                 end, name = f.readline().split(' ')
         #print(vertList)
         mesh1.from_pydata(vertList, [], faceList)
+#        mesh1.vertex_colors.new(
+        color_attri = mesh1.color_attributes.new('day', 'FLOAT_COLOR', 'POINT')
+        night_color_attri = mesh1.color_attributes.new('night', 'FLOAT_COLOR', 'POINT')
+        
+#        v_index = 0
+        for v_index in range(len(mesh1.vertices)):
+#        for v in mesh1.verts:
+            c = colorList[v_index]
+            nc = ncolorList[v_index]
+            color_attri.data[v_index].color = [float(c[0]) / 255.0, float(c[1]) / 255.0, float(c[2]) / 255.0, float(c[3]) / 255.0]
+            night_color_attri.data[v_index].color = [float(nc[0]) / 255.0, float(nc[1]) / 255.0, float(nc[2]) / 255.0, float(nc[3]) / 255.0]
+
+            
+        
+#        for c in colorList:
+#            print(f"{color_attri.data[i].color[0]}")
+#            color_attri.data[i].color[0] = float(c[0]) / 255.0
+#            color_attri.data[i].color[1] = float(c[1]) / 255.0
+#            color_attri.data[i].color[2] = float(c[2]) / 255.0
+#            color_attri.data[i].color[3] = float(c[3]) / 255.0
+##            color_attri.data[i].color = [int(c[0]), int(c[1]), int(c[2]), int(c[3])]
+#            print(f"{color_attri.data[i].color[0]} {float(c[0]) / 255.0}")
+#        for c in ncolorList:
+#            print(f"{night_color_attri.data[i].color[0]}")
+#            night_color_attri.data[i].color[0] = float(c[0]) / 255.0
+#            night_color_attri.data[i].color[1] = float(c[1]) / 255.0
+#            night_color_attri.data[i].color[2] = float(c[2]) / 255.0
+#            night_color_attri.data[i].color[3] = float(c[3]) / 255.0
+##            color_attri.data[i].color = [int(c[0]), int(c[1]), int(c[2]), int(c[3])]
+#            print(f"{night_color_attri.data[i].color[0]} {float(c[0]) / 255.0}")
         mesh1.update()
 #        for v in vertList:
 #            bm.verts.new(v)
@@ -236,6 +270,7 @@ class ChoroQCombImporter(Operator, ImportHelper):
         line = file.readline().split(' ')
         x = y = z = nx = ny = nz = 0
         r = g = b = a = s = t = 0
+        nr = ng = nb = 0
         fx = fy = fz = 0
         data = map(lambda x: float(x), line)
         if combType == "1":
@@ -246,13 +281,13 @@ class ChoroQCombImporter(Operator, ImportHelper):
             x,y,z,nx,ny,nz = data
         elif combType == "field":
             # "Field" mesh
-            x,y,z,fx,fy,fz,nx,ny,nz,r,g,b,a,s,t = data
+            x,y,z,fx,fy,fz,nx,ny,nz,r,g,b,a,nr,ng,nb,na,s,t = data
         elif combType == "4":
             # Post collider
             x,y,z,nx,ny,nz = data
         else:
             print(f"UNKNOW MESH TYPE {combType}")
-        return (x, z, y), (nx, ny, nz), (r, g, b, a), (s, t), (fx, fy, fz)
+        return (x, z, y), (nx, ny, nz), (r, g, b, a), (nr, ng, nb, na), (s, t), (fx, fy, fz)
 
     def read_face(file, combType):
         line = file.readline().split(' ')

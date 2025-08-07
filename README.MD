@@ -1,28 +1,42 @@
-# Road Trip Adventure / ChoroQ 2 HG extraction tools
+# Road Trip Adventure / ChoroQ HG 2 / チョロQ HG 2 extraction tools
 
-This is a set of tools used to extract the data from the PS2 game Road Trip Adventure (UK/EU) / Everywhere Road Trip (US) / ChoroQ HG 2 (JP) チョロQ HG 2 - written in python. 
+This is a set of tools used to extract the data from the PS2 game Road Trip Adventure (UK/EU) / Everywhere Road Trip (US) / ChoroQ HG 2 (JP) チョロQ HG 2 - written in python.
+
+There has also been work on HG 3, but this is very much WIP, this game is also known as Gadget Racers or ChoroQ HG 3, made by e-Game. 
 
 This has been tested with only the EU/UK version of the game, as this is the one I have. I have not really tested this with other games in the ChoroQ series, but after a quick look the files seem very different between games. It should also work with the US/American version, and the JP/Japanese & KR/Korean version, as the text is the main difference.
 
 Originally only wanted to create a tool to extract the car models, and textures, but the other files for the game are very similar and some data can be extracted from them as well. Building on my understanding of the car file format I have expanded this to work with the other files, most of the data on the disc is loaded directly to GS/VU1 via DMA transfers. 
 
 #### Features
-Currently it is possible to get all field (FLD/xxx.BIN), course (COURSE/Cxx.BIN), action (ACTION/Axx.BIN), and car models (CAR{0,1,2,3,4,S}/Qxx.BIN).
+Currently, it is possible to get all field (FLD/xxx.BIN), course (COURSE/Cxx.BIN), action (ACTION/Axx.BIN), and car models (CAR{0,1,2,3,4,S}/Qxx.BIN).
 The field/course file format are not fully understood, but the model, and most of the textures can be extracted (if a texture fails to be understood the rest of the textures usually fail). It is possible to get the mini-map model, and some level extras such as doors/barrels. 
 Textures should map to the correct mesh, which is setup via GIF tags in the .BIN files.
 
+Working (HG 2):
+- Car models/textures
+- Main world (FLD/field), with textures and optional vertex colours
+- Race Courses (COURSE), with textures and optional vertex colours
+- Mini-games (ACTION), with textures and optional vertex colours
+
+Working (HG 3):
+- Car models/textures
+- Race Courses (COURSE), with textures
+
 Documentation of the file formats below are still being worked on, and the best source of info is within the code.
+(Code is messy as it evolves, sorry)
 - For field/course/action files see the choroq/course.py
 - For car files see the choroq/car.py file
 - For textures see the choroq/texture.py file
+- For Sys/Shop/Item see above + choroq-extractor.py
 
 ##### Course/Field/Action file format
-The information here was previously different, this was before I had realised that most of data uses DMA/GIF and VIF tags/codes to directly load data from the disc to be draw with little overhead. After this discovery (perhaps this should have been more obvious earlier), I have realised that the other files on the disc like the SYS/ files also use these DMA/VIF/GIF tags to basically load all data as is, with only minimal checks done by the CPU.
+The information here was previously different, this was before I had realised that most of the data uses **DMA/GIF** and **VIF tags/codes** to directly load data from the disc to be drawn with little overhead. After this discovery (perhaps this should have been more obvious earlier), I have realised that the other files on the disc like the SYS/ files also use these DMA/VIF/GIF tags to basically load all data as is, with only minimal checks done by the CPU.
 
 The course/field/action files contain multiple sub-files:
 - Textures
   - This is all the textures that the field/course use, and are just one after each other
-  - Not all texture formats are understood, so some may turn out wrong, or will cause other textures to be skipped
+  - **Not all texture formats are understood**, so some may turn out wrong, or will cause other textures to be skipped
   - Each texture is prefixed with DMA tags (16bytes) with the length of the transfer, along with GIF tags to setup transfer parameters (PACKED mode, destination/size/format) and transfer the image data (IMAGE mode)
 - Chunks
   - This is the level data, which holds all the details on each of the meshes within each chunk of the course/field
@@ -60,11 +74,11 @@ The course/field/action files contain multiple sub-files:
       - Stage cover in Fuji city (hiding the princess)
       - Treasure chest parts in the maze action
 
-For HG3 files, there are some differences, key differences are that the size of the chunk array is often 16x16 for meshes, and 32x32 for colluder, and that other functions of the GS/VIF are used. The exec addresses are different as the VU1 code is different between the games
+For HG3 files, there are some differences, key differences are that the size of the chunk array is often 16x16 for meshes, and 32x32 for collider, and that other functions of the GS/VIF are used. The exec addresses are different as the VU1 code is different between the games.
 
 ##### Car model file format
 The car file format is the most understood, and it is possible to get the car body model, texture, as well as its accessories.
-Sub-File structure:
+Sub-File structure (HG2):
 - 0 Car body
 - 1 Lights (front/back) probably used for night driving lights
 - 2 Rear Lights, probably used for brake lights
@@ -78,22 +92,23 @@ Sub-File structure:
 The car file format uses a similar system to the Field/Course/Action meshes, it uses DMA/VIF/GIF tags, and has different EXECADDRes (so a different VU1 program executes)
 
 ### Extracting car models
-**Currently this is not working, I will get this back working as I know that the cars are more popular than the world/courses. For now use the choroq-extractor.py following the steps below, as that can extract everything. Add comments to the bottom lines of the code to disable the fields/courses/rest extraction**
 
 See the car-extractor.py file:
-``` python car-extractor.py <input folder> <output folder> [makedirs] [type]```
+``` python car-extractor.py <input folder> <output folder> [type]```
 
-e.g to make PLY files from the `CAR0` folder, with subfolders for each car
+e.g to make PLY files from the `CAR0` folder
 
-``` python car-extractor.py CAR0 ~/cars 1 2```
+``` python car-extractor.py CAR0 ~/cars 2```
 
-e.g to make both OBJ and PLY files from the `CAR0` folder, directly in the ~/cars folder
+e.g to make both OBJ and PLY files from the `CAR0` folder
 
 ``` python car-extractor.py CAR0 ~/cars```
 
-e.g to make OBJ files from the Q00.BIN car
+e.g to make OBJ files from the Q00.BIN car (single car mode)
 
-``` python car-extractor.py Q00.BIN ~/cars 1 1```
+``` python car-extractor.py Q00.BIN ~/cars 1```
+
+If you would like the vertex colours, PLY is the better choice, but you can also now use 'C' as the format option, which now adds colours to the OBJ format, however this is not universally supported. 
 
 ### Extracting Fields/Courses:
 See the choroq-extractor.py file for additional details:
@@ -103,11 +118,13 @@ Basic usage (help can be printed with no arguments)
 ``` python choroq-extractor.py E:/ ~/road-trip/ ```
 
 e.g to make OBJ files from road trip disc
-This will attempt to group all meshes within a field/course/action by their used texture, this reduces the number of files produced and saves on draw calls. This does however break the chunk based system the game uses, but this should be fine for most purposes. 
+This will attempt to group all meshes within a field/course/action by their used texture, this reduces the number of files produced and saves on draw calls. This does however break the chunk based system the game uses, but this should be fine for most purposes.
 
 ``` python choroq-extractor.py E:/ C:/road-trip/ 1```
 
 e.g to make PLY files from road trip disc, this mode has been neglected in the last few changes, so you may be better using the OBJ format
+
+**PLY format for course/field/action is currently not working, this may not get fixed**
 
 ``` python choroq-extractor.py E:/ C:/road-trip/ 2```
 
@@ -131,4 +148,6 @@ e.g to make PLY files from road trip disc, this mode has been neglected in the l
 - e-Game (JP) for making a very interesting game that I and many others have spent many hours playing
 
 #### Other notes:
-- I do not claim ownership of any of the content of the PS2 games, I have created this with the plan of understanding how the game works. Anyone who uses this takes responsibility for how they use the produced output.
+- I do not claim ownership of any content of the PS2 games, I have created this with the plan of understanding how the game works. Anyone who uses this takes responsibility for how they use the produced output.
+- If you end up using my tool to produce something cool, please link to this github page so people can explore the game, also LMK how you use it
+- If you have any issues with the tool, check the issues at the top, things should be improving as I understand more

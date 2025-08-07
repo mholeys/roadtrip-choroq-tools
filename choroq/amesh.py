@@ -7,7 +7,7 @@ class AMesh(ABC):
     # The format includes Vertices, Vertex Normals,
     # Texture coordinates and Faces
     @abstractmethod
-    def write_mesh_to_obj(self, fout, start_index=0, material=None):
+    def write_mesh_to_obj(self, fout, start_index=0, material=None, with_colours=False):
         pass
 
     # Custom file format for use in importing into unity
@@ -37,8 +37,8 @@ class AMesh(ABC):
         output_type = output_type.lower()
         if output_type == "dbg":
             return self.write_mesh_to_dbg(fout, start_index, material)
-        elif output_type == "obj":
-            return self.write_mesh_to_obj(fout, start_index, material)
+        elif output_type == "obj" or output_type == "obj+colour":
+            return self.write_mesh_to_obj(fout, start_index, material, output_type == "obj+colour")
         elif output_type == "comb":
             return self.write_mesh_to_comb(fout, start_index, material)
         else:

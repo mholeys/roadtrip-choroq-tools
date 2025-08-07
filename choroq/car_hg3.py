@@ -107,54 +107,34 @@ class HG3CarModel(CarModel):
         return sub_file_offsets
 
     @staticmethod
+    def read_car(file, offset, size):
+        sub_file_offsets = CarModel._parse_offsets(file, offset, size)
+        print(f"Reading car model (full) from {file.tell()}")
+        texture_offset = sub_file_offsets[-2]
+        eof_offset = sub_file_offsets[-1]
+        sub_file_offsets = sub_file_offsets[:-2]
+
+        meshes = []
+        textures = []
+
+        for o in sub_file_offsets:
+            mesh = CarMesh.from_file(file, offset + o)
+            if len(mesh) > 0:
+                meshes += mesh
+
+        texture, last = Texture.read_texture(file, offset + texture_offset)
+        textures.append(texture)
+        while not last:
+            texture, last = Texture.read_texture(file, file.tell())
+            textures.append(texture)
+
+        return CarModel("", meshes, textures)
+
+    @staticmethod
     def from_file(file, offset, size):
         sub_file_offsets = HG3CarModel._parse_offsets(file, offset, size)
         meshes = []
         textures = []
-        # for offsetIndex,o in enumerate(sub_file_offsets):
-        #     if (o == size or o == 0):
-        #         # At end of file
-        #         break
-        #     if offsetIndex < len(sub_file_offsets)-1:
-        #         currentOffsetMax = sub_file_offsets[offsetIndex+1]
-        #     else:
-        #         currentOffsetMax = size
-        #     file.seek(offset+o, os.SEEK_SET)
-        #     # print(f"Reading model from {file.tell()}")
-        #     magic = U.readLong(file)
-        #     file.seek(offset+o, os.SEEK_SET)
-        #     # Check to prevent overrun
-        #     if offsetIndex < len(sub_file_offsets)-1:
-        #         end = sub_file_offsets[offsetIndex+1]
-        #     else:
-        #         # This should not be a problem, as the last is usually the end of the file anyway
-        #         end = size
-        #
-        #     U.BreadLong(file)
-        #     U.BreadLong(file)
-        #     textureCheck = U.readLong(file) #  This should be 00 at the end for textures (guesswork)
-        #     file.seek(offset+o, os.SEEK_SET)
-        #
-        #     print(f"TextureCheck: pos: {offsetIndex}? {offsetIndex == len(sub_file_offsets)-2} and {textureCheck} {textureCheck & 0xFF000000 == 0}")
-        #     if offsetIndex > 0 and offsetIndex == len(sub_file_offsets)-2 and textureCheck & 0xFF000000 == 0:
-        #         textures += Texture.allFromFile(file, offset+o, end)
-        #     elif magic & 0x10120006 >= 0x10120006 or magic & 0x10400006 >= 0x10400006:
-        #         # File is possibly a texture
-        #         # print(f"Parsing texture @ {offset+o} {magic & 0x10120006} {magic & 0x10400006}")
-        #         # textures.append(Texture._fromFile(file, offset+o))
-        #         textures += Texture.allFromFile(file, offset+o, end)
-        #     elif magic == 0x0000050:
-        #         # print(f"Parsing meshes found 0x50 @ {offset+o}")
-        #         meshes += CarMesh.from_file(file, offset + o + 0x50)
-        #     elif magic == 5: # CHOROQ HG 3
-        #         # Has offset table different than usual
-        #         # print(f"Parsing HG 3 offset found {offset+o}")
-        #         meshes += HG3CarMesh.from_file(file, offset + o)
-        #
-        #     else:
-        #         # print(f"Parsing meshes @ {offset+o}")
-        #         #meshes += CarMesh._fromFile(file, offset+o+16)
-        #         meshes += HG3CarMesh.from_file(file, offset + o)
 
         print(f"Reading car model (full) from {file.tell()}")
         texture_offset = sub_file_offsets[-2]
@@ -352,13 +332,21 @@ class HG3CarMesh(CarMesh):
         
         return len(self.meshVerts)
 
-    def write_mesh_to_obj(self, fout, start_index = 0, material=None):
+    def write_mesh_to_obj(self, fout, start_index=0, material=None, with_colours=False):
         # Write verticies
         for i in range(0, len(self.meshVerts)):
             vx = '{:.20f}'.format(self.meshVerts[i][0])
             vy = '{:.20f}'.format(self.meshVerts[i][1])
             vz = '{:.20f}'.format(self.meshVerts[i][2])
-            fout.write("v " + vx + " " + vy + " " + vz + "\n")
+            if with_colours:
+                # Some programs support additional data, e.g colors after x/y/z
+                # the following section can be used to export with colors (blender supports first set)
+                r = '{:.20f}'.format(self.meshColours[i][0] / 255.0)
+                g = '{:.20f}'.format(self.meshColours[i][1] / 255.0)
+                b = '{:.20f}'.format(self.meshColours[i][2] / 255.0)
+                fout.write(f"v {vx} {vy} {vz} {r} {g} {b}\n")
+            else:
+                fout.write(f"v {vx} {vy} {vz}\n")
         fout.write("#" + str(len(self.meshVerts)) + " vertices\n")
             
         # Write normals

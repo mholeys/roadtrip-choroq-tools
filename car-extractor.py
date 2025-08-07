@@ -24,17 +24,17 @@ def show_help():
     print("Options: <REQUIRED> [OPTIONAL]")
     print("<folder/file to open>")
     print("<output folder>")
-    print("[makefolders]             : whether to create sub folders for each car : 1 = Yes")
-    print("[type]                    : model output format (requires [makefolders])")
+    print("[type]                    : model output format")
     print("                            -- 1 = OBJ only")
+    print("                            -- C = OBJ only, with colours (custom, should work with blender)")
     print("                            -- 2 = PLY only")
-    print("                            --  <other> = BOTH ")
+    print("                            --  <other> = BOTH (default is just obj)")
     print("[gameVersion]             : default = 2, ChoroQ HG 2 or other (requires [type])")
     print("                            -- 2 = HG 2")
     print("                            -- 3 = HG 3")
 
 
-def process_file(entry, folder_out, obj = True, ply = True, gameVersion = 2):
+def process_file(entry, folder_out, obj=True, ply=True, gameVersion = 2, with_colour=False):
     if type(entry) is str:
         entry = pathlib.Path(entry)
     basename = entry.name[0 : entry.name.find('.')]
@@ -65,12 +65,21 @@ def process_file(entry, folder_out, obj = True, ply = True, gameVersion = 2):
         with open(f"{out_folder}{basename}.mtl", "w") as fout:
             Texture.save_material_file_obj(fout, basename, texture_path)
 
+        mesh_section_names = ["body", "lights", "brake-light", "lp-body", "lp-lights", "spoiler", "spoiler2", "jets",
+                              "sticker"]
+        # this varies by car currently (HG3) so it is not implemented
+        mesh_section_names_hg3 = ["body", "brake-light", "lights", "lights2", "lp-body", "lp-lights", "lp-lights-2", "7", "spoiler", "9", "10", "11"]
+
         for i, mesh in enumerate(car.meshes):
+            if len(car.meshes) == 9:
+                mesh_path = mesh_section_names[i]
+            else:
+                mesh_path = i
             if obj:
-                with open(f"{out_folder}{basename}-{i}.obj", "w") as fout:
-                    mesh.write_mesh_to_obj(fout, material=basename)
+                with open(f"{out_folder}{basename}-{mesh_path}.obj", "w") as fout:
+                    mesh.write_mesh_to_obj(fout, material=basename, with_colours=with_colour)
             if ply:
-                with open(f"{out_folder}{basename}-{i}.obj", "w") as fout:
+                with open(f"{out_folder}{basename}-{mesh_path}.ply", "w") as fout:
                     mesh.write_mesh_to_ply(fout)
 
 
@@ -83,30 +92,28 @@ if __name__ == '__main__':
         show_help()
         print(Fore.RED +"ERROR: " + Style.RESET_ALL + "Not enough args")
         exit(1)
-    
-    makeFolders = False
-    obj = True
-    ply = True
+
+    obj = True # obj only by default
+    obj_with_colour = False
+    ply = False
     gameVersion = 2
-    if len(sys.argv) == 4: 
-        makeFolders = True if sys.argv[3] == "1" else False
-    elif len(sys.argv) == 5:
-        makeFolders = True if sys.argv[3] == "1" else False
+    if len(sys.argv) == 4:
         obj = True if sys.argv[4] == "1" else False
+        obj_with_colour = True if sys.argv[4] == "C" or sys.argv[4] == "c" else False
         ply = True if sys.argv[4] == "2" else False
-    elif len(sys.argv) == 6:
-        makeFolders = True if sys.argv[3] == "1" else False
+    elif len(sys.argv) == 5:
         obj = True if sys.argv[4] == "1" else False
+        obj_with_colour = True if sys.argv[4] == "C" or sys.argv[4] == "c" else False
         ply = True if sys.argv[4] == "2" else False
         gameVersion = int(sys.argv[5])
-    elif len(sys.argv) > 6:
+    elif len(sys.argv) > 5:
         show_help()
         print(Fore.RED +"ERROR: " +Style.RESET_ALL+ "Too many args")
         exit(1)
 
     if gameVersion != 2 and gameVersion != 3:
         show_help()
-        print(Fore.RED +"ERROR: " +Style.RESET_ALL+ "Unknown game version")
+        print(Fore.RED +"ERROR: " +Style.RESET_ALL+ "Unknown game version, HG \"2\" or \"3\"")
         exit(1)
 
     os.makedirs(folderOut, exist_ok=True)
@@ -114,16 +121,19 @@ if __name__ == '__main__':
         print(Fore.RED +"ERROR: " +Style.RESET_ALL+ "Failed to create or use output folder")
         exit(1)
 
+    if obj_with_colour:
+        obj = True
+
     if os.path.isdir(folder_in):
         with os.scandir(folder_in) as it:
             for entry in it:
                 if entry.name in ["FASHION.BIN", "FROG.BIN", "STICKER.BIN", "WHEEL.BIN"]:
                     continue
                 if not entry.name.startswith('.') and entry.is_file():
-                    process_file(entry, folderOut, obj, ply, gameVersion)
+                    process_file(entry, folderOut, obj, ply, gameVersion, obj_with_colour)
     
     elif os.path.isfile(folder_in):
-        process_file(folder_in, folderOut, obj, ply, gameVersion)
+        process_file(folder_in, folderOut, obj, ply, gameVersion, obj_with_colour)
     else:
         print(Fore.RED + "ERROR: " + Style.RESET_ALL + "Failed to read file/folder " + folder_in)
         exit(1)

@@ -295,6 +295,8 @@ class Course:
 
         print("Reading course: Meshes: Chunk sizes")
 
+        gs_state = PS2.GsState()
+
         for z in range(0, z_max):
             z_row = []
             for x in range(0, x_max):
@@ -309,7 +311,7 @@ class Course:
                     print("Skipping as last for CHQ HG 3")
                     continue
                 # print(f"Reading course: Meshes: Chunk[{index}] @ {chunk_offsets[index]} size: {shorts[index]} - ABS {offset+chunk_offsets[index]}")
-                chunk = Course.read_course_chunk(file, offset + chunk_offsets[index], shorts[index], choroq3_test)
+                chunk = Course.read_course_chunk(file, offset + chunk_offsets[index], shorts[index], gs_state, choroq3_test)
                 z_row += chunk
             chunks.append(z_row)
 
@@ -318,13 +320,13 @@ class Course:
         # Ensure offset is after the offset table
         if not choroq3_test and extra_offset > min_offset:
             print(f"extra_offset {offset + extra_offset} {extra_offset} {extra_short} but at @ {file.tell()}")
-            extra_chunk = Course.read_course_chunk(file, offset + extra_offset, extra_short, choroq3_test)
+            extra_chunk = Course.read_course_chunk(file, offset + extra_offset, extra_short, gs_state, choroq3_test)
             chunks.append(extra_chunk)
 
         return [Course(chunks, chunk_offsets, shorts)]
 
     @staticmethod
-    def read_course_chunk(file, offset, count, hg3=False):
+    def read_course_chunk(file, offset, count, gs_state, hg3=False):
         file.seek(offset, os.SEEK_SET)
 
         # Registers that may occur during reading of Vif tags/codes
@@ -714,13 +716,24 @@ class CourseMesh(AMesh):
         self.mesh_night_colours = mesh_night_colours
         self.mesh_extras        = mesh_extras
 
-    def write_mesh_to_obj(self, fout, start_index=0, material=None):
+    def write_mesh_to_obj(self, fout, start_index=0, material=None, with_colours=False):
         # Write vertices
         for i in range(0, len(self.mesh_verts)):
             vx = '{:.20f}'.format(self.mesh_verts[i][0])
             vy = '{:.20f}'.format(self.mesh_verts[i][1])
             vz = '{:.20f}'.format(self.mesh_verts[i][2])
-            fout.write("v " + vx + " " + vy + " " + vz + "\n")
+            if with_colours:
+                # Some programs support additional data, e.g colors after x/y/z
+                # the following section can be used to export with colors (blender supports first set)
+                dr = '{:.20f}'.format(self.mesh_day_colours[i][0] / 255.0)
+                dg = '{:.20f}'.format(self.mesh_day_colours[i][1] / 255.0)
+                db = '{:.20f}'.format(self.mesh_day_colours[i][2] / 255.0)
+                nr = '{:.20f}'.format(self.mesh_night_colours[i][0] / 255.0)
+                ng = '{:.20f}'.format(self.mesh_night_colours[i][1] / 255.0)
+                nb = '{:.20f}'.format(self.mesh_night_colours[i][2] / 255.0)
+                fout.write(f"v {vx} {vy} {vz} {dr} {dg} {db} {nr} {ng} {nb}\n")
+            else:
+                fout.write(f"v {vx} {vy} {vz}\n")
         fout.write("#" + str(len(self.mesh_verts)) + " vertices\n")
             
         # Course meshes have no normals, but swapped with other data
@@ -807,36 +820,37 @@ class CourseMesh(AMesh):
 
     def write_mesh_to_ply(self, fout, start_index=0):
         # Write header
-        fout.write("ply\n")
-        fout.write("format ascii 1.0\n")
-        fout.write(f"element vertex {len(self.mesh_verts)}\n")
-        fout.write("property float x\n")
-        fout.write("property float y\n")
-        fout.write("property float z\n")
-        fout.write("property float nx\n")
-        fout.write("property float ny\n")
-        fout.write("property float nz\n")
-        fout.write("property uchar red\n")
-        fout.write("property uchar green\n")
-        fout.write("property uchar blue\n")
-        fout.write("property uchar alpha\n")
-        fout.write("property float s\n")
-        fout.write("property float t\n")
-        fout.write(f"element face {len(self.mesh_faces)}\n")
-        fout.write("property list uint8 int vertex_index\n")
+        if start_index == 0:
+            fout.write("ply\n")
+            fout.write("format ascii 1.0\n")
+            fout.write(f"element vertex {len(self.mesh_verts)}\n")
+            fout.write("property float x\n")
+            fout.write("property float y\n")
+            fout.write("property float z\n")
+            fout.write("property float nx\n")
+            fout.write("property float ny\n")
+            fout.write("property float nz\n")
+            fout.write("property uchar red\n")
+            fout.write("property uchar green\n")
+            fout.write("property uchar blue\n")
+            fout.write("property uchar alpha\n")
+            fout.write("property float s\n")
+            fout.write("property float t\n")
+            fout.write(f"element face {len(self.mesh_faces)}\n")
+            fout.write("property list uint8 int vertex_index\n")
 
-        # Write out the "extra" data sets
-        fout.write("comment extra data:\n")
-        for i in range(0, len(self.mesh_verts)):
-            fx = '{:.20f}'.format(self.mesh_verts[i][0])
-            fy = '{:.20f}'.format(self.mesh_verts[i][1])
-            fz = '{:.20f}'.format(self.mesh_verts[i][2])
-            fout.write(f"comment {fx} {fy} {fz}\n")
-        fout.write("comment extra end\n")
+            # Write out the "extra" data sets
+            fout.write("comment extra data:\n")
+            for i in range(0, len(self.mesh_verts)):
+                fx = '{:.20f}'.format(self.mesh_verts[i][0])
+                fy = '{:.20f}'.format(self.mesh_verts[i][1])
+                fz = '{:.20f}'.format(self.mesh_verts[i][2])
+                fout.write(f"comment {fx} {fy} {fz}\n")
+            fout.write("comment extra end\n")
 
-        #fout.write(f"element texture {len(self.mesh_uvs)}\n")
-        #fout.write("property list uint8 float texcoord\n")
-        fout.write("end_header\n")
+            #fout.write(f"element texture {len(self.mesh_uvs)}\n")
+            #fout.write("property list uint8 float texcoord\n")
+            fout.write("end_header\n")
 
         # Write vertices, colours, normals
         for i in range(0, len(self.mesh_verts)):
@@ -1116,7 +1130,7 @@ class CourseCollider(AMesh):
         faces = CourseCollider.create_face_list(vert_count, 3)
         return verts, normals, faces
 
-    def write_mesh_to_obj(self, fout, start_index = 0, material=None):
+    def write_mesh_to_obj(self, fout, start_index=0, material=None, with_colours=False):
         # Write vertices
         for i in range(0, len(self.mesh_verts)):
             vx = '{:.20f}'.format(self.mesh_verts[i][0])
@@ -1330,7 +1344,7 @@ class CoursePostCollider(AMesh):
             posts.append(CoursePostCollider(len(post_vertices), post_vertices))
         return posts
 
-    def write_mesh_to_obj(self, fout, start_index=0, material=None):
+    def write_mesh_to_obj(self, fout, start_index=0, material=None, with_colours=False):
         # Write vertices
         for i in range(0, len(self.mesh_verts)):
             vx = '{:.20f}'.format(self.mesh_verts[i][0])

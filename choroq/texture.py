@@ -178,6 +178,10 @@ class Texture:
         size = texture.width * texture.height
         bpp = texture.bpp
 
+        if bpp == 16:
+            colours = []
+
+
         # # if isinstance(palette, bytes): 
         # #     if size * 4 == len(palette):
         # #         # Convert into list of colours from bytes
@@ -293,19 +297,29 @@ class Texture:
                 c = U.readShort(file)
                 hex = f"{c:02X}"
                 
-                cr = c & 0x1f
-                c = c >> 5
-                cg = c & 0x1f
-                c = c >> 5
-                cb = c & 0x1f
-                c = c >> 5
-                ca = 255 - 127 * c
-                texture.append(Texture.cc58[cr])
-                texture.append(Texture.cc58[cg])
-                texture.append(Texture.cc58[cb])
+                # cr = c & 0x1f
+                # c = c >> 5
+                # cg = c & 0x1f
+                # c = c >> 5
+                # cb = c & 0x1f
+                # c = c >> 5
+                # ca = 255 - 127 * c
+                # texture.append(Texture.cc58[cr])
+                # texture.append(Texture.cc58[cg])
+                # texture.append(Texture.cc58[cb])
+                # texture.append(ca)
+                cr = (c & 0b11111) << 3
+                cg = ((c >> 5) & 0b11111) << 3
+                cb = ((c >> 10) & 0b11111) << 3
+                ca = (1-((c >> 15) & 1)) * 255
+                texture.append(cr)
+                texture.append(cg)
+                texture.append(cb)
                 texture.append(ca)
+
             if len(texture) != 0:
                 unswizzled = bytes(Texture._unswizzle(texture, length))
+            # unswizzled = bytes(texture)
             texture = bytes(texture)
             #rawPalette.reverse()
             #isNonLinear = True
