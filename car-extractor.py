@@ -98,14 +98,14 @@ if __name__ == '__main__':
     ply = False
     gameVersion = 2
     if len(sys.argv) == 4:
-        obj = True if sys.argv[4] == "1" else False
-        obj_with_colour = True if sys.argv[4] == "C" or sys.argv[4] == "c" else False
-        ply = True if sys.argv[4] == "2" else False
+        obj = True if sys.argv[3] == "1" else False
+        obj_with_colour = True if sys.argv[3] == "C" or sys.argv[3] == "c" else False
+        ply = True if sys.argv[3] == "2" else False
     elif len(sys.argv) == 5:
-        obj = True if sys.argv[4] == "1" else False
-        obj_with_colour = True if sys.argv[4] == "C" or sys.argv[4] == "c" else False
-        ply = True if sys.argv[4] == "2" else False
-        gameVersion = int(sys.argv[5])
+        obj = True if sys.argv[3] == "1" else False
+        obj_with_colour = True if sys.argv[3] == "C" or sys.argv[3] == "c" else False
+        ply = True if sys.argv[3] == "2" else False
+        gameVersion = int(sys.argv[4])
     elif len(sys.argv) > 5:
         show_help()
         print(Fore.RED +"ERROR: " +Style.RESET_ALL+ "Too many args")
