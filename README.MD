@@ -93,6 +93,9 @@ The car file format uses a similar system to the Field/Course/Action meshes, it 
 
 ### Extracting car models
 
+Requires Python 3.7+
+Requires Pillow (PIL) and colorama python libs
+
 See the car-extractor.py file:
 ``` python car-extractor.py <input folder> <output folder> [type]```
 

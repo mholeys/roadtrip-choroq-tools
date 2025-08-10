@@ -323,7 +323,7 @@ class CarMesh(AMesh):
             if mode == PS2.GIF_MODE_PACKED:
                 registers = []
                 for i in range(0, 16):
-                    registers.append(PS2.gifDecodePacked(file, gif_tag, i, descriptors[i], gs_state))
+                    registers.append(PS2.gifDecodePacked(descriptors[i]))
                     # print(registers[-1])
 
                 # if (gif_tag >> 96) == 0x313EC000:

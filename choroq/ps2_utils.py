@@ -1446,7 +1446,7 @@ def gifGetSize(gifTag):
         exit(101)
     return size
 
-def gifDecodePacked(file, gifTag, index, descriptor, gsState):
+def gifDecodePacked(descriptor):
     return gifDebugRegisterDescriptor[descriptor]
 
 # This will probably not be used when VIF is involved, as I think

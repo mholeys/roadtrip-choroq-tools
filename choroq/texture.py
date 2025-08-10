@@ -83,7 +83,7 @@ class Texture:
             if mode == PS2.GIF_MODE_PACKED:
                 registers = []
                 for i in range(0, 16):
-                    registers.append(PS2.gifDecodePacked(file, gif_tag, i, descriptors[i], gs_state))
+                    registers.append(PS2.gifDecodePacked(descriptors[i]))
                 print(registers)
 
                 for loop in range(nloop):
@@ -367,20 +367,29 @@ class Texture:
             image = Image.frombytes('RGB', (self.width, self.height), self.texture, 'raw')
             return bytes(image.tobytes())
         else:
-            # Convert (R,G,B,A) TO [..., R,G,B,A,...]
-            for colour in self.palette:
-                colour_list.append(colour[0])
-                colour_list.append(colour[1])
-                colour_list.append(colour[2])
-                colour_list.append(colour[3])
-            if usepalette:
-                image = Image.frombytes('P', (self.width, self.height), self.texture, 'raw', 'P')
-                palette = ImagePalette.raw("RGBA", bytes(colour_list))
-                palette.mode = "RGBA"
-                image.palette = palette
+            if type(self.palette) == bytes:
+                if usepalette:
+                    image = Image.frombytes('P', (self.width, self.height), self.texture, 'raw', 'P')
+                    palette = ImagePalette.raw("RGBA", self.palette)
+                    palette.mode = "RGBA"
+                    image.palette = palette
+                else:
+                    image = Image.frombytes('L', (self.width, self.height), self.texture, 'raw')
             else:
-                image = Image.frombytes('L', (self.width, self.height), self.texture, 'raw')
-        
+                # Convert (R,G,B,A) TO [..., R,G,B,A,...]
+                for colour in self.palette:
+                    colour_list.append(colour[0])
+                    colour_list.append(colour[1])
+                    colour_list.append(colour[2])
+                    colour_list.append(colour[3])
+                if usepalette:
+                    image = Image.frombytes('P', (self.width, self.height), self.texture, 'raw', 'P')
+                    palette = ImagePalette.raw("RGBA", bytes(colour_list))
+                    palette.mode = "RGBA"
+                    image.palette = palette
+                else:
+                    image = Image.frombytes('L', (self.width, self.height), self.texture, 'raw')
+
             rgbd = image.convert("RGBA")
             if flip_x:
                 rgbd = ImageOps.mirror(rgbd)
