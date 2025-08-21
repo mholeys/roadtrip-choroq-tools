@@ -4,12 +4,13 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
+pyinstaller = "*"
+customtkinter = "*"
 
 [packages]
 colorama = "*"
 pillow = "*"
-numpy = "*"
-matplotlib = "*"
+customtkinter = "*"
 
 [requires]
 python_version = "3.7"

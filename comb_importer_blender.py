@@ -46,16 +46,18 @@ class ChoroQCombImporter(Operator, ImportHelper):
     def execute(self, context):
         base = Path(self.directory)                
         MaterialName = "mat0"
-        MeshMat = bpy.data.materials.new(MaterialName)
         for f in self.files:
-            ChoroQCombImporter.parse_comb(context, f.name, base / f.name, self.single_mesh, MeshMat)
+            MeshMat = bpy.data.materials.new(MaterialName)
+            ChoroQCombImporter.parse_comb(context, f.name, base / f.name, base, self.single_mesh, MeshMat)
             
         return {"FINISHED"}
             
         
     
-    def parse_comb(context, filename, filepath, single_mesh, mat = None):
-
+    def parse_comb(context, filename, filepath, base, single_mesh, mat = None):
+        print(base)
+        print(filepath)
+        print(filename)
         coord = filename[1:3]
         
         try:
@@ -127,6 +129,7 @@ class ChoroQCombImporter(Operator, ImportHelper):
         
         vertsRead = 0
         facesRead = 0
+        hasMaterialSetup = False
 
         for i in range(meshCount):
 #            if not single_mesh:
@@ -152,7 +155,29 @@ class ChoroQCombImporter(Operator, ImportHelper):
 
             vertCount = int(f.readline().split(' ')[1])
             faceCount = int(f.readline().split(' ')[1])
-            textureName = f.readline().split(' ')[1]
+            textureName = f.readline().split(' ')[1][0:-1]
+            
+            
+            # Setup material info
+            if not hasMaterialSetup:
+                try:
+                    texPath = str(base / textureName)
+                    img = bpy.data.images.load(texPath, check_existing=True)
+                    #img = bpy.data.images.load(f"//{textureName}", check_existing=False)
+                    mat.use_nodes=True 
+                    material_output = mat.node_tree.nodes.get('Material Output')
+                    principled_BSDF = mat.node_tree.nodes.get('Principled BSDF')
+
+                    tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+                    tex_node.image = img
+                    mat.node_tree.links.new(tex_node.outputs[0], principled_BSDF.inputs[0])
+                    hasMaterialSetup = True
+                
+                except RuntimeError as e:
+                    print(f"Failed to load texture {e}")
+                except Exception as e:
+                    raise e
+
             #print(f"verts {vert_count} faces {faceCount}")
             f.readline() # End header
             
@@ -177,13 +202,24 @@ class ChoroQCombImporter(Operator, ImportHelper):
         color_attri = mesh1.color_attributes.new('day', 'FLOAT_COLOR', 'POINT')
         night_color_attri = mesh1.color_attributes.new('night', 'FLOAT_COLOR', 'POINT')
         
+        #mesh1.faces.ensure_lookup_table()
+        #bpy.ops.uv.unwrap()
+        uv_layer = mesh1.uv_layers.new()
+        
+        mesh1.uv_layers.active = uv_layer
+        
 #        v_index = 0
-        for v_index in range(len(mesh1.vertices)):
+        #for v_index in range(len(mesh1.vertices)):
+        for face in mesh1.polygons:
+            for v_index, loop_idx in zip(face.vertices, face.loop_indices):
 #        for v in mesh1.verts:
-            c = colorList[v_index]
-            nc = ncolorList[v_index]
-            color_attri.data[v_index].color = [float(c[0]) / 255.0, float(c[1]) / 255.0, float(c[2]) / 255.0, float(c[3]) / 255.0]
-            night_color_attri.data[v_index].color = [float(nc[0]) / 255.0, float(nc[1]) / 255.0, float(nc[2]) / 255.0, float(nc[3]) / 255.0]
+                c = colorList[v_index]
+                nc = ncolorList[v_index]
+                uv = uvList[v_index]
+                color_attri.data[v_index].color = [float(c[0]) / 255.0, float(c[1]) / 255.0, float(c[2]) / 255.0, float(c[3]) / 255.0]
+                night_color_attri.data[v_index].color = [float(nc[0]) / 255.0, float(nc[1]) / 255.0, float(nc[2]) / 255.0, float(nc[3]) / 255.0]
+                uv_layer.data[loop_idx].uv = [uv[0], uv[1]]
+            
 
             
         

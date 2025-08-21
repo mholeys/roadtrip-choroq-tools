@@ -20,6 +20,8 @@ OUTPUT_GROUPED_OBJS = False
 # Create log files or not (probably not that useful for most people)
 CREATE_LOG_FILES = False
 
+should_exit = False
+
 def show_help():
     print(Fore.BLUE+"##############################################################################################")
     print(Fore.BLUE+"ChoroQ HG 2 extractor by Matthew Holey")
@@ -119,6 +121,8 @@ def save_course_type_grouped(mesh_by_material, number_of_meshes, dest_folder, fi
     mat_index = 0
     done_textures = []
     for key, mm in mesh_by_material.items():
+        if should_exit:
+            break
         # Export textures
         material_name = f"{file_prefix}{file_number}-{mat_index}"
         texture_path_relative = f"tex/t{file_number}-{mat_index}.png"
@@ -232,10 +236,14 @@ def save_course_type_grouped(mesh_by_material, number_of_meshes, dest_folder, fi
 def save_course_type(meshes, dest_folder, file_number, out_type, file_prefix):
     # Export the main level mesh data
     for i, level in enumerate(meshes):
+        if should_exit:
+            break
         for z, zRow in enumerate(level.chunks):
             Path(f"{dest_folder}/").mkdir(parents=True, exist_ok=True)
             for x, ((meshes, data), _) in enumerate(zRow):
                 for m, mesh in enumerate(meshes):
+                    if should_exit:
+                        break
                     with open(f"{dest_folder}/{file_prefix}{file_number}-{z}-{x}-{m}.{out_type}", "w") as fout:
                         mesh.write_mesh_to_type(out_type, fout)
 
@@ -252,6 +260,7 @@ def process_course_type(course_file, dest_folder, file_number, out_type, file_pr
         else:
             log_dest = os.devnull
         # Set logging output
+        prev_std_out = sys.stdout
         with open(log_dest, "w") as sys.stdout:
             f.seek(0, os.SEEK_END)
             file_size = f.tell()
@@ -270,10 +279,14 @@ def process_course_type(course_file, dest_folder, file_number, out_type, file_pr
 
             # Export all maps
             for i, mesh in enumerate(course.map_meshes):
+                if should_exit:
+                    break
                 with open(f"{dest_folder}/{file_prefix}{file_number}-map{i}.{extension}", "w") as fout:
                     mesh.write_mesh_to_type(out_type, fout)
             # Export any additional objects (e.g barrels)
             for e, extra in enumerate(course.extras):
+                if should_exit:
+                    break
                 for i, mesh in enumerate(extra.meshes):
                     with open(f"{dest_folder}/{file_prefix}{file_number}-extra{e}-{i}.{extension}", "w") as fout:
                         mesh.write_mesh_to_type(out_type, fout)
@@ -303,6 +316,8 @@ def process_course_type(course_file, dest_folder, file_number, out_type, file_pr
                             print(f"Failed to write texture/palette probably decoded badly Course:Extra:{file_number} Texture:{address:x}/{i} {texture}")
             collider_mat_index = 0
             for mat, colliders in course.colliders_by_mat.items():
+                if should_exit:
+                    break
                 # If you come across this, this is a custom file format I have made, expect this to change over time
                 # you will have to modify this file to get this to output
                 if out_type == "comb":
@@ -327,7 +342,11 @@ def process_course_type(course_file, dest_folder, file_number, out_type, file_pr
             if out_type == "obj" and OUTPUT_CHUNKED_COLLIDER or out_type == "obj+colour":
                 Path(f"{dest_folder}/colliders/all").mkdir(parents=True, exist_ok=True)
                 for z, z_row in enumerate(course.colliders):
+                    if should_exit:
+                        break
                     for x, collider in enumerate(z_row):
+                        if should_exit:
+                            break
                         with open(f"{dest_folder}/colliders/all/{file_prefix}{file_number}-{z}-{x}.{extension}", "w") as fout:
                             if OUTPUT_GROUPED_OBJS:
                                 fout.write(f"o {z}-{x}\n")  # Start of an object
@@ -361,6 +380,8 @@ def process_course_type(course_file, dest_folder, file_number, out_type, file_pr
                 collider_mat_index = 0
 
                 for ci, col in enumerate(course.extra_field_colliders):
+                    if should_exit:
+                        break
                     if isinstance(col, list):
                         # Probably post colliders
                         for c in col:
@@ -391,8 +412,7 @@ def process_course_type(course_file, dest_folder, file_number, out_type, file_pr
                                             fout.write(f"o {i}\n")  # Start of an object
                                         vert_count += collider.write_mesh_to_type(out_type, fout, vert_count)
                             collider_mat_index += 1
-                
-        sys.stdout = sys.__stdout__
+        sys.stdout = prev_std_out
 
 
 def process_courses(source, dest, folder, output_formats):
@@ -403,6 +423,8 @@ def process_courses(source, dest, folder, output_formats):
     print(f"Processing {folder}s")
     with os.scandir(f"{source}/{folder}") as it:
         for entry in it:
+            if should_exit:
+                break
             process_course(entry, dest, folder, output_formats)
 
 
@@ -415,6 +437,8 @@ def process_course(entry, dest, folder, output_formats):
         c_number = c_number[1:]
         print(f"Processing {entry.name}")
         for outType in output_formats:
+            if should_exit:
+                break
             course_output_folder = f"{dest}/{folder}/{c_prefix}{c_number}{outType}"
             try:
                 process_course_type(entry, course_output_folder, c_number, outType, c_prefix)
@@ -441,10 +465,14 @@ def process_fields(source, dest, output_formats, merge_by_data=False):
     for fx in [0, 1, 2, 3]:
         for fy in [0, 1, 2, 3]:
             for fz in [0, 1, 2, 3]:
+                if should_exit:
+                    break
                 field_number = f"{fx}{fy}{fz}"
                 field_file = f"{source}/FLD/{field_number}.BIN"
                 print(f"Processing {field_file}")
                 for out_type in output_formats:
+                    if should_exit:
+                        break
                     field_output_folder = f"{dest}/FIELD/F{field_number}{out_type}"
                     if not Path(field_file).exists():
                         continue
@@ -461,9 +489,13 @@ def process_cars(source, dest, output_formats):
         version = 3
 
     for carFolder in [f"{source}/CAR0", f"{source}/CAR1", f"{source}/CAR2", f"{source}/CAR3", f"{source}/CAR4", f"{source}/CARS"]:
+        if should_exit:
+            break
         if Path(carFolder).is_dir():
             with os.scandir(carFolder) as it:
                 for entry in it:
+                    if should_exit:
+                        break
                     if entry.name == "WHEEL.BIN":
                         continue
                     if entry.name == "FASHION.BIN":
@@ -488,6 +520,7 @@ def process_file(entry, folder_out, output_formats, version, is_car=False):
             log_dest = f"{out_folder}/log.log"
         else:
             log_dest = os.devnull
+        prev_std_out = sys.stdout
         with open(log_dest, "w") as sys.stdout:
             f.seek(0, os.SEEK_END)
             file_size = f.tell()
@@ -517,7 +550,11 @@ def process_file(entry, folder_out, output_formats, version, is_car=False):
                                       "7", "spoiler", "9", "10", "11"]
 
             for i, mesh in enumerate(car.meshes):
+                if should_exit:
+                    break
                 for outType in output_formats:
+                    if should_exit:
+                        break
                     extension = outType
                     if outType == "obj+colour":
                         extension = "obj"
@@ -533,7 +570,7 @@ def process_file(entry, folder_out, output_formats, version, is_car=False):
                     if outType == "obj" or outType == "obj+colour":
                         with open(f"{out_folder}/{basename}-{mesh_path}.mtl", "w") as fout:
                             Texture.save_material_file_obj(fout, basename, texture_path)
-        sys.stdout = sys.__stdout__
+        sys.stdout = prev_std_out
 
 
 def process_items(source, dest, output_formats):
@@ -543,6 +580,8 @@ def process_items(source, dest, output_formats):
     if Path(item_folder).is_dir():
         with os.scandir(item_folder) as it:
             for entry in it:
+                if should_exit:
+                    break
                 if not entry.name.startswith('.') and entry.is_file():
                     if type(entry) is str:
                         entry = Path(entry)
@@ -555,13 +594,16 @@ def process_items(source, dest, output_formats):
                             log_dest = f"{out_folder}/log.log"
                         else:
                             log_dest = os.devnull
+                        prev_std_out = sys.stdout
                         with open(log_dest, "w") as sys.stdout:
                             textures = Texture.all_from_file(f, 0)
-                            for i,(address,tex) in enumerate(textures):
+                            for i, (address, tex) in enumerate(textures):
+                                if should_exit:
+                                    break
                                 if tex is None:
                                     continue
                                 tex.write_texture_to_png(f"{out_folder}/{basename}-{address:x}.png")
-                        sys.stdout = sys.__stdout__
+                        sys.stdout = prev_std_out
 
 
 def process_shops(source, dest, output_formats):
@@ -572,11 +614,13 @@ def process_shops(source, dest, output_formats):
     if Path(item_folder).is_dir():
         with os.scandir(item_folder) as it:
             for entry in it:
+                if should_exit:
+                    break
                 if not entry.name.startswith('.') and entry.is_file():
                     if type(entry) is str:
                         entry = Path(entry)
                     basename = entry.name[0 : entry.name.find('.')]
-                    out_folder = f"{folder_out}/SHOP/{basename}"
+                    out_folder = f"{dest}/SHOP/{basename}"
                     Path(out_folder).mkdir(parents=True, exist_ok=True)
                     print(f"Processing {entry} to {out_folder}")
                     with open(entry, "rb") as f:
@@ -584,6 +628,7 @@ def process_shops(source, dest, output_formats):
                             log_dest = f"{out_folder}/log.log"
                         else:
                             log_dest = os.devnull
+                        prev_std_out = sys.stdout
                         with open(log_dest, "w") as sys.stdout:
                             if basename == "GARAGE":
                                 # GARAGE is different
@@ -604,6 +649,8 @@ def process_shops(source, dest, output_formats):
                                 shops = Shop.from_file(f, 0)
                                 print(f"Done shop {entry}")
                                 for i, tex in enumerate(shops.textures):
+                                    if should_exit:
+                                        break
                                     if tex is None:
                                         continue
                                     # for i, tex in enumerate(shop):
@@ -612,7 +659,7 @@ def process_shops(source, dest, output_formats):
                                     except Exception as E:
                                         print(f"Failed to write texture/palette probably decoded badly Shop[{entry}]: Texture:{i} {tex} {E}")
                                         raise E
-                        sys.stdout = sys.__stdout__
+                        sys.stdout = prev_std_out
 
 
 def process_sys(source, dest, output_formats):
@@ -622,6 +669,8 @@ def process_sys(source, dest, output_formats):
     if Path(sys_folder).is_dir():
         with os.scandir(sys_folder) as it:
             for entry in it:
+                if should_exit:
+                    break
                 if not entry.name.startswith('.') and entry.is_file():
                     if type(entry) is str:
                         entry = Path(entry)
@@ -636,10 +685,13 @@ def process_sys(source, dest, output_formats):
                             log_dest = f"{out_folder}/log.log"
                         else:
                             log_dest = os.devnull
+                        prev_std_out = sys.stdout
                         with open(log_dest, "w") as sys.stdout:
                             if extension == "GSL":
                                 textures = Texture.all_from_file(f, 0)
                                 for i in range(0, len(textures)):
+                                    if should_exit:
+                                        break
                                     address, texture = textures[i]
                                     if texture is None:
                                         continue
@@ -667,6 +719,8 @@ def process_sys(source, dest, output_formats):
                                 img_length = 47216
 
                                 for i in range(0, 100):
+                                    if should_exit:
+                                        break
                                     result = Texture.all_from_file(f, i * total_length)
                                     texture = result[0][1]
                                     clut = result[1][1]
@@ -700,12 +754,14 @@ def process_sys(source, dest, output_formats):
                                 # Need to group the meshes by the "data/material" info
                                 mesh_by_material, number_of_meshes = group_meshes_by_material(meshes)
                                 for out_type in output_formats:
+                                    if should_exit:
+                                        break
                                     save_course_type_grouped(mesh_by_material, number_of_meshes, out_folder,
                                                              basename, out_type, "", textures)
                             elif extension == "BIN":
                                 process_file(entry, out_folder, output_formats, 2)
 
-                        sys.stdout = sys.__stdout__
+                        sys.stdout = prev_std_out
 
 
 if __name__ == '__main__':

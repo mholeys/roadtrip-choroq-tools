@@ -8,6 +8,10 @@ This has been tested with only the EU/UK version of the game, as this is the one
 
 Originally only wanted to create a tool to extract the car models, and textures, but the other files for the game are very similar and some data can be extracted from them as well. Building on my understanding of the car file format I have expanded this to work with the other files, most of the data on the disc is loaded directly to GS/VU1 via DMA transfers. 
 
+#### Usage
+See [Releases](https://github.com/mholeys/roadtrip-choroq-tools/releases) section for the GUI, this is the easiest way for most people to use the tool, the GUI is new and should have most features.
+If you want to have the latest version, or make changes, or have any other options then you would be better off cloning, and running the tool you require.
+
 #### Features
 Currently, it is possible to get all field (FLD/xxx.BIN), course (COURSE/Cxx.BIN), action (ACTION/Axx.BIN), and car models (CAR{0,1,2,3,4,S}/Qxx.BIN).
 The field/course file format are not fully understood, but the model, and most of the textures can be extracted (if a texture fails to be understood the rest of the textures usually fail). It is possible to get the mini-map model, and some level extras such as doors/barrels. 
@@ -96,40 +100,40 @@ The car file format uses a similar system to the Field/Course/Action meshes, it 
 Requires Python 3.7+
 Requires Pillow (PIL) and colorama python libs
 
-See the car-extractor.py file:
-``` python car-extractor.py <input folder> <output folder> [type]```
+See the car_extractor.py file:
+``` python car_extractor.py <input folder> <output folder> [type]```
 
 e.g to make PLY files from the `CAR0` folder
 
-``` python car-extractor.py CAR0 ~/cars 2```
+``` python car_extractor.py CAR0 ~/cars 2```
 
 e.g to make both OBJ and PLY files from the `CAR0` folder
 
-``` python car-extractor.py CAR0 ~/cars```
+``` python car_extractor.py CAR0 ~/cars```
 
 e.g to make OBJ files from the Q00.BIN car (single car mode)
 
-``` python car-extractor.py Q00.BIN ~/cars 1```
+``` python car_extractor.py Q00.BIN ~/cars 1```
 
 If you would like the vertex colours, PLY is the better choice, but you can also now use 'C' as the format option, which now adds colours to the OBJ format, however this is not universally supported. 
 
 ### Extracting Fields/Courses:
-See the choroq-extractor.py file for additional details:
+See the choroq_extractor.py file for additional details:
 Basic usage (help can be printed with no arguments)
-``` python choroq-extractor.py <input folder> <output folder> [type]```
+``` python choroq_extractor.py <input folder> <output folder> [type]```
 
-``` python choroq-extractor.py E:/ ~/road-trip/ ```
+``` python choroq_extractor.py E:/ ~/road-trip/ ```
 
 e.g to make OBJ files from road trip disc
 This will attempt to group all meshes within a field/course/action by their used texture, this reduces the number of files produced and saves on draw calls. This does however break the chunk based system the game uses, but this should be fine for most purposes.
 
-``` python choroq-extractor.py E:/ C:/road-trip/ 1```
+``` python choroq_extractor.py E:/ C:/road-trip/ 1```
 
 e.g to make PLY files from road trip disc, this mode has been neglected in the last few changes, so you may be better using the OBJ format
 
 **PLY format for course/field/action is currently not working, this may not get fixed**
 
-``` python choroq-extractor.py E:/ C:/road-trip/ 2```
+``` python choroq_extractor.py E:/ C:/road-trip/ 2```
 
 #### Demo
 ![Mostly textured world of the RoadTrip Adventure game in 3D](results/Whole-World-01-2024.jpg)

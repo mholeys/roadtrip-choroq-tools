@@ -343,6 +343,16 @@ class CarMesh(AMesh):
                         # Has extra at start unknown data
                         U.readXYZ(file)
                         U.readFloat(file)
+                    if not hg3:
+                        # Colour mode is set via GIF tag
+                        # - 0 Colour is as is
+                        # - 1 Colour is colour 1 from game
+                        # - 2 Colour is colour 1 if single colour selected or colour 2
+                        # TODO: split mesh by this value, or mark the data in some capacity
+                        colour_selection = (gif_tag >> 96) & 0xFF
+
+                        # Unsure on the use of this but it varies
+                        unused = PS2.gifGetUnused(gif_tag)
                     for loop in range(nloop):
                         # X, Y, Z, W
                         vx, vy, vz = U.readXYZ(file)
@@ -351,7 +361,6 @@ class CarMesh(AMesh):
                         if hg3 and exec_type == 80:
                             nx, ny, nz, nw = 0, 0, 0, 0
                         else:
-                            # Unsure on what these are, but they are not normals
                             nx, ny, nz = U.readXYZ(file)
                             nw = U.readFloat(file)
 
@@ -361,6 +370,7 @@ class CarMesh(AMesh):
 
                         # Texture coords
                         tu, tv, unkw2 = U.readXYZ(file)
+                        # I think unkw2 is probably something to do with shader values, 280.5 is car's glossy surfaces
                         tw = U.readFloat(file)
 
                         c = (cr, cg, cb, 255)  # Convert to RGBA

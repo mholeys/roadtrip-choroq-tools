@@ -1591,6 +1591,14 @@ def gifHandlePacked(file, gifTag, index, descriptor, gsState):
     print("GifDecodeDescriptor hit unknown descriptor")
     return {}
 
+def gifGetUnused(gifTag):
+    unused = (gifTag >> 16) & 0x3FFFFFFF
+    return unused
+
+def gifGetUnused(gifTag):
+    unused = (gifTag >> 16) & 0x3FFFFFFF
+    return unused
+
 def gifHandleRegList(file, gifTag, index, descriptor):
     pass
 
