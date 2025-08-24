@@ -13,12 +13,15 @@ from pathlib import Path
 import colorama
 from colorama import Fore, Back, Style
 
-# Set to true if you want 16x16 grid of collision mesh's (probably not that useful for most people)
+
+# Set to true if you want grid of mesh's (probably not that useful for most people)
+OUTPUT_CHUNKED_MESHES = False
+# Set to true if you want grid of collision mesh's (probably not that useful for most people)
 OUTPUT_CHUNKED_COLLIDER = False
 # Output obj files wih "o" lines, to split sections of the read mesh (probably not that useful for most people)
 OUTPUT_GROUPED_OBJS = False
 # Create log files or not (probably not that useful for most people)
-CREATE_LOG_FILES = False
+CREATE_LOG_FILES = True
 
 should_exit = False
 
@@ -234,18 +237,29 @@ def save_course_type_grouped(mesh_by_material, number_of_meshes, dest_folder, fi
 
 
 def save_course_type(meshes, dest_folder, file_number, out_type, file_prefix):
+    extension = out_type
+    if out_type == "obj+colour":
+        extension = "obj"
+
     # Export the main level mesh data
     for i, level in enumerate(meshes):
         if should_exit:
             break
         for z, zRow in enumerate(level.chunks):
-            Path(f"{dest_folder}/").mkdir(parents=True, exist_ok=True)
-            for x, ((meshes, data), _) in enumerate(zRow):
-                for m, mesh in enumerate(meshes):
-                    if should_exit:
-                        break
-                    with open(f"{dest_folder}/{file_prefix}{file_number}-{z}-{x}-{m}.{out_type}", "w") as fout:
-                        mesh.write_mesh_to_type(out_type, fout)
+            Path(f"{dest_folder}/chunks").mkdir(parents=True, exist_ok=True)
+            for x, chunk in enumerate(zRow):
+                    if out_type == "obj" or out_type == "obj+colour":
+                        with open(f"{dest_folder}/chunks/{file_prefix}{file_number}-{z}-{x}.{extension}", "w") as fout:
+                            for address in chunk:
+                                meshes = chunk[address]
+                                m = 0
+                                vert_count = 0
+                                for mesh in meshes:
+                                    if should_exit:
+                                        break
+                                    fout.write(f"o {m}\n")  # Start of an object
+                                    vert_count += mesh.write_mesh_to_type(out_type, fout, vert_count)
+                                m += 1
 
 
 # Open parse, and extract the common data, for fields/courses/actions
@@ -272,6 +286,8 @@ def process_course_type(course_file, dest_folder, file_number, out_type, file_pr
             Path(f"{dest_folder}/meshes").mkdir(parents=True, exist_ok=True)
             mesh_by_material, number_of_meshes = group_meshes_by_material(course.meshes)
             save_course_type_grouped(mesh_by_material, number_of_meshes, dest_folder, file_number, out_type, file_prefix, course.textures)
+            if OUTPUT_CHUNKED_MESHES:
+                save_course_type(course.meshes, dest_folder,  file_number, out_type, file_prefix)
 
             extension = out_type
             if out_type == "obj+colour":
@@ -339,7 +355,7 @@ def process_course_type(course_file, dest_folder, file_number, out_type, file_pr
                                 fout.write(f"o {i}\n")  # Start of an object
                             vert_count += collider.write_mesh_to_type(out_type, fout, vert_count)
                 collider_mat_index += 1
-            if out_type == "obj" and OUTPUT_CHUNKED_COLLIDER or out_type == "obj+colour":
+            if (out_type == "obj"  or out_type == "obj+colour") and OUTPUT_CHUNKED_COLLIDER:
                 Path(f"{dest_folder}/colliders/all").mkdir(parents=True, exist_ok=True)
                 for z, z_row in enumerate(course.colliders):
                     if should_exit:

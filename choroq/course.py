@@ -498,20 +498,12 @@ class Course:
                         offsetW = U.readFloat(file)
                     if hg3:
                         # Unknown data
-                        U.readXYZ(file)
-                        U.readFloat(file)
+                        preval123 = U.readXYZ(file)
+                        preval4 = U.readFloat(file)
                     for loop in range(nloop):
                         if hg3:
                             vx, vy, vz = U.readXYZ(file)
                             vw = U.readFloat(file)  # = 0
-
-                            # Day time baked lighting data/colours
-                            # This is used in the day time, and scaled down as night approaches
-                            dr, dg, db = U.readXYZ(file)
-                            U.readFloat(file)  # = 0
-
-                            tu, tv, tw = U.readXYZ(file)  # Are texture coords
-                            U.BreadFloat(file)
 
                             nx, ny, nz, nw = 0, 0, 0, 0
                             nr, ng, nb = 0, 0, 0
@@ -519,10 +511,24 @@ class Course:
                             if exec_type == 96:
                                 # Has 4 sets of 4 floats not the normal 3
                                 # but unsure on what the new value is, some negative, most are small numbers e.g 3 -4.5
-                                # Guessing?:
-                                # Nighttime baked lighting data/colours
-                                # This is used at the Night time, and scaled down as day approaches
-                                nr, ng, nb = U.readXYZ(file)
+
+                                nx, ny, nz = U.readXYZ(file)
+                                nw = U.readFloat(file)
+
+                                # Day time baked lighting data/colours
+                                # This is used in the day time, and scaled down as night approaches
+                                dr, dg, db = U.readXYZ(file)
+                                dd = U.readFloat(file)  # = 0
+
+                                tu, tv, tw = U.readXYZ(file)  # Are texture coords
+                                tt = U.BreadFloat(file)
+                            else:
+                                # Day time baked lighting data/colours
+                                # This is used in the day time, and scaled down as night approaches
+                                dr, dg, db = U.readXYZ(file)
+                                U.readFloat(file)  # = 0
+
+                                tu, tv, tw = U.readXYZ(file)  # Are texture coords
                                 U.BreadFloat(file)
 
                             day = (dr, dg, db, 255)  # Convert to RGBA
@@ -531,7 +537,7 @@ class Course:
                             day_colours.append(day)
                             night_colours.append(night)
                             normals.append((nx, ny, nz))
-                            uvs.append((tu, 1 - tv, tw))
+                            uvs.append((tu, -tv+1, tw))
                         else:
                             # I think the order of floats is as follows:
                             # X, Y, Z, W
@@ -573,7 +579,7 @@ class Course:
                             day_colours.append(day)
                             night_colours.append(night)
                             normals.append((nx, ny, nz))
-                            uvs.append((tu, 1 - tv, tw))
+                            uvs.append((tu, -tv+1, tw))
 
                     faces = CourseMesh.create_face_list(nloop, 1)
                     print(f"Got to after verts {file.tell()}")
