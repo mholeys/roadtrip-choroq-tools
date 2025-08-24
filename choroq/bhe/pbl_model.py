@@ -4,62 +4,6 @@ from choroq.amesh import AMesh
 
 STOP_ON_NEW = False
 
-# struct Matrix {
-#     float floats[8];
-# };
-#
-# struct Coord {
-#     float x;
-#     float y;
-#     float z;
-#     float w;
-# };
-#
-# struct Normal {
-#     float x;
-#     float y;
-#     float z;
-#     float w;
-# };
-#
-# struct UV {
-#     float u;
-#     float v;
-# };
-#
-# struct Face {
-#     u16 f1, f2, f3, unused;
-# };
-#
-# struct Faces {
-#     u32 val1;
-#     padding[8];
-#     u32 count;
-#     Face faces[count];
-# };
-#
-# struct PBL_Part {
-#
-#     u32 sizes[8];
-#     u16 val1;
-#     u16 val2;
-#     u16 val3;
-#     padding[2];
-#     padding[8];
-#     char name[16];
-#     Matrix mat[sizes[0]];
-#     Coord vertices[sizes[1]];
-#     Normal normals[sizes[2]];
-#     UV uv[sizes[3]];
-#     u64 data;
-#     u32 data2;
-#     Faces faces[299]; // TODO: workout how many faces, or is it a continuous list, or limited by length?
-# };
-#
-# PBL_Part part1 @ 0x00;
-#
-# //Faces f @ 29860;
-
 
 class PBLModel(AMesh):
 

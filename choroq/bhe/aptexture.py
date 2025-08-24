@@ -5,6 +5,7 @@ from choroq.texture import Texture
 
 STOP_ON_NEW = False
 
+
 class APTexture:
 
     def __init__(self, name, val_a, val_b, total_size):
