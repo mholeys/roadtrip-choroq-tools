@@ -1,7 +1,9 @@
 import os
 from PIL import Image, ImagePalette, ImageOps
 import choroq.read_utils as U
+from choroq.texture import Texture
 
+STOP_ON_NEW = False
 
 class APTexture:
 
@@ -22,7 +24,11 @@ class APTexture:
     def set_palette(self, data, palette_size=-1):
         if palette_size != -1:
             self.palette_size = palette_size
-        self.palette = data
+        # Unswizzle
+        if palette_size > 16:
+            self.palette = Texture._unswizzle(data, palette_size)
+        else:
+            self.palette = data
 
     def set_data(self, width, height, data, colour_format):
         self.width = width
@@ -31,6 +37,9 @@ class APTexture:
         self.colour_format = colour_format
 
     def write_texture_to_png(self, path, flip_x=False, flip_y=False, use_palette=True):
+        if self.data == [] or self.data is None:
+            print("Skipping write, as texture has no data")
+            return
         colour_list = []
 
         if self.palette_size == 0:
@@ -71,6 +80,8 @@ class APTexture:
         print("Saved")
 
     def write_palette_to_png(self, path):
+        if self.palette == [] or self.palette is None:
+            return
         colour_list = []
         # Convert (R,G,B,A) TO [..., R,G,B,A,...]
         for colour in self.palette:
@@ -111,10 +122,18 @@ class APTexture:
             val_b = U.readLong(file)
             size = U.readLong(file)  # Think this is the total size of the texture descriptor+palette+data
             zeros = U.readLong(file)
-            texture_name = file.read(16).decode("ascii").rstrip('\00')  # \0 terminated string, max 16 bytes
+            texture_name = file.read(16)  # \0 terminated string, max 16 bytes
+            try:
+                first_0 = texture_name.index(0)
+                texture_name = texture_name[0:first_0].decode("ascii").rstrip('\00')
+            except:
+                print(f"{texture_name} failed to convert to ascii")
+
             print(f"Texture header: {texture_name}, {val_a}, {val_b}, {size}, {zeros:x}")
             if zeros != 0:
                 print("Found non zero value in texture table data")
+                if STOP_ON_NEW:
+                    exit()
             textures.append(APTexture(texture_name, val_a, val_b, size))
 
         # After the header table, the texture data starts
@@ -127,6 +146,14 @@ class APTexture:
             palette_size = U.readLong(file)  # Number of colours in palette
 
             print(f"{width:x} {height:x} {colour_format:x} {palette_size:x}")
+
+            if width == 0 or height == 0 or width > 2048 or height > 2048:
+                print(f"Cannot decode texture at @{file.tell()} size is {width}, {height}?")
+                return textures
+
+            if palette_size > 2048:
+                print(f"Cannot decode texture at @{file.tell()} size is {width}, {height}, palette issues {palette_size}?")
+                return textures
 
             # Read palette in
             palette = []
@@ -151,9 +178,14 @@ class APTexture:
                 elif colour_format == 8:
                     val = U.readByte(file)
                     texture_data.append(val)
+                elif colour_format == 24:
+                    val = U.readByte(file)
+                    texture_data.append(val)
                 else:
                     print(f"new colour format found @ {file.tell()} value is: {colour_format}")
-                    exit(99)
+                    if STOP_ON_NEW:
+                        exit()
+                    return
 
             texture_data = bytes(texture_data)
 

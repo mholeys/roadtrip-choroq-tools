@@ -2,6 +2,7 @@ import os
 import choroq.read_utils as U
 from choroq.amesh import AMesh
 
+STOP_ON_NEW = False
 
 # struct Matrix {
 #     float floats[8];
@@ -59,7 +60,8 @@ from choroq.amesh import AMesh
 #
 # //Faces f @ 29860;
 
-class PBLModel:
+
+class PBLModel(AMesh):
 
     def __init__(self, name, first_section, vert_count, vertices, normal_count, normals, uv_count, uvs, face_group_count, faces):
         self.name = name
@@ -152,28 +154,32 @@ class PBLModel:
             faces = []
 
             for i in range(face_group_count):
-                val1_known = [0x1C, 0x0C, 0x1D, 0x4]
+                val1_known = [0x1C, 0x0C, 0x1D, 0x4, 0x5C, 0x5B, 0x1B, 0x0B]
                 value1 = U.BreadShort(file)  # 1C
                 if value1 not in val1_known:
                     print(f"Face start value not as expected 1C != {value1:x} at {file.tell()}")
-                    # exit()
-                val2_known = [0, 0xFFFF, 1]
+                    if STOP_ON_NEW:
+                        exit()
+                val2_known = [0, 0xFFFF, 1, 2]  # 1 and 2 seems same as 0
                 value2 = U.BreadShort(file)  # 0000 or FFFF
                 if value2 not in val2_known:
                     print(f"New face value2 found @ {file.tell()} value is {value2:x}")
-                    # exit()
+                    if STOP_ON_NEW:
+                        exit()
                 # Read faces
                 face_type = U.readShort(file)  # This might not be useful, but it varies
                 face_filler = U.readShort(file)  # This might not be useful, but its either 0 or FFFF
                 # values seen, I think FFFF part might be a value that says if you
-                # see FFFF  hen that means that one is not included .e.g no UV index
-                if face_filler != 0 and face_filler != 0xFFFF:
+                # see FFFF then that means that one is not included .e.g no UV index
+                if (face_filler < 0 or face_filler > 3) and face_filler != 0xFFFF:
                     print(f"Face filler different @{file.tell()} value is {face_filler:x}")
-                    # exit()
-                known_types = list(range(0, 0x20)) + [0xFFFF]
+                    if STOP_ON_NEW:
+                        exit()
+                known_types = list(range(0, 0x33)) + [0xFFFF]
                 if face_type not in known_types:
                     print(f"New face size/type found @ {file.tell()} value is {face_type:x}")
-                    # exit()
+                    if STOP_ON_NEW:
+                        exit()
 
                 file.seek(4, os.SEEK_CUR)
                 strip_count = U.readLong(file)
@@ -187,6 +193,22 @@ class PBLModel:
                         f2 = U.readShort(file)  # Normal index
                         f3 = U.readShort(file)  # UV index
                         fe = U.readShort(file)
+                        if value1 == 0x5c:
+                            # 0x5C seems to have 4 values, with the 4th being 1/0 so far
+                            if fe != 1 and fe != 0:
+                                print(f"Found face 0x5C with 4th being != 1 {fe} @ {file.tell()}")
+                                if STOP_ON_NEW:
+                                    exit()
+                    # Correct parts that are missing to be skipped e.g f1//f3 vs f1/f2/f3, total guess
+                    if face_filler == 1:
+                        print(f"found face filler value of 1: @ {file.tell()}")
+                        f1 = 0xFFFF
+                    if face_filler == 2:
+                        print(f"found face filler value of 2: @ {file.tell()}")
+                        f2 = 0xFFFF
+                    if face_filler == 3:
+                        print(f"found face filler value of 3: @ {file.tell()}")
+                        f3 = 0xFFFF
                     pp = file.tell()
                     if value2 > 0:
                         for t in range(value2):
@@ -271,5 +293,12 @@ class PBLModel:
 
         return self.vert_count
 
+    def write_mesh_to_comb(self, fout, start_index=0, material=None):
+        return 0
 
+    def write_mesh_to_ply(self, fout, start_index=0):
+        return 0
+
+    def write_mesh_to_dbg(self, fout, start_index=0, material=None):
+        return self.write_mesh_to_obj(fout, start_index, material, True)
 
