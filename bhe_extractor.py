@@ -56,7 +56,7 @@ def process_cpk(path, out_path, output_formats):
                     for format in output_formats:
                         out = f"{out_path}\\{name}-{out_index}.{format}"
                         with open(out, "w") as fout:
-                            pbl.write_mesh_to_type(fout, format)
+                            pbl.write_mesh_to_type(format, fout)
                     out_index += 1
             elif sf_type == "APT":  # Texture format
                 for t in sf:

@@ -34,7 +34,7 @@ class AMesh(ABC):
         pass
 
     def write_mesh_to_type(self, output_type, fout, start_index=0, material=None):
-        output_type = str(output_type).lower()
+        output_type = output_type.lower()
         if output_type == "dbg":
             return self.write_mesh_to_dbg(fout, start_index, material)
         elif output_type == "obj" or output_type == "obj+colour":
