@@ -3,10 +3,9 @@ from PIL import Image, ImagePalette, ImageOps
 import choroq.read_utils as U
 from choroq.texture import Texture
 
-STOP_ON_NEW = False
-
 
 class APTexture:
+    STOP_ON_NEW = False
 
     def __init__(self, name, val_a, val_b, total_size):
         self.name = name
@@ -133,7 +132,7 @@ class APTexture:
             print(f"Texture header: {texture_name}, {val_a}, {val_b}, {size}, {zeros:x}")
             if zeros != 0:
                 print("Found non zero value in texture table data")
-                if STOP_ON_NEW:
+                if APTexture.STOP_ON_NEW:
                     exit()
             textures.append(APTexture(texture_name, val_a, val_b, size))
 
@@ -184,7 +183,7 @@ class APTexture:
                     texture_data.append(val)
                 else:
                     print(f"new colour format found @ {file.tell()} value is: {colour_format}")
-                    if STOP_ON_NEW:
+                    if APTexture.STOP_ON_NEW:
                         exit()
                     return
 

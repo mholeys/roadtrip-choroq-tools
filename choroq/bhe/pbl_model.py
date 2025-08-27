@@ -2,10 +2,9 @@ import os
 import choroq.read_utils as U
 from choroq.amesh import AMesh
 
-STOP_ON_NEW = False
-
 
 class PBLModel(AMesh):
+    STOP_ON_NEW = False
 
     def __init__(self, name, first_section, vert_count, vertices, normal_count, normals, uv_count, uvs, face_group_count, faces):
         self.name = name
@@ -86,8 +85,8 @@ class PBLModel(AMesh):
             for i in range(sizes[3]):
                 uvs.append((U.readFloat(file), 1-U.readFloat(file)))
 
-            print(f"longs section start: {file.tell()}")
-            # unknown longs (might be colours RGBA x 2)
+            print(f"Vertex colour section start: {file.tell()}")
+            # Vertex Colours
             for i in range(sizes[4]):
                 U.BreadLong(file)
 
@@ -102,13 +101,13 @@ class PBLModel(AMesh):
                 value1 = U.BreadShort(file)  # 1C
                 if value1 not in val1_known:
                     print(f"Face start value not as expected 1C != {value1:x} at {file.tell()}")
-                    if STOP_ON_NEW:
+                    if PBLModel.STOP_ON_NEW:
                         exit()
                 val2_known = [0, 0xFFFF, 1, 2]  # 1 and 2 seems same as 0
                 value2 = U.BreadShort(file)  # 0000 or FFFF
                 if value2 not in val2_known:
                     print(f"New face value2 found @ {file.tell()} value is {value2:x}")
-                    if STOP_ON_NEW:
+                    if PBLModel.STOP_ON_NEW:
                         exit()
                 # Read faces
                 face_type = U.readShort(file)  # This might not be useful, but it varies
@@ -117,12 +116,12 @@ class PBLModel(AMesh):
                 # see FFFF then that means that one is not included .e.g no UV index
                 if (face_filler < 0 or face_filler > 3) and face_filler != 0xFFFF:
                     print(f"Face filler different @{file.tell()} value is {face_filler:x}")
-                    if STOP_ON_NEW:
+                    if PBLModel.STOP_ON_NEW:
                         exit()
                 known_types = list(range(0, 0x33)) + [0xFFFF]
                 if face_type not in known_types:
                     print(f"New face size/type found @ {file.tell()} value is {face_type:x}")
-                    if STOP_ON_NEW:
+                    if PBLModel.STOP_ON_NEW:
                         exit()
 
                 file.seek(4, os.SEEK_CUR)
@@ -131,40 +130,43 @@ class PBLModel(AMesh):
                 face_type_a = known_types
                 # face_type_b = [, ]
                 for f in range(strip_count):
-                    f1, f2, f3, fe = -2, -2, -2, 0
+                    fv, fvn, fvt, fvc = -2, -2, -2, 0
                     if face_type in face_type_a:
-                        f1 = U.readShort(file)  # Vert index
-                        f2 = U.readShort(file)  # Normal index
-                        f3 = U.readShort(file)  # UV index
-                        fe = U.readShort(file)
-                        if value1 == 0x5c:
-                            # 0x5C seems to have 4 values, with the 4th being 1/0 so far
-                            if fe != 1 and fe != 0:
-                                print(f"Found face 0x5C with 4th being != 1 {fe} @ {file.tell()}")
-                                if STOP_ON_NEW:
-                                    exit()
+                        fv = U.readShort(file)  # Vert index
+                        fvn = U.readShort(file)  # Normal index
+                        fvt = U.readShort(file)  # UV index
+                        fvc = U.readShort(file)  # Colour index
+                        # if value1 == 0x5c:
+                        #     # 0x5C seems to have 4 values, with the 4th being 1/0 so far
+                        #     if fvc != 1 and fvc != 0:
+                        #         print(f"Found face 0x5C with 4th being != 1 {fvc} @ {file.tell()}")
+                        #         if STOP_ON_NEW:
+                        #             exit()
                     # Correct parts that are missing to be skipped e.g f1//f3 vs f1/f2/f3, total guess
                     if face_filler == 1:
                         print(f"found face filler value of 1: @ {file.tell()}")
-                        f1 = 0xFFFF
+                        fv = 0xFFFF
                     if face_filler == 2:
                         print(f"found face filler value of 2: @ {file.tell()}")
-                        f2 = 0xFFFF
+                        fvn = 0xFFFF
                     if face_filler == 3:
                         print(f"found face filler value of 3: @ {file.tell()}")
-                        f3 = 0xFFFF
-                    pp = file.tell()
+                        fvt = 0xFFFF
+                    if face_filler == 4:
+                        print(f"found face filler value of 4: @ {file.tell()}")
+                        vc = 0xFFFF
+                    pp = file.tell()  # Debugging
                     if value2 > 0:
                         for t in range(value2):
-                            tri_strips.append((f1, f2, f3))
+                            tri_strips.append((fv, fvn, fvt, fvc))
                     else:
-                        tri_strips.append((f1, f2, f3))
+                        tri_strips.append((fv, fvn, fvt, fvc))
 
                 # Convert tri_strips to normal face list
                 face_indices = AMesh.create_face_list(strip_count, vert_count_offset=-1)
                 face_list = []
                 for fi in face_indices:
-                    face_list.append((tri_strips[fi[0]], tri_strips[fi[1]], tri_strips[fi[2]]))
+                    face_list.append((tri_strips[fi[0]], tri_strips[fi[1]], tri_strips[fi[2]], 0))
                 faces += face_list
 
             pbls.append(PBLModel(name, floats_first_section, sizes[1], verts, sizes[2], normals, sizes[3], uvs, face_group_count, faces))
@@ -200,16 +202,16 @@ class PBLModel(AMesh):
 
         # Write mesh face order/list
         face_count = 0
-        for f1, f2, f3 in self.faces:
-            fv1 = f1[0] + 1
-            fv2 = f2[0] + 1
-            fv3 = f3[0] + 1
-            fn1 = f1[1] + 1
-            fn2 = f2[1] + 1
-            fn3 = f3[1] + 1
-            fuv1 = f1[2] + 1
-            fuv2 = f2[2] + 1
-            fuv3 = f3[2] + 1
+        for fv, fvn, fvt, fvc in self.faces:
+            fv1 = fv[0] + 1
+            fv2 = fvn[0] + 1
+            fv3 = fvt[0] + 1
+            fn1 = fv[1] + 1
+            fn2 = fvn[1] + 1
+            fn3 = fvt[1] + 1
+            fuv1 = fv[2] + 1
+            fuv2 = fvn[2] + 1
+            fuv3 = fvt[2] + 1
             if fv1 == 65536:
                 fv1 = ""
             if fv2 == 65536:

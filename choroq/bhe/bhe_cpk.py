@@ -4,6 +4,7 @@ from pathlib import Path
 import choroq.read_utils as U
 from choroq.bhe.aptexture import APTexture
 from choroq.bhe.pbl_model import PBLModel
+from choroq.bhe.toc_0318 import Toc0318
 
 
 class CPK:
@@ -26,6 +27,10 @@ class CPK:
                 # Texture file
                 apt_data = APTexture.read_apt(file, position)
                 self.subfiles[i] = ("APT", apt_data)
+            elif self.subfile_types[i] == b'\x03\x18\x00\x00':
+                # toc/0318 file
+                toc_data = Toc0318.read_toc0318(file, position)
+                self.subfiles[i] = (b'\x03\x18\x00\x00', toc_data)
             else:
                 print(f"Unknown subfile type: {self.subfile_types[i]}")
             pass
