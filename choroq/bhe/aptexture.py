@@ -126,8 +126,19 @@ class APTexture:
             try:
                 first_0 = texture_name.index(0)
                 texture_name = texture_name[0:first_0].decode("ascii").rstrip('\00')
-            except:
+            except Exception as e1:
+                # Possible JP character in name, cannot really handle nicely, without custom d/encoding
                 print(f"{texture_name} failed to convert to ascii")
+                end_letter = 1
+                for li in range(len(texture_name)):
+                    if texture_name[li] > 0x7F:
+                        end_letter = li-1
+                try:
+                    texture_name = texture_name[0:end_letter].decode("ascii").rstrip('\00')
+                except Exception as e2:
+                    print("Cannot parse name, other error occurred")
+                    raise e2
+
 
             print(f"Texture header: {texture_name}, {val_a}, {val_b}, {size}, {zeros:x}")
             if zeros != 0:

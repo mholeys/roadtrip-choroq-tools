@@ -5,10 +5,11 @@ from choroq.bhe.bhe_cpk import CPK
 import sys
 import os
 import csv
-
+from pathlib import Path
 
 # Create log files or not (probably not that useful for most people)
 CREATE_LOG_FILES = True
+
 
 def show_help():
     print("##############################################################################################")
@@ -43,13 +44,19 @@ def process_cpk(path, out_path, output_formats):
 
         names_seen_pbl = []
         names_seen_apt = []
-        deduplcate_id_pbl = 0
+        deduplicate_id_pbl = 0
         toc_index = 0
 
-        # if b'\x03\x18\x00\x00' in cpk.subfile_types:
-        #     total_file = open(f"{out_path}\\toc-text.csv", "w", encoding="utf_8", newline='')
-        #     total_writer = csv.writer(total_file, delimiter=',')
-        #     total_writer.writerow(("Type", "Name", "Position (Dec)", "Flag (Dec)", "Length read", "Text Length", "Bytes eqiv", "Text"))
+        # file holding all text for this file (easier to search)
+        if b'\x03\x18\x00\x00' in cpk.subfile_types or b'TOC\x00' in cpk.subfile_types:
+            # Check folder exist/make them
+            Path(f"{out_path}/text/tex/").mkdir(parents=True, exist_ok=True)
+            Path(f"{out_path}/other/tex/").mkdir(parents=True, exist_ok=True)
+            total_file = open(f"{out_path}\\toc-text.csv", "w", encoding="utf_8", newline='')
+            total_writer = csv.writer(total_file, delimiter=',')
+            total_writer.writerow(("Type", "Name", "Position (Dec)", "Flag (Dec)", "Length read", "Text Length", "Bytes eqiv", "Text"))
+        else:
+            print("No TOC, skipping total file")
 
         for index in cpk.subfiles:
             sf_type, sf = cpk.subfiles[index]
@@ -61,55 +68,257 @@ def process_cpk(path, out_path, output_formats):
                 for pbl in sf:
                     name = pbl.name
                     if name in names_seen_pbl:
-                        name = f"{pbl.name}-{deduplcate_id_pbl}"
-                        deduplcate_id_pbl += 1
-                    for format in output_formats:
-                        out = f"{out_path}\\{name}-{out_index}.{format}"
+                        name = f"{pbl.name}-{deduplicate_id_pbl}"
+                        deduplicate_id_pbl += 1
+                    for out_format in output_formats:
+                        out = f"{out_path}\\{name}-{out_index}.{out_format}"
                         with open(out, "w") as fout:
-                            pbl.write_mesh_to_type(format, fout)
+                            pbl.write_mesh_to_type(out_format, fout)
                     out_index += 1
             elif sf_type == "APT":  # Texture format
                 # continue
                 for t in sf:
                     name = t.name
                     print(t.name)
-                    deduplcate_id_apt = 0
-                    while name in names_seen_apt and deduplcate_id_apt < 32:
-                        name = f"{t.name}-{deduplcate_id_apt}"
-                        deduplcate_id_apt += 1
+                    deduplicate_id_apt = 0
+                    while name in names_seen_apt and deduplicate_id_apt < 32:
+                        name = f"{t.name}-{deduplicate_id_apt}"
+                        deduplicate_id_apt += 1
                     names_seen_apt.append(name)
                     print(f"Read texture {t.name}")
                     t.write_texture_to_png(f"{out_path}\\{name}.png")
                     t.write_palette_to_png(f"{out_path}\\{name}-p.png")
-        #     elif sf_type == b'\x03\x18\x00\x00':  # Toc format
-        #         # Output all data types
-        #         # with open(f"{out_path}\\toc-data-{toc_index}.csv", "w", encoding="utf_8", newline='') as csv_file:
-        #         #     writer = csv.writer(csv_file, delimiter=',')
-        #         #     for toc in sf:
-        #         #         with open(f"{out_path}\\toc-data-{toc.name}.csv", "a", encoding="utf_8", newline='') as single_csv_file:
-        #         #             single_writer = csv.writer(single_csv_file, delimiter=',')
-        #         #             row = toc.type, toc.position, toc.flag, toc.length_read, toc.data
-        #         #             writer.writerow(row)
-        #         #             single_writer.writerow(row)
-        #
-        #         # Output text based data
-        #
-        #         if len(sf) > 0:
-        #             with open(f"{out_path}\\toc-[{toc_index}]-text.csv", "w", encoding="utf_8", newline='') as csv_file:
-        #                 toc_index += 1
-        #                 writer = csv.writer(csv_file, delimiter=',')
-        #                 current_name = ""
-        #                 for toc in sf:
-        #                     if toc.type != "text":
-        #                         continue
-        #                     row = toc.type, toc.name, toc.position, toc.flag, toc.length_read, toc.text_length, toc.data[1], toc.data[0]
-        #                     writer.writerow(row)
-        #                     total_writer.writerow(row)
-        #                     # with open(f"{out_path}\\toc-text-{toc.name}.csv", "a", encoding="utf_8", newline='') as single_csv_file:
-        #                     #     single_writer = csv.writer(single_csv_file, delimiter=',')
-        #                     # single_writer.writerow(row)
-        #         toc_index += 1
-        # total_file.close()
+            elif sf_type == b'TOC\x00':  # Toc format
+                # Check folder exist/make them
+                Path(f"{out_path}/text/").mkdir(parents=True, exist_ok=True)
+                Path(f"{out_path}/other/").mkdir(parents=True, exist_ok=True)
+                # Group all data by their toc name, slower but makes nicer files
+                text_toc_by_name = {}
+                other_toc_by_name = {}
+                toc_by_name = {}
+                for toc in sf:
+                    if toc is None:
+                        continue
+                    if type(toc) == list:
+                        break
+                    if toc.name not in toc_by_name:
+                        toc_by_name[toc.name] = []
+                    toc_by_name[toc.name].append(toc)
+                    if toc.type == "text":
+                        if toc.name not in text_toc_by_name:
+                            text_toc_by_name[toc.name] = []
+                        text_toc_by_name[toc.name].append(toc)
+                    else:
+                        if toc.name not in other_toc_by_name:
+                            other_toc_by_name[toc.name] = []
+                        other_toc_by_name[toc.name].append(toc)
+
+                for toc_name in text_toc_by_name:
+                    with open(f"{out_path}\\text\\toc-{toc_name}-text.csv", "w", encoding="utf_8", newline='') as csv_file:
+                        writer = csv.writer(csv_file, delimiter=',')
+                        writer.writerow(("Type", "Name", "Position (Dec)", "Flag (Dec)", "Length read", "Text Length", "Bytes eqiv", "Text"))
+                        for toc in text_toc_by_name[toc_name]:
+                            if toc.type != "text":
+                                continue
+                            row = toc.type, toc.name, toc.position, toc.flag, toc.length_read, toc.text_length, toc.data[1], toc.data[0]
+                            writer.writerow(row)
+                            total_writer.writerow(row)
+
+                for toc_name in other_toc_by_name:
+                    with open(f"{out_path}\\other\\toc-{toc_name}-other.csv", "w", encoding="utf_8", newline='') as csv_file:
+                        writer = csv.writer(csv_file, delimiter=',')
+                        writer.writerow(("Type", "Name", "Position (Dec)", "Flag (Dec)", "Length read", "Bytes eqiv"))
+                        for toc in other_toc_by_name[toc_name]:
+                            if toc.type != "text":
+                                continue
+                            row = toc.type, toc.name, toc.position, toc.flag, toc.length_read, toc.text_length, toc.data
+                            writer.writerow(row)
+                            total_writer.writerow(row)
+
+
+                # Output all data types
+                # with open(f"{out_path}\\toc-data-{toc_index}.csv", "w", encoding="utf_8", newline='') as csv_file:
+                #     writer = csv.writer(csv_file, delimiter=',')
+                #     for toc in sf:
+                #         with open(f"{out_path}\\toc-data-{toc.name}.csv", "a", encoding="utf_8", newline='') as single_csv_file:
+                #             single_writer = csv.writer(single_csv_file, delimiter=',')
+                #             row = toc.type, toc.position, toc.flag, toc.length_read, toc.data
+                #             writer.writerow(row)
+                #             single_writer.writerow(row)
+
+
+
+
+                # if len(sf) > 0:
+                #     with open(f"{out_path}\\toc-[{toc_index}]-text.csv", "w", encoding="utf_8", newline='') as csv_file:
+                #         toc_index += 1
+                #         writer = csv.writer(csv_file, delimiter=',')
+                #         current_name = ""
+                #         for toc in sf:
+                #             if toc.type != "text":
+                #                 continue
+                #             row = toc.type, toc.name, toc.position, toc.flag, toc.length_read, toc.text_length, toc.data[1], toc.data[0]
+                #             writer.writerow(row)
+                #             total_writer.writerow(row)
+                #             # with open(f"{out_path}\\toc-text-{toc.name}.csv", "a", encoding="utf_8", newline='') as single_csv_file:
+                #             #     single_writer = csv.writer(single_csv_file, delimiter=',')
+                #             # single_writer.writerow(row)
+                # toc_index += 1
+        if b'\x03\x18\x00\x00' in cpk.subfile_types or b'TOC\x00' in cpk.subfile_types:
+            total_file.close()
+
+def process_cpk_once(path, out_path, output_formats):
+    with open(path, "rb") as f:
+        cpk = CPK.read_cpk(f, 0)
+
+        names_seen_pbl = []
+        names_seen_mpd = []
+        names_seen_apt = []
+        deduplicate_id_pbl = 0
+        deduplicate_id_mpd = 0
+        toc_index = 0
+
+        # file holding all text for this file (easier to search)
+        if b'\x03\x18\x00\x00' in cpk.subfile_types or b'TOC\x00' in cpk.subfile_types:
+            # Check folder exist/make them
+            Path(f"{out_path}/text/tex/").mkdir(parents=True, exist_ok=True)
+            Path(f"{out_path}/other/tex/").mkdir(parents=True, exist_ok=True)
+            total_file = open(f"{out_path}\\toc-text.csv", "w", encoding="utf_8", newline='')
+            total_writer = csv.writer(total_file, delimiter=',')
+            total_writer.writerow(("Type", "Name", "Position (Dec)", "Flag (Dec)", "Length read", "Text Length", "Bytes eqiv", "Text"))
+        else:
+            print("No TOC, skipping total file")
+
+        for index in range(cpk.entry_count):
+            if index >= len(cpk.entry_positions):
+                continue
+            cpk.read_subfile(f, index)
+            if index not in cpk.subfiles:
+                print(f"Missed index [{index}] type: [{cpk.subfile_types[index]}]")
+                continue
+            sf_type, sf = cpk.subfiles[index]
+            if sf is None:
+                pass
+            if sf_type == "PBL":  # Model format
+                # continue
+                out_index = 0
+                for pbl in sf:
+                    name = pbl.name
+                    if name in names_seen_pbl:
+                        name = f"{pbl.name}-{deduplicate_id_pbl}"
+                        deduplicate_id_pbl += 1
+                    for out_format in output_formats:
+                        out = f"{out_path}\\{name}-{out_index}.{out_format}"
+                        with open(out, "w") as fout:
+                            pbl.write_mesh_to_type(out_format, fout)
+                    out_index += 1
+            elif sf_type == "MPD":  # Model format
+                # continue
+                Path(f"{out_path}\\mpd").mkdir(parents=True, exist_ok=True)
+                out_index = 0
+                for mpd in sf:
+                    name = mpd.name
+                    if name in names_seen_mpd:
+                        name = f"{mpd.name}-{deduplicate_id_mpd}"
+                        deduplicate_id_mpd += 1
+                    for out_format in output_formats:
+                        out = f"{out_path}\\mpd\\{name}-{out_index}.{out_format}"
+                        with open(out, "w") as fout:
+                            mpd.write_mesh_to_type(out_format, fout)
+                    out_index += 1
+            elif sf_type == "APT":  # Texture format
+                # continue
+                Path(f"{out_path}\\tex").mkdir(parents=True, exist_ok=True)
+                for t in sf:
+                    name = t.name
+                    print(t.name)
+                    deduplicate_id_apt = 0
+                    while name in names_seen_apt and deduplicate_id_apt < 32:
+                        name = f"{t.name}-{deduplicate_id_apt}"
+                        deduplicate_id_apt += 1
+                    names_seen_apt.append(name)
+                    print(f"Save texture {t.name}")
+                    t.write_texture_to_png(f"{out_path}\\tex\\{name}.png")
+                    t.write_palette_to_png(f"{out_path}\\tex\\{name}-p.png")
+            elif sf_type == b'TOC\x00':  # Toc format
+                # Check folder exist/make them
+                Path(f"{out_path}/text/").mkdir(parents=True, exist_ok=True)
+                Path(f"{out_path}/other/").mkdir(parents=True, exist_ok=True)
+                # Group all data by their toc name, slower but makes nicer files
+                text_toc_by_name = {}
+                other_toc_by_name = {}
+                toc_by_name = {}
+                for toc in sf:
+                    if toc is None:
+                        continue
+                    if type(toc) == list:
+                        break
+                    if toc.name not in toc_by_name:
+                        toc_by_name[toc.name] = []
+                    toc_by_name[toc.name].append(toc)
+                    if toc.type == "text":
+                        if toc.name not in text_toc_by_name:
+                            text_toc_by_name[toc.name] = []
+                        text_toc_by_name[toc.name].append(toc)
+                    else:
+                        if toc.name not in other_toc_by_name:
+                            other_toc_by_name[toc.name] = []
+                        other_toc_by_name[toc.name].append(toc)
+
+                for toc_name in text_toc_by_name:
+                    with open(f"{out_path}\\text\\toc-{toc_name}-text.csv", "w", encoding="utf_8", newline='') as csv_file:
+                        writer = csv.writer(csv_file, delimiter=',')
+                        writer.writerow(("Type", "Name", "Position (Dec)", "Flag (Dec)", "Length read", "Text Length", "Bytes eqiv", "Text"))
+                        for toc in text_toc_by_name[toc_name]:
+                            if toc.type != "text":
+                                continue
+                            row = toc.type, toc.name, toc.position, toc.flag, toc.length_read, toc.text_length, toc.data[1], toc.data[0]
+                            writer.writerow(row)
+                            total_writer.writerow(row)
+
+                for toc_name in other_toc_by_name:
+                    with open(f"{out_path}\\other\\toc-{toc_name}-other.csv", "w", encoding="utf_8", newline='') as csv_file:
+                        writer = csv.writer(csv_file, delimiter=',')
+                        writer.writerow(("Type", "Name", "Position (Dec)", "Flag (Dec)", "Length read", "Bytes eqiv"))
+                        for toc in other_toc_by_name[toc_name]:
+                            if toc.type != "text":
+                                continue
+                            row = toc.type, toc.name, toc.position, toc.flag, toc.length_read, toc.text_length, toc.data
+                            writer.writerow(row)
+                            total_writer.writerow(row)
+
+
+                # Output all data types
+                # with open(f"{out_path}\\toc-data-{toc_index}.csv", "w", encoding="utf_8", newline='') as csv_file:
+                #     writer = csv.writer(csv_file, delimiter=',')
+                #     for toc in sf:
+                #         with open(f"{out_path}\\toc-data-{toc.name}.csv", "a", encoding="utf_8", newline='') as single_csv_file:
+                #             single_writer = csv.writer(single_csv_file, delimiter=',')
+                #             row = toc.type, toc.position, toc.flag, toc.length_read, toc.data
+                #             writer.writerow(row)
+                #             single_writer.writerow(row)
+
+
+
+
+                # if len(sf) > 0:
+                #     with open(f"{out_path}\\toc-[{toc_index}]-text.csv", "w", encoding="utf_8", newline='') as csv_file:
+                #         toc_index += 1
+                #         writer = csv.writer(csv_file, delimiter=',')
+                #         current_name = ""
+                #         for toc in sf:
+                #             if toc.type != "text":
+                #                 continue
+                #             row = toc.type, toc.name, toc.position, toc.flag, toc.length_read, toc.text_length, toc.data[1], toc.data[0]
+                #             writer.writerow(row)
+                #             total_writer.writerow(row)
+                #             # with open(f"{out_path}\\toc-text-{toc.name}.csv", "a", encoding="utf_8", newline='') as single_csv_file:
+                #             #     single_writer = csv.writer(single_csv_file, delimiter=',')
+                #             # single_writer.writerow(row)
+                # toc_index += 1
+        if b'\x03\x18\x00\x00' in cpk.subfile_types or b'TOC\x00' in cpk.subfile_types:
+            total_file.close()
+
 
 
 if __name__ == '__main__':
@@ -154,3 +363,5 @@ if __name__ == '__main__':
     if os.path.isfile(cpk_file_in):
         print(f"Reading from {cpk_file_in}")
         process_cpk(cpk_file_in, folder_out, output_formats)
+        # Read subfile one at a time, then save, probably slower, good for crashing
+        #process_cpk_once(cpk_file_in, folder_out, output_formats)
