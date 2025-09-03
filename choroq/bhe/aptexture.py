@@ -6,8 +6,10 @@ from choroq.texture import Texture
 
 class APTexture:
     STOP_ON_NEW = False
+    PRINT_DEBUG = False
 
-    def __init__(self, name, val_a, val_b, total_size):
+    def __init__(self, name, val_a, val_b, total_size, offset):
+        self.offset = offset
         self.name = name
         self.val_a = val_a
         self.height = val_b
@@ -41,22 +43,29 @@ class APTexture:
             print("Skipping write, as texture has no data")
             return
         colour_list = []
+        image = None
 
         if self.palette_size == 0:
-            print("Not using a palette, no palette")
-            if self.colour_format == 32 or self.colour_format == 16:
-                image = Image.frombytes('RGBA', (self.width, self.height), self.data, 'raw')
-            elif self.colour_format == 24:
-                image = Image.frombytes('RGB', (self.width, self.height), self.data, 'raw')
-                image.convert("RGBA").save(path, "PNG")
-            elif self.colour_format == 4 or self.colour_format == 8:
-                image = Image.frombytes('L', (self.width, self.height), self.data, 'raw')
-                image.convert("RGBA").save(path, "PNG")
-            else:
-                print(f"BAD BPP value {self.colour_format}")
-                exit()
+            try:
+                if APTexture.PRINT_DEBUG:
+                    print("Not using a palette, no palette")
+                if self.colour_format == 32 or self.colour_format == 16:
+                    image = Image.frombytes('RGBA', (self.width, self.height), self.data, 'raw')
+                elif self.colour_format == 24:
+                    image = Image.frombytes('RGB', (self.width, self.height), self.data, 'raw')
+                    image.convert("RGBA").save(path, "PNG")
+                elif self.colour_format == 4 or self.colour_format == 8:
+                    image = Image.frombytes('L', (self.width, self.height), self.data, 'raw')
+                    image.convert("RGBA").save(path, "PNG")
+                else:
+                    print(f"BAD BPP value {self.colour_format}")
+                    exit()
+            except Exception as e:
+                print(e)
+                return
         else:
-            print("Using palette from texture")
+            if APTexture.PRINT_DEBUG:
+                print("Using palette from texture")
             # Convert (R,G,B,A) TO [..., R,G,B,A,...]
             for colour in self.palette:
                 colour_list.append(colour[0])
@@ -70,14 +79,16 @@ class APTexture:
                 image.palette = palette
             else:
                 image = Image.frombytes('L', (self.width, self.height), self.data, 'raw')
-        print("Doing conversion")
+        if APTexture.PRINT_DEBUG:
+            print("Doing conversion")
         rgbd = image.convert("RGBA")
         if flip_x:
             rgbd = ImageOps.mirror(rgbd)
         if flip_y:
             rgbd = ImageOps.flip(rgbd)
         rgbd.save(path, "PNG")
-        print("Saved")
+        if APTexture.PRINT_DEBUG:
+            print("Saved")
 
     def write_palette_to_png(self, path):
         if self.palette == [] or self.palette is None:
@@ -111,13 +122,15 @@ class APTexture:
         if magic != b"APT\0":
             print("No textures, incompatible file")
             return None
-
-        print(f"U1: {unknown1}  U2: {unknown2}")
+        if APTexture.PRINT_DEBUG:
+            print(f"U1: {unknown1}  U2: {unknown2}")
 
         # List of files start
         textures = []
         for i in range(texture_count):
-            print(file.tell())
+            if APTexture.PRINT_DEBUG:
+                print(file.tell())
+            texture_offset = file.tell()
             val_a = U.readLong(file)
             val_b = U.readLong(file)
             size = U.readLong(file)  # Think this is the total size of the texture descriptor+palette+data
@@ -139,24 +152,28 @@ class APTexture:
                     print("Cannot parse name, other error occurred")
                     raise e2
 
-
-            print(f"Texture header: {texture_name}, {val_a}, {val_b}, {size}, {zeros:x}")
+            if APTexture.PRINT_DEBUG:
+                print(f"Texture header: {texture_name}, {val_a}, {val_b}, {size}, {zeros:x}")
             if zeros != 0:
-                print("Found non zero value in texture table data")
+                if APTexture.PRINT_DEBUG:
+                    print("Found non zero value in texture table data")
                 if APTexture.STOP_ON_NEW:
                     exit()
-            textures.append(APTexture(texture_name, val_a, val_b, size))
+            textures.append(APTexture(texture_name, val_a, val_b, size, texture_offset))
 
         # After the header table, the texture data starts
         for i in range(texture_count):
-            print(f"pos: {file.tell()} t: {i}")
+            if APTexture.PRINT_DEBUG:
+                print(f"pos: {file.tell()} t: {i}")
+            texture_start = file.tell()
             # Read texture descriptor
             width = U.readLong(file)
             height = U.readLong(file)
             colour_format = U.readLong(file)  # Might just be bytes per pixel (of texture, not palette)
             palette_size = U.readLong(file)  # Number of colours in palette
 
-            print(f"{width:x} {height:x} {colour_format:x} {palette_size:x}")
+            if APTexture.PRINT_DEBUG:
+                print(f"{width:x} {height:x} {colour_format:x} {palette_size:x}")
 
             if width == 0 or height == 0 or width > 2048 or height > 2048:
                 print(f"Cannot decode texture at @{file.tell()} size is {width}, {height}?")
@@ -166,20 +183,39 @@ class APTexture:
                 print(f"Cannot decode texture at @{file.tell()} size is {width}, {height}, palette issues {palette_size}?")
                 return textures
 
+            max_length = texture_start + textures[i].total_size
+
             # Read palette in
             palette = []
             for c in range(palette_size):
+                if file.tell() > max_length:
+                    break
                 r = U.readByte(file)
                 g = U.readByte(file)
                 b = U.readByte(file)
                 a = U.readByte(file)
                 palette.append((r, g, b, a))
             # palette = file.read(palette_size * 4)
-            print(f"pos: {file.tell()} t: {i}")
+            if APTexture.PRINT_DEBUG:
+                print(f"pos: {file.tell()} t: {i}")
+
+            # Check before reading, just in case
+            if file.tell() > max_length:
+                # Check if we are past the limit for this texture, seems to occur, which means
+                # the data given is not valid
+                # unsure why this happens, as the values I understand seem to still be right
+                file.seek(max_length, os.SEEK_SET)
+                continue
 
             texture_data = []
             # Read texture in
             for c in range(int(width * height * (colour_format/8))):
+                if file.tell() > max_length:
+                    # Check if we are past the limit for this texture, seems to occur, which means
+                    # the data given is not valid
+                    # unsure why this happens, as the values I understand seem to still be right
+                    file.seek(max_length, os.SEEK_SET)
+                    break
                 if colour_format == 4:
                     val = U.readByte(file)
                     i1 = val & 0xF
@@ -194,9 +230,11 @@ class APTexture:
                     texture_data.append(val)
                 else:
                     print(f"new colour format found @ {file.tell()} value is: {colour_format}")
-                    if APTexture.STOP_ON_NEW:
-                        exit()
+                    # if APTexture.STOP_ON_NEW:
+                    exit()
                     return
+
+            # Might need some checks, to test if we were past max_length
 
             texture_data = bytes(texture_data)
 
