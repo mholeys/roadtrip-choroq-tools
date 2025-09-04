@@ -648,19 +648,50 @@ def process_shops(source, dest, output_formats):
                         with open(log_dest, "w") as sys.stdout:
                             if basename == "GARAGE":
                                 # GARAGE is different
-                                # garage = GarageModel.from_file(f, 0)
-                                # for ei, g_entry in enumerate(garage.textures):
-                                #     for i, mesh in enumerate(g_entry.meshes):
-                                #         for outType in output_formats:
-                                #             with open(f"{out_folder}/{basename}-{ei}-{i}.{outType}", "w") as fout:
-                                #                 mesh.write_mesh_to_type(outType, fout)
-                                #     for i, tex in enumerate(g_entry.textures):
-                                #         try:
-                                #             tex.write_texture_to_png(f"{out_folder}/{basename}-{ei}-{i}.png")
-                                #         except Exception as E:
-                                #             print(f"Failed to write texture/palette probably decoded badly Garage[{ei}]:{g_entry} Texture:{i} {tex} {E}")
-                                pass
-                                # TODO: need to rewrite now dma tags are understood better
+                                garage = GarageModel.from_file(f, 0)
+                                for ei, g_entry in enumerate(garage.entries):
+                                    if g_entry is None:
+                                        continue
+                                    for i in range(0, len(g_entry.textures)):
+                                        if should_exit:
+                                            break
+                                        address, texture = g_entry.textures[i]
+                                        if texture is None:
+                                            continue
+                                        print(f"{address}: {i} bpp: {texture.bpp} {texture.width}x{texture.height}")
+                                        if texture.bpp <= 8:
+                                            # Get next image as clut
+                                            clut_address, clut = g_entry.textures[i + 1]
+                                            # texture.write_texture_to_png(f"{out_folder}/{entry.name}-{address:x}-raw.png")
+                                            if clut is None:
+                                                texture.write_texture_to_png(
+                                                    f"{out_folder}/{basename}-{ei}-{i}.png")
+                                                continue
+                                            print(
+                                                f"Using clut to merge, bpp: {clut.bpp} {clut.width}x{clut.height}")
+                                            print(f"{clut_address}: {i}")
+                                            clut.write_texture_to_png(
+                                                f"{out_folder}/{basename}-{clut_address:x}-raw.png")
+                                            # Set the texture's palette accordingly
+                                            unswizzled = Texture.unswizzle_bytes(clut)
+                                            texture.palette = unswizzled
+                                            texture.palette_width = clut.width
+                                            texture.palette_height = clut.height
+
+                                            texture.write_texture_to_png(
+                                                f"{out_folder}/{basename}-{ei}-{i}.png")
+                                    for mi, mesh in enumerate(g_entry.meshes):
+                                        for outType in output_formats:
+                                            extension = outType
+                                            if outType == "obj+colour":
+                                                extension = "obj"
+                                            with open(f"{out_folder}/{basename}-{ei}-{mi}.{extension}", "w") as fout:
+                                                mesh.write_mesh_to_type(outType, fout, material="GARAGE")
+                                                if outType == "obj" or outType == "obj+colour":
+                                                    with open(f"{out_folder}/{basename}-{ei}-{mi}.mtl", "w") as fout:
+                                                        # cheap Fix as texture is not indexed same
+                                                        Texture.save_material_file_obj(fout, basename, f"./{basename}-{ei}-{2 - ((mi % 2) * 2)}.png")
+
                             else:
                                 shops = Shop.from_file(f, 0)
                                 print(f"Done shop {entry}")
@@ -831,13 +862,13 @@ if __name__ == '__main__':
         output_formats = ["comb"]
 
     if os.path.isdir(folder_in):
-        process_courses(folder_in, folder_out, "COURSE", output_formats)
-        process_cars(folder_in, folder_out, output_formats)
-        process_courses(folder_in, folder_out, "ACTION", output_formats)
-        process_fields(folder_in, folder_out, output_formats)
+        # process_courses(folder_in, folder_out, "COURSE", output_formats)
+        # process_cars(folder_in, folder_out, output_formats)
+        # process_courses(folder_in, folder_out, "ACTION", output_formats)
+        # process_fields(folder_in, folder_out, output_formats)
         # These are other bits from the game, might be useful for some
         # process_items(folder_in, folder_out, output_formats)
-        # process_shops(folder_in, folder_out, output_formats)
+        process_shops(folder_in, folder_out, output_formats)
         # process_sys(folder_in, folder_out, output_formats)
 
     else:

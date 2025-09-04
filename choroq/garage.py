@@ -15,6 +15,8 @@
 import io
 import os
 import math
+import sys
+
 from choroq.amesh import AMesh
 from choroq.texture import Texture
 from choroq.car import CarModel, CarMesh
@@ -22,185 +24,93 @@ from choroq.car_hg3 import HG3CarModel, HG3CarMesh
 import choroq.read_utils as U
 
 
-class GarageModel():
+class GarageModel:
     def __init__(self, entries):
         self.entries = entries
 
     @staticmethod
     def from_file(file, offset):
-        file.seek(0, os.SEEK_END)
-        maxLength = file.tell()
-        file.seek(offset, os.SEEK_SET)
         entries = []
+        position = offset
+        file.seek(0, os.SEEK_END)
+        end = file.tell()
+        file.seek(offset, os.SEEK_SET)
 
-        currentIndex = 0
-        while file.tell() < maxLength:
-            test = U.BreadLong(file)
-            if file.tell() % 4 == 0 and test != 0xFFFFFFFF and test != 0x00000000:
-                file.seek(-4, os.SEEK_CUR)
-                print(f"Trying to parse garage.[{currentIndex}] found start {file.tell()}")
-                entries.append(GarageEntry.fromFile(file, file.tell()))
-                currentIndex += 1
+        while position < end:
+            entry, end_position = GarageEntry.from_file(file, position)
+            print(f"Read garage entry up to {end_position + position}")
+            GarageModel.read_until_next(file, end, end_position + position)
+            position = file.tell()
+            entries.append(entry)
+            # break
 
-        if entries == []:
-            print("No textures")
         return GarageModel(entries)
 
+    @staticmethod
+    def read_until_next(file, end, last_position):
+        file.seek(last_position, os.SEEK_SET)
+        current = file.tell()
+        if current + 2048 >= end:
+            return
+        # Check if we are already at the correct location
+        test_valid = False
+        next_try = current
 
-class GarageEntry():
+        # Seek to next sector aligned area
+        while not test_valid and file.tell() != end:
+            file.seek(next_try, os.SEEK_SET)
+            test = U.readLong(file)
+            file.seek(-4, os.SEEK_CUR)
+            test_valid = 0 < test < 32
+            next_try = (math.floor(current / 2048) + 1) * 2048
+            current = file.tell()
+        print(f"Skipped until {file.tell()}")
 
-    def __init__(self, meshes = [], textures = []):
+class GarageEntry:
+
+    def __init__(self, meshes=None, textures=None):
         self.meshes = meshes
         self.textures = textures
 
-
-
     @staticmethod
-    def _parse_offsets(file, offset):
-        print(offset)
+    def from_file(file, offset):
+        print(f"Reading garage entry from {file.tell()}")
+
         file.seek(offset, os.SEEK_SET)
-        subFileOffsets = [U.readLong(file), U.readLong(file), U.readLong(file), U.readLong(file)]
-        return subFileOffsets
+        # Read offset table
+        offsets = [U.readLong(file)]
+        while offsets[-1] != 0 and len(offsets) < 32:  # 32 check just for error prevention
+            o = U.readLong(file)
+            if o == 0 or o < offsets[-1]:
+                break
+            offsets.append(o)
 
-    @staticmethod
-    def read_additional(file, offset, max_length):
-        if offset + 100 > max_length:
-            return []
+        if offsets[0] > 32:
+            print(f"Ended up at invalid location for garage entry (probably end) {file.tell()}")
+            return None, offset+2048
+
+        if len(offsets) > 3:
+            print(f"Found different style of data @ {file.tell()}, has more than 2 subfiles [{len(offsets)}]")
+            exit()
+
+        # Read model
+        meshes = CarMesh.from_file(file, offset+offsets[0], offset+offsets[1] - offset+offsets[0])
+        # Read texture
         textures = []
-        file.seek(offset, os.SEEK_SET)
-        check = U.readLong(file)
-        # Check for next
-        file.seek(offset, os.SEEK_SET)
+        end_tag = False
+        next_texture = offset+offsets[1]
+        while not end_tag:
+            texture, end_tag = Texture.read_texture(file, next_texture)
+            next_texture = file.tell()
+            textures.append(texture)
 
-        if check == 0x00000010:
-            # Jump back to start of the next (probably) garage file 
-            print(f"No additional texture, at next file 0x{check:X}")
-            # give up, as we have not found a palette
-            return []
+        print(f"Read garage entry up to {file.tell()}")
+        # Seek to end
+        file.seek(offsets[-1] + offset - 6)  # -6 to ensure other code works for finding next, no matter where we end reading
 
-        print(f"Reading garage additional @ {offset}")
-        # Read texture data, as we don't know what the image dimensions are
-        data_in = U.readShort(file)
-        data = []
-        print(f"Reading until palette @ {file.tell()-2}")
-        more = True
-        count = 0
-        while more and count < 0xFFFF:
-            if data_in == 0x0046:
-                more = False
-                break
-            elif data_in == 0x0010:
-                more = False
-                break
-            # Read 4 as the headers are aligned by 16 bytes
-            data.append(data_in)
-            data_in = U.readShort(file)
-            data.append(data_in)
-            data_in = U.readShort(file)
-            data.append(data_in)
-            data_in = U.readShort(file)
-            data.append(data_in)
-            data_in = U.readShort(file)
-            count += 16
-        if len(data) < 16:
-            if data[3] == 0 and data[4] == 0x51:  # this is midway between a header
-                file.seek(offset+64, os.SEEK_SET)
-                return GarageEntry.read_additional(file, file.tell(), max_length)
-            if data[3] == 0 and data[4] == 0x52:  # this is midway between a header
-                file.seek(offset+48, os.SEEK_SET)
-                return GarageEntry.read_additional(file, file.tell(), max_length)
-            if data[3] == 0 and data[4] == 0x53:  # this is midway between a header
-                file.seek(offset+32, os.SEEK_SET)
-                return GarageEntry.read_additional(file, file.tell(), max_length)
-        print(data)
-        print(f"Read up to ?palette @ {file.tell()-2}")
-        # Check of the 3/4 byte of the palette, should me FF to be a palette
-        # if not we are probably at bad data, give up
-        check = U.readShort(file)
-        # Check for the start of the next garage entry
-        if data_in == 0x0010 and check == 0x0000:
-            # Now check that there are only 3 offsets
-            offset1 = U.readLong(file)
-            offset2 = U.readLong(file)
-            offset3 = U.readLong(file)
-            print(f"offsets? {[(data_in << 8) | check, offset1, offset2, offset3]}")
-            if offset2 > offset1: # Sanity check
-                if offset3 == 0:        
-                    # Jump back to start of the next (probably) garage file 
-                    file.seek(-16, os.SEEK_CUR)
-                    print(f"Offsets valid")
-                    print(f"No texture, at next file 0x{check:X}")
-                    # give up, as we have not found a palette
-                    return []
-            # This is probably data we want to parse, not a new entry
-            print("Offsets not valid trying as texture")
-            file.seek(-16, os.SEEK_CUR)
-        # Check for the start of a Palette
-        palette = True
-        if (check & 0xFFFF) != 0x10FF:
-            print(f"No palette, check 0x{check:X}")
-            # give up, as we have not found a palette
-            palette = False
-        print(f"Probably palette? {palette}")
-        # Move to palette/start of next section
-        file.seek(-4, os.SEEK_CUR)
-        # Read palette and create image
-        texture = []
-        for v in data:
-            texture.append(v & 0xFF)
-            texture.append((v & 0xFF00) > 8)
-        
-        texture = bytes(texture)
-        # Just make up width/height
-        width = int(len(texture) / 16)
-        height = int(len(texture) / width)
-        if palette:
-            bpp = 8
-            colours, psize = Texture._paletteFromFile(file, file.tell(), fixAlpha=True)
-        else:
-            bpp = 24
-            psize = (0, 0)
-            colours = None
-            
-        textures.append(Texture(texture, colours, (width, height), psize, bpp, fix_alpha=True))
-        print(f"Read texture {texture}")
+        return GarageEntry(meshes, textures), offsets[-1]
 
-        # Check for extra dma tag, which would end the last image/palette data
-        dmaTagCheck = U.readLong(file)
-        file.seek(-4, os.SEEK_CUR)
-        if dmaTagCheck & 0xFF00FFFF == 0x70000002:
-            # Skip past dma tag, ignoring value
-            print("Skipping ending dmatag")
-            file.seek((dmaTagCheck & 0xFFFF) * 16 + 16, os.SEEK_CUR)
-        # Check for more
-        textures += GarageEntry.read_additional(file, file.tell(), max_length)
-        return textures
 
-    @staticmethod
-    def fromFile(file, offset):
-        file.seek(0, os.SEEK_END)
-        maxLength = file.tell()
-        file.seek(offset, os.SEEK_SET)
-        print(offset)
-        offsets = GarageEntry._parse_offsets(file, offset)
-        meshes = []
-        textures = []
-        for oi, o, in enumerate(offsets):
-            if o == 0:
-                break
-            file.seek(offset+o, os.SEEK_SET)
-            if oi == 0:
-                # Car style meshes
-                print(f"Reading garage mesh {file.tell()}")
-                meshes += CarMesh.from_file(file, offset + o, offsets[1])
-            elif oi == 1:
-                # Textures
-                print(f"Reading garage textures {file.tell()}")
-                textures += Texture.all_from_file(file, offset+o)
-            elif oi == 2:
-                # Extra textures?                
-                textures += GarageEntry.read_additional(file, offset + o, maxLength)
 
-        return GarageEntry(meshes, textures)
 
-    
+
