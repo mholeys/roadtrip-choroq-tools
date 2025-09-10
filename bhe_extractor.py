@@ -45,7 +45,7 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
         print("Read all data, now saving......")
 
         current_texture_group = {}
-        index_counts = { "PBL": 0, "MPD": 0, "APT": 0, "TOC": 0 }
+        index_counts = { "PBL": 0, "MPD": 0, "APT": 0, "TOC": 0, "HPD": 0 }
 
         if save_all_textures:
             Path(f"{out_path}/all_textures/").mkdir(parents=True, exist_ok=True)
@@ -74,15 +74,22 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
                     current_texture_group[name] = t
                     if save_all_textures:
                         t.write_texture_to_png(f"{out_path}/all_textures/{name}-{index}-{t.offset}.png")
-                        # t.write_palette_to_png(f"{out_path}/{name}-p.png")
+                        # t.write_palette_to_png(f"{out_path}/all_textures/{name}-p.png")
+                        # t.write_texture_to_png(f"{out_path}/all_textures/{name}-i.png", use_palette=False)
+                        # t.write_palette_to_ms_PAL(f"{out_path}/all_textures/{name}-p.pal")
 
             # Exports all model's and all referenced textures (if found)
             elif sf_type == "PBL":  # Model format
                 # continue
                 out_index = 0
                 name = f"pbl-{index_counts['PBL']}"
+
                 index_counts['PBL'] += 1
                 for pbl in sf:
+                    # If the object only uses one texture, then why not name it as it might help
+                    if len(pbl.texture_names) == 1:
+                        name = f"pbl-{index_counts['PBL']}-{pbl.texture_names[0]}"
+
                     # Create subfolder for each sub pbl
                     Path(f"{out_path}/pbl/{name}").mkdir(parents=True, exist_ok=True)
                     Path(f"{out_path}/pbl/{name}/tex").mkdir(parents=True, exist_ok=True)
@@ -110,7 +117,7 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
                 name = f"mpd-{index_counts['MPD']}"
                 index_counts['MPD'] += 1
                 for mpd in sf:
-                    # Create subfolder for each sub pbl
+                    # Create subfolder for each sub mpd
                     Path(f"{out_path}/mpd/{name}").mkdir(parents=True, exist_ok=True)
                     Path(f"{out_path}/mpd/{name}/tex").mkdir(parents=True, exist_ok=True)
 
@@ -122,6 +129,7 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
                         t = current_texture_group[texture_name]
                         t.write_texture_to_png(f"{out_path}/mpd/{name}/tex/{texture_name}.png")
                         # t.write_palette_to_png(f"{out_path}/pbl/{name}/tex/{texture_name}-p.png")
+                        # t.write_palette_to_png(f"{out_path}/pbl/{name}/tex/{texture_name}-i.png")
 
                     for out_format in output_formats:
                         out = f"{out_path}/mpd/{name}/{name}-{out_index}.{out_format}"
@@ -132,7 +140,32 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
                     with open(material_path, "w") as fout:
                         mpd.save_material_file_obj(fout, texture_path)
                     out_index += 1
+            elif sf_type == "HPD":  # Model format?
+                out_index = 0
+                name = f"hpd-{index_counts['HPD']}"
+                index_counts['HPD'] += 1
+                hpd = sf
+                # Create subfolder for each sub hpd
+                Path(f"{out_path}/hpd/{name}").mkdir(parents=True, exist_ok=True)
+                Path(f"{out_path}/hpd/{name}/tex").mkdir(parents=True, exist_ok=True)
 
+                # # Write all required textures
+                # for texture_name in mpd.texture_names:
+                #     if texture_name not in current_texture_group:
+                #         print(f"Missing texture in current APT list, please let developer know, CPK file name and [{texture_name}]")
+                #         continue
+                #     t = current_texture_group[texture_name]
+                #     t.write_texture_to_png(f"{out_path}/mpd/{name}/tex/{texture_name}.png")
+                #     # t.write_palette_to_png(f"{out_path}/pbl/{name}/tex/{texture_name}-p.png")
+
+                for out_format in output_formats:
+                    out = f"{out_path}/hpd/{name}/{name}-{out_index}.{out_format}"
+                    with open(out, "w") as fout:
+                        hpd.write_mesh_to_type(out_format, fout)
+                # material_path = f"{out_path}/hpd/{name}/{name}-{out_index}.mtl"
+                # texture_path = f"tex"
+                # with open(material_path, "w") as fout:
+                #     mpd.save_material_file_obj(fout, texture_path)
             # TOC, only text data is understood
             elif sf_type == b'TOC\x00':  # Toc format
                 # Check folder exist/make them

@@ -128,7 +128,7 @@ class Toc0318:
             if flag == 0:
                 continue
             # The flag must mean something, but for now ifs...
-            text_after_4_flags = [0x39]
+            text_after_4_flags = [0x39, 0x57]
             text_flags = [0x32, 0x3F] + text_after_4_flags
             flags_4len = [0x2E, 0x03, 0x0F, 0x54, 0x56, 0xBB, 0x55, 0xF2, 0x75, 0x41, 0x15, 0x8D, 0x5B, 0x7C, 0x58,
                           0xF5, 0xF8, 0xF6, 0x1A]
@@ -186,10 +186,14 @@ class Toc0318:
                     file.seek(required, os.SEEK_CUR)
                 pp = file.tell()
                 end_part = U.readLong(file)
+                if flag == 0x57:
+                    U.readLong(file)
+                    end_part = U.readLong(file)
                 if end_part == 0:
                     if Toc0318.PRINT_DEBUG:
                         print(f"Possible wrong end of part message @ {file.tell() - 4} [{end_part}]")
                     end_part = U.readLong(file)
+
                 if end_part != 0x80000000:
                     if Toc0318.PRINT_DEBUG:
                         print(f"Wrong end of part message @ {file.tell() - 4} [{end_part}]")

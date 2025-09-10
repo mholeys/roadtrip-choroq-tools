@@ -561,6 +561,7 @@ def process_file(entry, folder_out, output_formats, version, is_car=False):
             texture_path = f"{basename}.png"
 
             mesh_section_names = ["body", "lights", "brake-light", "lp-body", "lp-lights", "spoiler", "spoiler2", "jets", "sticker"]
+            mesh_section_names_10 = ["body", "lights", "brake-light", "lp-body", "lp-lights", "spoiler", "spoiler-brake", "spoiler2", "jets", "sticker"]
             # this varies by car currently (HG3) so it is not implemented
             mesh_section_names_hg3 = ["body", "brake-light", "lights", "lights2", "lp-body", "lp-lights", "lp-lights-2",
                                       "7", "spoiler", "9", "10", "11"]
@@ -576,6 +577,8 @@ def process_file(entry, folder_out, output_formats, version, is_car=False):
                         extension = "obj"
                     if is_car and len(car.meshes) == 9:
                         mesh_path = f"{mesh_section_names[i]}.{extension}"
+                    elif is_car and len(car.meshes) == 10:
+                        mesh_path = f"{mesh_section_names_10[i]}.{extension}"
                     else:
                         mesh_path = f"{i}.{extension}"
                     with open(f"{out_folder}/{basename}-{mesh_path}", "w") as fout:

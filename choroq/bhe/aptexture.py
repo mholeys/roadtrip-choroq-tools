@@ -81,14 +81,44 @@ class APTexture:
                 image = Image.frombytes('L', (self.width, self.height), self.data, 'raw')
         if APTexture.PRINT_DEBUG:
             print("Doing conversion")
-        rgbd = image.convert("RGBA")
-        if flip_x:
-            rgbd = ImageOps.mirror(rgbd)
-        if flip_y:
-            rgbd = ImageOps.flip(rgbd)
-        rgbd.save(path, "PNG")
+        if use_palette:
+            rgbd = image.convert("RGBA")
+            if flip_x:
+                rgbd = ImageOps.mirror(rgbd)
+            if flip_y:
+                rgbd = ImageOps.flip(rgbd)
+            rgbd.save(path, "PNG")
+        else:
+            if flip_x:
+                image = ImageOps.mirror(image)
+            if flip_y:
+                image = ImageOps.flip(image)
+            image.save(path, "PNG")
         if APTexture.PRINT_DEBUG:
             print("Saved")
+
+    def write_palette_to_ms_PAL(self, path):
+        if self.palette == [] or self.palette is None:
+            return
+
+        with open(path, "wb") as fout:
+            # Write PAL header
+            fout.write("RIFF".encode("ascii"))
+            expected_file_size = 24 + len(self.palette) * 4
+            fout.write((expected_file_size - 8).to_bytes(4, 'little'))
+            fout.write("PAL data".encode("ascii"))
+            fout.write((expected_file_size - 20).to_bytes(4, 'little'))
+            fout.write((0).to_bytes(1, 'little'))
+            fout.write((3).to_bytes(1, 'little'))
+            fout.write(len(self.palette).to_bytes(2, 'little'))
+            for r, g, b, a in self.palette:
+                fout.write(r.to_bytes(1, 'little'))
+                fout.write(g.to_bytes(1, 'little'))
+                fout.write(b.to_bytes(1, 'little'))
+                # fout.write(a.to_bytes(1, 'little'))
+                fout.write(b'\x00')
+
+
 
     def write_palette_to_png(self, path):
         if self.palette == [] or self.palette is None:
@@ -228,10 +258,13 @@ class APTexture:
                 elif colour_format == 24:
                     val = U.readByte(file)
                     texture_data.append(val)
+                elif colour_format == 32:
+                    val = U.readByte(file)
+                    texture_data.append(val)
                 else:
                     print(f"new colour format found @ {file.tell()} value is: {colour_format}")
-                    # if APTexture.STOP_ON_NEW:
-                    exit()
+                    if APTexture.STOP_ON_NEW:
+                        exit()
                     return
 
             # Might need some checks, to test if we were past max_length

@@ -20,6 +20,7 @@ class BHEMesh(AMesh):
     # Texture coordinates and Faces
     @abstractmethod
     def write_mesh_to_obj(self, fout, start_index=0, material=None, with_colours=False):
+        # See below
         pass
 
     # Custom file format for use in importing into unity
@@ -78,13 +79,14 @@ class BHEMesh(AMesh):
         face_count += BHEMesh.write_obj_faces(fout, other_faces)
 
         for tex_ref in faces:
-            if tex_ref > len(self.texture_names) or tex_ref < 0:
-                print("Bad texture reference got through!!")
-                continue
-            texture_name = self.texture_names[tex_ref]
+            if tex_ref >= len(self.texture_names) or tex_ref < 0:
+                if len(self.texture_names) > 0:
+                    print("Bad texture reference got through!!")
 
             fout.write(f"g {tex_ref + 1}\n")
-            fout.write(f"usemtl {texture_name}\n")
+            if 0 <= tex_ref < len(self.texture_names):
+                texture_name = self.texture_names[tex_ref]
+                fout.write(f"usemtl {texture_name}\n")
             face_count += BHEMesh.write_obj_faces(fout, faces[tex_ref])
 
         return self.vert_count
@@ -92,8 +94,9 @@ class BHEMesh(AMesh):
     def save_material_file_obj(self, fout, texture_path):
         faces, other_faces = self.faces
         for tex_ref in faces:
-            if tex_ref > len(self.texture_names) or tex_ref < 0:
-                print("Bad texture reference got through!!")
+            if tex_ref >= len(self.texture_names) or tex_ref < 0:
+                if len(self.texture_names) > 0:
+                    print("Bad texture reference got through!!")
                 continue
             texture_name = self.texture_names[tex_ref]
             fout.write(f"newmtl {texture_name}\n")
@@ -153,6 +156,9 @@ class BHEMesh(AMesh):
         faces = {}
         other_faces = []
 
+        if face_group_count > 70000:
+            print(f"Reading loads of face groups {face_group_count} {file.tell()}")
+
         for i in range(face_group_count):
             val1_known = [0x1C, 0x0C, 0x1D, 0x4, 0x5C, 0x5B, 0x1B, 0x0B]
             value1 = U.BreadShort(file)  # 1C
@@ -163,33 +169,12 @@ class BHEMesh(AMesh):
 
             file.seek(4, os.SEEK_CUR)
             strip_count = U.readLong(file)
+            if strip_count > 70000:
+                print(f"Reading loads of strips {strip_count}")
             tri_strips = []
 
             for f in range(strip_count):
-                fv, fvn, fvt, fvc = -2, -2, -2, 0
-                fv = U.readShort(file)  # Vert index
-                fvn = U.readShort(file)  # Normal index
-                fvt = U.readShort(file)  # UV index
-                fvc = U.readShort(file)  # Colour index
-
-                # Correct parts that are missing to be skipped e.g f1//f3 vs f1/f2/f3, total guess
-                if face_filler == 1:
-                    if BHEMesh.PRINT_DEBUG:
-                        print(f"found face filler value of 1: @ {file.tell()}")
-                    fv = 0xFFFF
-                if face_filler == 2:
-                    if BHEMesh.PRINT_DEBUG:
-                        print(f"found face filler value of 2: @ {file.tell()}")
-                    fvn = 0xFFFF
-                if face_filler == 3:
-                    if BHEMesh.PRINT_DEBUG:
-                        print(f"found face filler value of 3: @ {file.tell()}")
-                    fvt = 0xFFFF
-                if face_filler == 4:
-                    if BHEMesh.PRINT_DEBUG:
-                        print(f"found face filler value of 4: @ {file.tell()}")
-                    vc = 0xFFFF
-                pp = file.tell()  # Debugging
+                fv, fvn, fvt, fvc = BHEMesh.read_face(file, face_filler)
                 tri_strips.append((fv, fvn, fvt, fvc))
 
             # Convert tri_strips to normal face list
@@ -197,6 +182,8 @@ class BHEMesh(AMesh):
             face_list = []
             for fi in face_indices:
                 face_list.append((tri_strips[fi[0]], tri_strips[fi[1]], tri_strips[fi[2]], 0))
+            if texture_index == 0xFFFF:
+                texture_index = 0
             if texture_index > len(texture_names):
                 other_faces += face_list
             else:
@@ -205,4 +192,34 @@ class BHEMesh(AMesh):
                 faces[texture_index] += face_list
 
         return faces, other_faces
+
+    @staticmethod
+    def read_face(file, face_filler):
+        fv, fvn, fvt, fvc = -2, -2, -2, 0
+        fv = U.readShort(file)  # Vert index
+        fvn = U.readShort(file)  # Normal index
+        fvt = U.readShort(file)  # UV index
+        fvc = U.readShort(file)  # Colour index
+
+        # Correct parts that are missing to be skipped e.g f1//f3 vs f1/f2/f3, total guess
+        if face_filler == 1:
+            if BHEMesh.PRINT_DEBUG:
+                print(f"found face filler value of 1: @ {file.tell()}")
+            fv = 0xFFFF
+        if face_filler == 2:
+            if BHEMesh.PRINT_DEBUG:
+                print(f"found face filler value of 2: @ {file.tell()}")
+            fvn = 0xFFFF
+        if face_filler == 3:
+            if BHEMesh.PRINT_DEBUG:
+                print(f"found face filler value of 3: @ {file.tell()}")
+            fvt = 0xFFFF
+        if face_filler == 4:
+            if BHEMesh.PRINT_DEBUG:
+                print(f"found face filler value of 4: @ {file.tell()}")
+            vc = 0xFFFF
+
+        pp = file.tell()  # Debugging
+
+        return fv, fvn, fvt, fvc
 

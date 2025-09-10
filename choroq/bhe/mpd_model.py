@@ -89,6 +89,11 @@ class MPDModel(BHEMesh):
                 texture_names.append(name)
                 last_name = texture_names[0]
 
+            for i in range(sizes[6]):
+                # Unknown data
+                U.readXYZW(file)
+                U.readXYZW(file)
+
             if MPDModel.PRINT_DEBUG:
                 print(f"Vert section start: {file.tell()}")
             # Data starts

@@ -36,8 +36,8 @@ class PBLModel(BHEMesh):
             subfile_offsets.append(offset + U.readLong(file))
 
         last_name = "unset"
-        texture_names = []
         for o in subfile_offsets:
+            texture_names = []
             file.seek(o, os.SEEK_SET)
             if PBLModel.PRINT_DEBUG:
                 print(f"Reading PBL section from {file.tell()}")

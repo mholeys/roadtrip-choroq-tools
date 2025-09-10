@@ -3,6 +3,7 @@ from pathlib import Path
 
 import choroq.read_utils as U
 from choroq.bhe.aptexture import APTexture
+from choroq.bhe.hpd_model import HPDModel
 from choroq.bhe.mpd_model import MPDModel
 from choroq.bhe.pbl_model import PBLModel
 from choroq.bhe.toc_0318 import Toc0318
@@ -56,6 +57,11 @@ class CPK:
             mpd_data = MPDModel.read_mpd(read_from, position)
             self.subfiles[i] = ("MPD", mpd_data)
             pass
+        elif self.subfile_types[i] == b'HPD\x00':
+            # Model format?
+            hpd_data = HPDModel.read_hpd(read_from, position)
+            self.subfiles[i] = ("HPD", hpd_data)
+            pass
         elif self.subfile_types[i] == b'APT\x00':
             # Texture file
             apt_data = APTexture.read_apt(read_from, position)
@@ -102,11 +108,23 @@ class CPK:
 
         entry_count = U.readLong(file)
         print(f"CPK has {entry_count} entries")
-        entry_positions = []
-        for i in range(entry_count):
-            entry_positions.append(U.readShort(file) * 2048)
+        entry_positions = [U.readShort(file) * 2048]  # Seed for checks
+        seen_large = False
+        has_larger = False
+        for i in range(entry_count-1):
+            next_entry_position = U.readShort(file)
+            if (next_entry_position * 2048) < entry_positions[-1] and seen_large:
+                # This means we have looped over
+                # I think this means + 65536 sectors
+                next_entry_position += 65536
+                has_larger = True
+            if next_entry_position > 65000:
+                seen_large = True
+            entry_positions.append(next_entry_position * 2048)
 
         past_eof = U.readShort(file)  # Not sure why, but the last one is after the end of the file?
+        if has_larger:
+            past_eof += 65536
 
         # Remove duplicates, and bad offsets
         entry_positions_2 = []
@@ -130,7 +148,7 @@ class CPK:
                 name = file_magic.decode('ascii').rstrip("\x00")
                 print(f"{name} @ {pos}")
             except:
-                print(f"Possible bad position @ {pos} {file_magic}")
+                #print(f"Possible bad position @ {pos} {file_magic}")
                 # exit()
                 pass
 
