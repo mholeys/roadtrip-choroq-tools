@@ -87,15 +87,16 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
                 index_counts['PBL'] += 1
                 for pbl in sf:
                     # If the object only uses one texture, then why not name it as it might help
-                    if len(pbl.texture_names) == 1:
-                        name = f"pbl-{index_counts['PBL']}-{pbl.texture_names[0]}"
+                    if len(pbl.texture_references) == 1:
+                        name = f"pbl-{index_counts['PBL']}-{pbl.texture_references[0][0]}"
 
                     # Create subfolder for each sub pbl
                     Path(f"{out_path}/pbl/{name}").mkdir(parents=True, exist_ok=True)
                     Path(f"{out_path}/pbl/{name}/tex").mkdir(parents=True, exist_ok=True)
 
                     # Write all required textures
-                    for texture_name in pbl.texture_names:
+                    for texture_reference in pbl.texture_references:
+                        texture_name, (t_width, t_height, t_format, t_unknown) = texture_reference
                         if texture_name not in current_texture_group:
                             print(f"Missing texture in current APT list (Ignore if BODY.CPK), please let developer know, CPK file name and [sf-{index}, PBL, {texture_name}]")
                             continue
@@ -122,7 +123,8 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
                     Path(f"{out_path}/mpd/{name}/tex").mkdir(parents=True, exist_ok=True)
 
                     # Write all required textures
-                    for texture_name in mpd.texture_names:
+                    for texture_reference in mpd.texture_references:
+                        texture_name, (t_width, t_height, t_format, t_unknown) = texture_reference
                         if texture_name not in current_texture_group:
                             print(f"Missing texture in current APT list, please let developer know, CPK file name and [{texture_name}]")
                             continue
@@ -150,7 +152,7 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
                 Path(f"{out_path}/hpd/{name}/tex").mkdir(parents=True, exist_ok=True)
 
                 # # Write all required textures
-                # for texture_name in mpd.texture_names:
+                # for texture_name in mpd.texture_references:
                 #     if texture_name not in current_texture_group:
                 #         print(f"Missing texture in current APT list, please let developer know, CPK file name and [{texture_name}]")
                 #         continue

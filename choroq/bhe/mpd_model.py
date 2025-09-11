@@ -3,13 +3,14 @@ import choroq.read_utils as U
 from choroq.bhe.bhe_mesh import BHEMesh
 
 
+# Mesh Polygon Data
 class MPDModel(BHEMesh):
     STOP_ON_NEW = False
     PRINT_DEBUG = False
 
-    def __init__(self, texture_names, vert_count, vertices, normal_count, normals, uv_count, uvs, faces):
+    def __init__(self, texture_references, vert_count, vertices, normal_count, normals, uv_count, uvs, faces):
         super().__init__()
-        self.texture_names = texture_names
+        self.texture_references = texture_references
         self.vert_count = vert_count
         self.vertices = vertices
         self.normal_count = normal_count
@@ -58,17 +59,17 @@ class MPDModel(BHEMesh):
                 sizes.append(U.readLong(file))
 
             name = f"{last_name}-{o}"
-            texture_names = []
+            texture_references = []
             for i in range(sizes[0]):
                 if MPDModel.PRINT_DEBUG:
                     print(f"Header name next: {file.tell()}")
-                # Might be texture size referencing?
-                t_size0 = U.readShort(file)
-                t_size1 = U.readShort(file)
-                t_size2 = U.readLong(file)
-                file.seek(8, os.SEEK_CUR)
-                # Name of texture maybe?
-                name = file.read(16)  # \0 terminated string, max 16 bytes
+                t_width = U.readShort(file)
+                t_height = U.readShort(file)
+                t_format = U.readShort(file)
+                t_unknown = U.readShort(file)
+                U.BreadLong(file)
+                U.BreadLong(file)
+                name = file.read(16)
                 try:
                     first_0 = name.index(0)
                     name = name[0:first_0].decode("ascii").rstrip('\00')
@@ -85,9 +86,8 @@ class MPDModel(BHEMesh):
                         print("Cannot parse name, other error occurred")
                         raise e2
 
-                texture_names.append(name)
-                texture_names.append(name)
-                last_name = texture_names[0]
+                texture_references.append((name, (t_width, t_height, t_format, t_unknown)))
+                last_name = texture_references[0][0]
 
             for i in range(sizes[6]):
                 # Unknown data
@@ -123,9 +123,9 @@ class MPDModel(BHEMesh):
             for i in range(sizes[4]):
                 U.BreadLong(file)
 
-            faces, other_faces = MPDModel.read_faces(file, texture_names)
+            faces, other_faces = MPDModel.read_faces(file, texture_references)
 
-            mpds.append(MPDModel(texture_names, sizes[1], verts, sizes[2], normals, sizes[3], uvs, [faces, other_faces]))
+            mpds.append(MPDModel(texture_references, sizes[1], verts, sizes[2], normals, sizes[3], uvs, [faces, other_faces]))
 
         return mpds
 

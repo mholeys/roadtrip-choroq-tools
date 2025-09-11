@@ -8,11 +8,12 @@ class BHEMesh(AMesh):
     PRINT_DEBUG = False
 
     def __init__(self):
-        self.texture_names = []
+        self.texture_references = []
         self.faces = []
         self.uvs = []
         self.normals = []
         self.vertices = []
+        self.colours = []
         self.vert_count = 0
 
     # Creates OBJ file, of the meshes
@@ -79,13 +80,13 @@ class BHEMesh(AMesh):
         face_count += BHEMesh.write_obj_faces(fout, other_faces)
 
         for tex_ref in faces:
-            if tex_ref >= len(self.texture_names) or tex_ref < 0:
-                if len(self.texture_names) > 0:
+            if tex_ref >= len(self.texture_references) or tex_ref < 0:
+                if len(self.texture_references) > 0:
                     print("Bad texture reference got through!!")
 
             fout.write(f"g {tex_ref + 1}\n")
-            if 0 <= tex_ref < len(self.texture_names):
-                texture_name = self.texture_names[tex_ref]
+            if 0 <= tex_ref < len(self.texture_references):
+                texture_name = self.texture_references[tex_ref][0]
                 fout.write(f"usemtl {texture_name}\n")
             face_count += BHEMesh.write_obj_faces(fout, faces[tex_ref])
 
@@ -94,11 +95,11 @@ class BHEMesh(AMesh):
     def save_material_file_obj(self, fout, texture_path):
         faces, other_faces = self.faces
         for tex_ref in faces:
-            if tex_ref >= len(self.texture_names) or tex_ref < 0:
-                if len(self.texture_names) > 0:
+            if tex_ref >= len(self.texture_references) or tex_ref < 0:
+                if len(self.texture_references) > 0:
                     print("Bad texture reference got through!!")
                 continue
-            texture_name = self.texture_names[tex_ref]
+            texture_name = self.texture_references[tex_ref][0]
             fout.write(f"newmtl {texture_name}\n")
             fout.write("Ka 1.000 1.000 1.000\n")  # ambient colour
             fout.write("Kd 1.000 1.000 1.000\n")  # diffused colour
@@ -148,7 +149,7 @@ class BHEMesh(AMesh):
         return face_count
 
     @staticmethod
-    def read_faces(file, texture_names):
+    def read_faces(file, texture_references):
         if BHEMesh.PRINT_DEBUG:
             print(f"Faces section start: {file.tell()}")
         # Read faces
@@ -185,7 +186,7 @@ class BHEMesh(AMesh):
                 face_list.append((tri_strips[fi[0]], tri_strips[fi[1]], tri_strips[fi[2]], 0))
             if texture_index == 0xFFFF:
                 texture_index = 0
-            if texture_index > len(texture_names):
+            if texture_index > len(texture_references):
                 other_faces += face_list
             else:
                 if texture_index not in faces:

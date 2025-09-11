@@ -4,13 +4,14 @@ from choroq.amesh import AMesh
 from choroq.bhe.bhe_mesh import BHEMesh
 
 
+# Hit Polygon Data
 class HPDModel(BHEMesh):
     STOP_ON_NEW = False
     PRINT_DEBUG = False
 
-    def __init__(self, texture_names, vert_count, vertices, normal_count, normals, uv_count, uvs, faces):
+    def __init__(self, texture_references, vert_count, vertices, normal_count, normals, uv_count, uvs, faces):
         super().__init__()
-        self.texture_names = texture_names
+        self.texture_references = texture_references
         self.vert_count = vert_count
         self.vertices = vertices
         self.normal_count = normal_count

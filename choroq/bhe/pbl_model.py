@@ -8,9 +8,9 @@ class PBLModel(BHEMesh):
     STOP_ON_NEW = False
     PRINT_DEBUG = False
 
-    def __init__(self, texture_names, first_section, vert_count, vertices, normal_count, normals, uv_count, uvs, colour_count, colours, faces):
+    def __init__(self, texture_references, first_section, vert_count, vertices, normal_count, normals, uv_count, uvs, colour_count, colours, faces):
         super().__init__()
-        self.texture_names = texture_names
+        self.texture_references = texture_references
         self.first_section = first_section
         self.vert_count = vert_count
         self.vertices = vertices
@@ -40,7 +40,7 @@ class PBLModel(BHEMesh):
 
         last_name = "unset"
         for o in subfile_offsets:
-            texture_names = []
+            texture_references = []
             file.seek(o, os.SEEK_SET)
             if PBLModel.PRINT_DEBUG:
                 print(f"Reading PBL section from {file.tell()}")
@@ -53,10 +53,12 @@ class PBLModel(BHEMesh):
                 if PBLModel.PRINT_DEBUG:
                     print(f"Header name next: {file.tell()}")
                 # Unsure on value usage, might be name/texture related
-                U.readShort(file)
-                U.readShort(file)
-                U.readShort(file)
-                file.seek(10, os.SEEK_CUR)
+                t_width = U.readShort(file)
+                t_height = U.readShort(file)
+                t_format = U.readShort(file)
+                t_unknown = U.readShort(file)
+                U.BreadLong(file)
+                U.BreadLong(file)
                 name = file.read(16)   # \0 terminated string, max 16 bytes
                 try:
                     first_0 = name.index(0)
@@ -74,7 +76,7 @@ class PBLModel(BHEMesh):
                         print("Cannot parse name, other error occurred")
                         raise e2
 
-                texture_names.append(name)
+                texture_references.append((name, (t_width, t_height, t_format, t_unknown)))
 
             # Unknown section, might be position/colour its floats * 8
             if PBLModel.PRINT_DEBUG:
@@ -114,9 +116,9 @@ class PBLModel(BHEMesh):
             for i in range(sizes[4]):
                 colours.append(U.readLong(file))
 
-            faces, other_faces = BHEMesh.read_faces(file, texture_names)
+            faces, other_faces = BHEMesh.read_faces(file, texture_references)
 
-            pbls.append(PBLModel(texture_names, floats_first_section, sizes[1], verts, sizes[2], normals, sizes[3], uvs, sizes[4], colours, [faces, other_faces]))
+            pbls.append(PBLModel(texture_references, floats_first_section, sizes[1], verts, sizes[2], normals, sizes[3], uvs, sizes[4], colours, [faces, other_faces]))
 
         return pbls
 
