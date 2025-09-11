@@ -143,6 +143,7 @@ class BHEMesh(AMesh):
                 fuv3 = ""
 
             fout.write(f"f {fv1}/{fuv1}/{fn1} {fv2}/{fuv2}/{fn2} {fv3}/{fuv3}/{fn3} \n")
+            # fout.write(f"f {fv1} {fv2} {fv3} \n")
             face_count += 1
         return face_count
 

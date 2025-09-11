@@ -184,11 +184,11 @@ class APTexture:
 
             if APTexture.PRINT_DEBUG:
                 print(f"Texture header: {texture_name}, {val_a}, {val_b}, {size}, {zeros:x}")
-            if zeros != 0:
-                if APTexture.PRINT_DEBUG:
-                    print("Found non zero value in texture table data")
-                if APTexture.STOP_ON_NEW:
-                    exit()
+            #if zeros != 0:
+            #    if APTexture.PRINT_DEBUG:
+            #        print("Found non zero value in texture table data")
+            #    if APTexture.STOP_ON_NEW:
+            #        exit()
             textures.append(APTexture(texture_name, val_a, val_b, size, texture_offset))
 
         # After the header table, the texture data starts

@@ -45,7 +45,7 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
         print("Read all data, now saving......")
 
         current_texture_group = {}
-        index_counts = { "PBL": 0, "MPD": 0, "APT": 0, "TOC": 0, "HPD": 0 }
+        index_counts = { "PBL": 0, "MPD": 0, "APT": 0, "TOC": 0, "HPD": 0, "MPC": 0 }
 
         if save_all_textures:
             Path(f"{out_path}/all_textures/").mkdir(parents=True, exist_ok=True)
@@ -215,6 +215,41 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
                             total_writer.writerow(row)
             elif sf_type == "FONT":  # Font data
                 sf.save_font_data(f"{out_path}/font{index}/", str(index))
+            elif sf_type == "MPC":  # Model format
+                # Exports all model's and all referenced textures (if found)
+                # continue
+                out_index = 0
+                name = f"mpc-{index_counts['MPC']}"
+
+                index_counts['MPC'] += 1
+                for mpc in sf:
+                    # If the object only uses one texture, then why not name it as it might help
+                    name = mpc.name
+
+                    # Create subfolder for each sub mpc
+                    Path(f"{out_path}/mpc/{name}").mkdir(parents=True, exist_ok=True)
+                    Path(f"{out_path}/mpc/{name}/tex").mkdir(parents=True, exist_ok=True)
+
+                    # Write all required textures
+                    for texture_reference in mpc.texture_references:
+                        texture_name, (t_width, t_height, t_format, t_unknown) = texture_reference
+                        if texture_name not in current_texture_group:
+                            print(
+                                f"Missing texture in current APT list (Ignore if BODY.CPK), please let developer know, CPK file name and [sf-{index}, MPC, {texture_name}]")
+                            continue
+                        t = current_texture_group[texture_name]
+                        t.write_texture_to_png(f"{out_path}/mpc/{name}/tex/{texture_name}.png")
+                        # t.write_palette_to_png(f"{out_path}/mpc/{name}/tex/{texture_name}-p.png")
+
+                    for out_format in output_formats:
+                        out = f"{out_path}/mpc/{name}/{name}-{out_index}.{out_format}"
+                        with open(out, "w") as fout:
+                            mpc.write_mesh_to_type(out_format, fout)
+                    material_path = f"{out_path}/mpc/{name}/{name}-{out_index}.mtl"
+                    texture_path = f"tex"
+                    with open(material_path, "w") as fout:
+                        mpc.save_material_file_obj(fout, texture_path)
+                    out_index += 1
 
         if b'\x03\x18\x00\x00' in cpk.subfile_types or b'TOC\x00' in cpk.subfile_types:
             total_file.close()

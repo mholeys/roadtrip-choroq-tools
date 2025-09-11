@@ -3,11 +3,12 @@ import choroq.read_utils as U
 from choroq.bhe.bhe_mesh import BHEMesh
 
 
+
 class PBLModel(BHEMesh):
     STOP_ON_NEW = False
     PRINT_DEBUG = False
 
-    def __init__(self, texture_names, first_section, vert_count, vertices, normal_count, normals, uv_count, uvs, faces):
+    def __init__(self, texture_names, first_section, vert_count, vertices, normal_count, normals, uv_count, uvs, colour_count, colours, faces):
         super().__init__()
         self.texture_names = texture_names
         self.first_section = first_section
@@ -17,6 +18,8 @@ class PBLModel(BHEMesh):
         self.normals = normals
         self.uv_count = uv_count
         self.uvs = uvs
+        self.colour_count = colour_count
+        self.colours = colours
         self.faces = faces
 
     @staticmethod
@@ -107,12 +110,13 @@ class PBLModel(BHEMesh):
             if PBLModel.PRINT_DEBUG:
                 print(f"Vertex colour section start: {file.tell()}")
             # Vertex Colours
+            colours = []
             for i in range(sizes[4]):
-                U.BreadLong(file)
+                colours.append(U.readLong(file))
 
             faces, other_faces = BHEMesh.read_faces(file, texture_names)
 
-            pbls.append(PBLModel(texture_names, floats_first_section, sizes[1], verts, sizes[2], normals, sizes[3], uvs, [faces, other_faces]))
+            pbls.append(PBLModel(texture_names, floats_first_section, sizes[1], verts, sizes[2], normals, sizes[3], uvs, sizes[4], colours, [faces, other_faces]))
 
         return pbls
 
