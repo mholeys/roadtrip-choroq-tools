@@ -21,6 +21,11 @@ class PBLModel(BHEMesh):
         self.colour_count = colour_count
         self.colours = colours
         self.faces = faces
+        # Max value of face indices, maximum index for vertex
+        self.max_vert = len(vertices)
+        self.max_normal = len(normals)
+        self.max_uv = len(uvs)
+        self.max_colour = len(colours)
 
     @staticmethod
     def read_pbl(file, offset):
@@ -100,7 +105,8 @@ class PBLModel(BHEMesh):
             # Normals
             normals = []
             for i in range(sizes[2]):
-                normals.append(U.readXYZW(file))
+                nx, ny, nz, nw = U.readXYZW(file)
+                normals.append((nx, -ny, nz, nw))
 
             if PBLModel.PRINT_DEBUG:
                 print(f"UVs section start: {file.tell()}")

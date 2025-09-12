@@ -15,6 +15,10 @@ class BHEMesh(AMesh):
         self.vertices = []
         self.colours = []
         self.vert_count = 0
+        self.max_vert = 65536
+        self.max_normal = 65536
+        self.max_uv = 65536
+        self.max_colour = 65536
 
     # Creates OBJ file, of the meshes
     # The format includes Vertices, Vertex Normals,
@@ -77,7 +81,7 @@ class BHEMesh(AMesh):
 
         faces, other_faces = self.faces
         fout.write("g 0\n")
-        face_count += BHEMesh.write_obj_faces(fout, other_faces)
+        face_count += BHEMesh.write_obj_faces(fout, other_faces, self.max_vert, self.max_normal, self.max_uv, self.max_colour)
 
         for tex_ref in faces:
             if tex_ref >= len(self.texture_references) or tex_ref < 0:
@@ -88,7 +92,7 @@ class BHEMesh(AMesh):
             if 0 <= tex_ref < len(self.texture_references):
                 texture_name = self.texture_references[tex_ref][0]
                 fout.write(f"usemtl {texture_name}\n")
-            face_count += BHEMesh.write_obj_faces(fout, faces[tex_ref])
+            face_count += BHEMesh.write_obj_faces(fout, faces[tex_ref], self.max_vert, self.max_normal, self.max_uv, self.max_colour)
 
         return self.vert_count
 
@@ -112,7 +116,7 @@ class BHEMesh(AMesh):
             fout.write("\n")
 
     @staticmethod
-    def write_obj_faces(fout, faces):
+    def write_obj_faces(fout, faces, max_vert=65536, max_normal=65536, max_uv=65536, max_colour=65536):
         face_count = 0
         for fv, fvn, fvt, fvc in faces:
             fv1 = fv[0] + 1
@@ -124,24 +128,24 @@ class BHEMesh(AMesh):
             fuv1 = fv[2] + 1
             fuv2 = fvn[2] + 1
             fuv3 = fvt[2] + 1
-            # if fv1 == 65536:
-            #     fv1 = ""
-            # if fv2 == 65536:
-            #     fv2 = ""
-            # if fv3 == 65536:
-            #     fv3 = ""
-            # if fn1 == 65536:
-            #     fn1 = ""
-            # if fn2 == 65536:
-            #     fn2 = ""
-            # if fn3 == 65536:
-            #     fn3 = ""
-            # if fuv1 == 65536:
-            #     fuv1 = ""
-            # if fuv2 == 65536:
-            #     fuv2 = ""
-            # if fuv3 == 65536:
-            #     fuv3 = ""
+            if fv1 > max_vert:
+                fv1 = ""
+            if fv2 > max_vert:
+                fv2 = ""
+            if fv3 > max_vert:
+                fv3 = ""
+            if fn1 > max_normal:
+                fn1 = ""
+            if fn2 > max_normal:
+                fn2 = ""
+            if fn3 > max_normal:
+                fn3 = ""
+            if fuv1 > max_uv:
+                fuv1 = ""
+            if fuv2 > max_uv:
+                fuv2 = ""
+            if fuv3 > max_uv:
+                fuv3 = ""
 
             fout.write(f"f {fv1}/{fuv1}/{fn1} {fv2}/{fuv2}/{fn2} {fv3}/{fuv3}/{fn3} \n")
             # fout.write(f"f {fv1} {fv2} {fv3} \n")
@@ -180,7 +184,7 @@ class BHEMesh(AMesh):
                 tri_strips.append((fv, fvn, fvt, fvc))
 
             # Convert tri_strips to normal face list
-            face_indices = AMesh.create_face_list(strip_count, vert_count_offset=-1)
+            face_indices = AMesh.create_face_list(strip_count, vert_count_offset=-1, start_direction=1)
             face_list = []
             for fi in face_indices:
                 face_list.append((tri_strips[fi[0]], tri_strips[fi[1]], tri_strips[fi[2]], 0))
@@ -203,7 +207,7 @@ class BHEMesh(AMesh):
         fvt = U.readShort(file)  # UV index
         fvc = U.readShort(file)  # Colour index
 
-        # Correct parts that are missing to be skipped e.g f1//f3 vs f1/f2/f3, total guess
+        # Correct parts that are missing to be skipped e.g f1//f3 vs f1/f2/f3. This is a total guess
         if face_filler == 1:
             if BHEMesh.PRINT_DEBUG:
                 print(f"found face filler value of 1: @ {file.tell()}")

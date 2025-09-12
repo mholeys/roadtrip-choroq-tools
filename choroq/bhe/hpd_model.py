@@ -19,6 +19,11 @@ class HPDModel(BHEMesh):
         self.uv_count = uv_count
         self.uvs = uvs
         self.faces = faces
+        # Max value of face indices, maximum index for vertex
+        self.max_vert = len(vertices)
+        self.max_normal = len(normals)
+        self.max_uv = len(uvs)
+        self.max_colour = 0
 
     @staticmethod
     def read_hpd(file, offset):
@@ -68,7 +73,7 @@ class HPDModel(BHEMesh):
             tri_strips.append((fv, fvn, fvt, fvc))
 
         # Convert tri_strips to normal face list
-        face_indices = AMesh.create_face_list(face_count, vert_count_offset=-1)
+        face_indices = AMesh.create_face_list(face_count, vert_count_offset=-1, start_direction=1)
         face_list = []
         for fi in face_indices:
             face_list.append((tri_strips[fi[0]], tri_strips[fi[1]], tri_strips[fi[2]], 0))
@@ -101,7 +106,8 @@ class HPDModel(BHEMesh):
         print(f"Reading {normals_size} normals? from @ {file.tell()}")
         normals = []
         for i in range(normals_size):
-            normals.append(U.readXYZW(file))
+            nx, ny, nz, nw = U.readXYZW(file)
+            normals.append((nx, -ny, nz, nw))
         print(f"Done @ {file.tell()} end {offset + hpd_size}")
 
         return HPDModel([], verts_size, verts, normals_size, normals, 0, [], [[], face_list])
