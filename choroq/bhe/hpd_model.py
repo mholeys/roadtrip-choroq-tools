@@ -31,29 +31,38 @@ class HPDModel(BHEMesh):
             print(f"HPD header invalid at @ {file.tell()}")
             return
 
-        end_of_file = U.readLong(file)
+        hpd_size = U.readLong(file)
 
-        floats_offset = U.readLong(file)
-        verts_size = U.readLong(file)
+        floats_offset = U.readLong(file)  # Vertex Top ("v_top")
+        verts_size = U.readLong(file)     # Vertex Total ("v_total")
 
-        normals_offset = U.readLong(file)
-        normals_size = U.readLong(file)
+        normals_offset = U.readLong(file)  # Normal Top ("n_top")
+        normals_size = U.readLong(file)    # Normal Total ("n_total")
 
-        uvs_offset = U.readLong(file)
-        uvs_size = U.readLong(file)
+        uvs_offset = U.readLong(file)  # P? Top ("p_top") ? Properties?
+        uvs_size = U.readLong(file)    # p? Total ("p_total") ? Properties?
 
         #file.seek(offset + sf_offset, os.SEEK_SET)
 
         # Start of faces, I think
-        face_count = U.readLong(file)
-        shorts = []
-        for i in range(6):
-            shorts.append(U.readShort(file))
+        face_count = U.readLong(file)  # Labelled as b_total
+
+        # These names are from the game
+        hpd_base = U.readShort(file)
+        hpd_shift = U.readShort(file)
+        min_bx = U.readShort(file)
+        min_bz = U.readShort(file)
+        max_bx = U.readShort(file)
+        max_bz = U.readShort(file)
+
+        hpd_unit = 1 << (hpd_shift & 0x1F)
+        hpd_offset = 0x40 - hpd_base
 
         print(f"Reading {face_count} faces from @ {file.tell()}")
         # Read faces
         tri_strips = []
         for f in range(face_count):
+            # Game code reads as x,y,z,d I think
             fv, fvn, fvt, fvc = BHEMesh.read_face(file, 0)
             # print(f"{fv} {fvn} {fvt} {fvc}")
             tri_strips.append((fv, fvn, fvt, fvc))
@@ -63,7 +72,10 @@ class HPDModel(BHEMesh):
         face_list = []
         for fi in face_indices:
             face_list.append((tri_strips[fi[0]], tri_strips[fi[1]], tri_strips[fi[2]], 0))
-            #print(f"{face_list[-1][0][0]} {face_list[-1][1][0]} {face_list[-1][2][0]}")
+            # print(f"{face_list[-1][0][0]} {face_list[-1][1][0]} {face_list[-1][2][0]}")
+        # for i in range(int(face_count / 3)):
+        #     face_list.append((tri_strips[i * 3], tri_strips[i * 3 + 1], tri_strips[i * 3 + 2], 0))
+
 
         print(f"Finished reading {face_count} faces up to @ {file.tell()}")
 
@@ -90,7 +102,7 @@ class HPDModel(BHEMesh):
         normals = []
         for i in range(normals_size):
             normals.append(U.readXYZW(file))
-        print(f"Done @ {file.tell()} end {offset + end_of_file}")
+        print(f"Done @ {file.tell()} end {offset + hpd_size}")
 
         return HPDModel([], verts_size, verts, normals_size, normals, 0, [], [[], face_list])
 

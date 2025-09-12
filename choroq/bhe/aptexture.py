@@ -181,6 +181,12 @@ class APTexture:
                 except Exception as e2:
                     print("Cannot parse name, other error occurred")
                     raise e2
+            if "." in texture_name:
+                # Remove extension
+                print(f"Found APT with name extension: {texture_name}")
+                ext_start = texture_name.index(".")
+                ext = texture_name[ext_start:]
+                texture_name = texture_name[:ext_start]
 
             if APTexture.PRINT_DEBUG:
                 print(f"Texture header: {texture_name}, {val_a}, {val_b}, {size}, {zeros:x}")

@@ -222,6 +222,7 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
                 # continue
                 out_index = 0
                 name = f"mpc-{index_counts['MPC']}"
+                mpc_index = index_counts['MPC']
 
                 index_counts['MPC'] += 1
                 for mpc in sf:
@@ -229,8 +230,8 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
                     name = mpc.name
 
                     # Create subfolder for each sub mpc
-                    Path(f"{out_path}/mpc/{name}").mkdir(parents=True, exist_ok=True)
-                    Path(f"{out_path}/mpc/{name}/tex").mkdir(parents=True, exist_ok=True)
+                    Path(f"{out_path}/mpc/{mpc_index}/{name}").mkdir(parents=True, exist_ok=True)
+                    Path(f"{out_path}/mpc/{mpc_index}/{name}/tex").mkdir(parents=True, exist_ok=True)
 
                     # Write all required textures
                     for texture_reference in mpc.texture_references:
@@ -240,14 +241,14 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
                                 f"Missing texture in current APT list (Ignore if BODY.CPK), please let developer know, CPK file name and [sf-{index}, MPC, {texture_name}]")
                             continue
                         t = current_texture_group[texture_name]
-                        t.write_texture_to_png(f"{out_path}/mpc/{name}/tex/{texture_name}.png")
-                        # t.write_palette_to_png(f"{out_path}/mpc/{name}/tex/{texture_name}-p.png")
+                        t.write_texture_to_png(f"{out_path}/mpc/{mpc_index}/{name}/tex/{texture_name}.png")
+                        # t.write_palette_to_png(f"{out_path}/mpc/{mpc_index}/{name}/tex/{texture_name}-p.png")
 
                     for out_format in output_formats:
-                        out = f"{out_path}/mpc/{name}/{name}-{out_index}.{out_format}"
+                        out = f"{out_path}/mpc/{mpc_index}/{name}/{name}-{out_index}.{out_format}"
                         with open(out, "w") as fout:
                             mpc.write_mesh_to_type(out_format, fout)
-                    material_path = f"{out_path}/mpc/{name}/{name}-{out_index}.mtl"
+                    material_path = f"{out_path}/mpc/{mpc_index}/{name}/{name}-{out_index}.mtl"
                     texture_path = f"tex"
                     with open(material_path, "w") as fout:
                         mpc.save_material_file_obj(fout, texture_path)

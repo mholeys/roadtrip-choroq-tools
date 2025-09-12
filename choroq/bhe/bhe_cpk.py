@@ -70,14 +70,14 @@ class CPK:
             pass
         elif self.subfile_types[i] == b'\x03\x18\x00\x00':
             # toc/0318 file
-            toc_data = Toc0318.read_toc0318(read_from, position)
-            self.subfiles[i] = (b'TOC\x00', toc_data)
+            #toc_data = Toc0318.read_toc0318(read_from, position)
+            #self.subfiles[i] = (b'TOC\x00', toc_data)
             pass
         elif self.subfile_types[i] == b'TOC\x00':  # This is odd, but its same as 0318, but just one toc
             # toc/TOC file
-            toc_header = Toc0318.read_toc_part_header(read_from, position)
-            toc_data = Toc0318.read_toc_part(read_from, toc_header)
-            self.subfiles[i] = (b'TOC\x00', toc_data)  # Convert to list, as this is required for other type
+            #toc_header = Toc0318.read_toc_part_header(read_from, position)
+            #toc_data = Toc0318.read_toc_part(read_from, toc_header)
+            #self.subfiles[i] = (b'TOC\x00', toc_data)  # Convert to list, as this is required for other type
             pass
         elif self.subfile_types[i] == b'FONT':
             # Font data/array/texture
@@ -86,7 +86,7 @@ class CPK:
             pass
         elif self.subfile_types[i] == b'MPC\x00':
             # Model format
-            mpc_data = MPCModel.read_mpc(read_from, position)
+            mpc_data = MPCModel.read_mpc(read_from, position, self.entry_positions[index + 1])
             self.subfiles[i] = ("MPC", mpc_data)
             pass
         else:

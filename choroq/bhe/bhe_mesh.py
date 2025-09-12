@@ -124,24 +124,24 @@ class BHEMesh(AMesh):
             fuv1 = fv[2] + 1
             fuv2 = fvn[2] + 1
             fuv3 = fvt[2] + 1
-            if fv1 == 65536:
-                fv1 = ""
-            if fv2 == 65536:
-                fv2 = ""
-            if fv3 == 65536:
-                fv3 = ""
-            if fn1 == 65536:
-                fn1 = ""
-            if fn2 == 65536:
-                fn2 = ""
-            if fn3 == 65536:
-                fn3 = ""
-            if fuv1 == 65536:
-                fuv1 = ""
-            if fuv2 == 65536:
-                fuv2 = ""
-            if fuv3 == 65536:
-                fuv3 = ""
+            # if fv1 == 65536:
+            #     fv1 = ""
+            # if fv2 == 65536:
+            #     fv2 = ""
+            # if fv3 == 65536:
+            #     fv3 = ""
+            # if fn1 == 65536:
+            #     fn1 = ""
+            # if fn2 == 65536:
+            #     fn2 = ""
+            # if fn3 == 65536:
+            #     fn3 = ""
+            # if fuv1 == 65536:
+            #     fuv1 = ""
+            # if fuv2 == 65536:
+            #     fuv2 = ""
+            # if fuv3 == 65536:
+            #     fuv3 = ""
 
             fout.write(f"f {fv1}/{fuv1}/{fn1} {fv2}/{fuv2}/{fn2} {fv3}/{fuv3}/{fn3} \n")
             # fout.write(f"f {fv1} {fv2} {fv3} \n")

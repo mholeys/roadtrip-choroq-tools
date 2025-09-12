@@ -9,7 +9,7 @@ from choroq.bhe.bhe_mesh import BHEMesh
 
 
 class MPCModel(BHEMesh):
-    PRINT_DEBUG = True
+    PRINT_DEBUG = False
 
     def __init__(self, name, texture_references, vert_count, vertices, normal_count, normals, uv_count, uvs, colour_count, colours, faces):
         super().__init__()
@@ -26,7 +26,7 @@ class MPCModel(BHEMesh):
         self.faces = faces
 
     @staticmethod
-    def read_mpc(file, offset):
+    def read_mpc(file, offset, next_offset):
         file.seek(offset, os.SEEK_SET)
         mpcs = []
 
@@ -40,18 +40,20 @@ class MPCModel(BHEMesh):
 
         valid = True
         while valid:
-            mpc, valid = MPCModel.read_mpc_section(file, file.tell())
+            mpc, valid = MPCModel.read_mpc_section(file, file.tell(), next_offset)
             if valid:
                 mpcs.append(mpc)
                 # Move to next aligned section
                 position = file.tell()
                 pad_by = 16 - (position - ((position >> 4) << 4))
+                if pad_by == 16:
+                    pad_by = 0
                 file.seek(pad_by, os.SEEK_CUR)
 
         return mpcs
 
     @staticmethod
-    def read_mpc_section(file, offset):
+    def read_mpc_section(file, offset, next_offset):
         file.seek(offset, os.SEEK_SET)
         if MPCModel.PRINT_DEBUG:
             print(f"Part start: {file.tell()}")
@@ -68,6 +70,9 @@ class MPCModel(BHEMesh):
             name = f"mpc-{offset}"
 
         if not valid:
+            return None, False
+
+        if file.tell() > next_offset:
             return None, False
 
         size_textures = U.readLong(file)
@@ -93,6 +98,8 @@ class MPCModel(BHEMesh):
                 t_name = t_name[0:first_0].decode("ascii").rstrip('\00')
             except Exception as e:
                 print("Failed to decode MPC texture name")
+            if file.tell() > next_offset:
+                return None, False
 
             texture_references.append((t_name, (t_width, t_height, t_format, t_unknown)))
 
@@ -104,6 +111,8 @@ class MPCModel(BHEMesh):
         for i in range(size_verts):
             x, y, z, w = U.readXYZW(file)
             verts.append((-x, -y, z, w))
+            if file.tell() > next_offset:
+                return None, False
 
         if MPCModel.PRINT_DEBUG:
             print(f"Normal section start: {file.tell()}")
@@ -111,6 +120,8 @@ class MPCModel(BHEMesh):
         normals = []
         for i in range(size_normals):
             normals.append(U.readXYZW(file))
+            if file.tell() > next_offset:
+                return None, False
 
         if MPCModel.PRINT_DEBUG:
             print(f"UVs section start: {file.tell()}")
@@ -118,6 +129,8 @@ class MPCModel(BHEMesh):
         uvs = []
         for i in range(size_uvs):
             uvs.append((U.readFloat(file), 1 - U.readFloat(file)))
+            if file.tell() > next_offset:
+                return None, False
 
         if MPCModel.PRINT_DEBUG:
             print(f"Vertex colour section start: {file.tell()}")
@@ -125,6 +138,8 @@ class MPCModel(BHEMesh):
         colours = []
         for i in range(size_colours):
             colours.append(U.readLong(file))
+            if file.tell() > next_offset:
+                return None, False
 
         faces, other_faces = BHEMesh.read_faces(file, texture_references)
 
