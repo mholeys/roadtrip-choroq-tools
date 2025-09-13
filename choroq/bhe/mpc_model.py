@@ -143,7 +143,7 @@ class MPCModel(BHEMesh):
         # Vertex Colours
         colours = []
         for i in range(size_colours):
-            colours.append(U.readLong(file))
+            colours.append((U.readByte(file), U.readByte(file), U.readByte(file), U.readByte(file)))
             if file.tell() > next_offset:
                 return None, False
 

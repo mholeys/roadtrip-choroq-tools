@@ -120,7 +120,7 @@ class PBLModel(BHEMesh):
             # Vertex Colours
             colours = []
             for i in range(sizes[4]):
-                colours.append(U.readLong(file))
+                colours.append((U.readByte(file), U.readByte(file), U.readByte(file), U.readByte(file)))
 
             faces, other_faces = BHEMesh.read_faces(file, texture_references)
 

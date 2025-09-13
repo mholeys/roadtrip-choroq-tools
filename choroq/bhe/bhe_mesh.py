@@ -52,6 +52,9 @@ class BHEMesh(AMesh):
         pass
 
     def write_mesh_to_obj(self, fout, start_index=0, material=None, with_colours=False):
+        if with_colours:
+            self.write_mesh_to_obj_conformed(fout)
+            return
         face_count = 0
         if material is not None:
             fout.write(f"usemtl {material}\n")
@@ -151,6 +154,328 @@ class BHEMesh(AMesh):
             # fout.write(f"f {fv1} {fv2} {fv3} \n")
             face_count += 1
         return face_count
+
+    def write_mesh_to_obj_conformed(self, fout, start_index=0, material=None, with_colours=False):
+        face_count = 0
+        if material is not None:
+            fout.write(f"usemtl {material}\n")
+        fout.write("s off\n")
+
+        has_colours = len(self.colours) > 0
+
+        max_vert = min(self.max_vert, len(self.vertices)-1)
+        max_normal = min(self.max_normal, len(self.normals)-1)
+        max_uv = min(self.max_uv, len(self.uvs)-1)
+        max_colour = min(self.max_colour, len(self.colours)-1)
+
+        face_index = 1
+
+        for tex_ref in self.faces[0]:
+            if tex_ref >= len(self.texture_references) or tex_ref < 0:
+                if len(self.texture_references) > 0:
+                    print("Bad texture reference got through!!")
+
+            fout.write(f"g {tex_ref + 1}\n")
+            if 0 <= tex_ref < len(self.texture_references):
+                texture_name = self.texture_references[tex_ref][0]
+                fout.write(f"usemtl {texture_name}\n")
+
+            for f1, f2, f3, f0 in self.faces[0][tex_ref]:
+                vert1 = f1[0]
+                vert2 = f2[0]
+                vert3 = f3[0]
+                normal1 = f1[1]
+                normal2 = f2[1]
+                normal3 = f3[1]
+                uv1 = f1[2]
+                uv2 = f2[2]
+                uv3 = f3[2]
+                colour1 = f1[3]
+                colour2 = f2[3]
+                colour3 = f3[3]
+
+                # Write verts with colours
+                if vert1 <= max_vert:
+                    vx = '{:.20f}'.format(self.vertices[vert1][0])
+                    vy = '{:.20f}'.format(self.vertices[vert1][1])
+                    vz = '{:.20f}'.format(self.vertices[vert1][2])
+                    vert1 += 1
+                else:
+                    vx = 0
+                    vy = 0
+                    vz = 0
+                    vert1 = ""
+                if has_colours and colour1 <= max_colour:
+                    cr = '{:.20f}'.format(self.colours[colour1][0] / 255.0)
+                    cg = '{:.20f}'.format(self.colours[colour1][1] / 255.0)
+                    cb = '{:.20f}'.format(self.colours[colour1][2] / 255.0)
+                    fout.write(f"v {vx} {vy} {vz} {cr} {cg} {cb}\n")
+                else:
+                    cr = 0
+                    cg = 0
+                    cb = 0
+                    fout.write(f"v {vx} {vy} {vz}\n")
+                if vert2 <= max_vert:
+                    vx = '{:.20f}'.format(self.vertices[vert2][0])
+                    vy = '{:.20f}'.format(self.vertices[vert2][1])
+                    vz = '{:.20f}'.format(self.vertices[vert2][2])
+                    vert2 += 1
+                else:
+                    vx = 0
+                    vy = 0
+                    vz = 0
+                    vert2 = ""
+                if has_colours and colour2 <= max_colour:
+                    cr = '{:.20f}'.format(self.colours[colour2][0] / 255.0)
+                    cg = '{:.20f}'.format(self.colours[colour2][1] / 255.0)
+                    cb = '{:.20f}'.format(self.colours[colour2][2] / 255.0)
+                    fout.write(f"v {vx} {vy} {vz} {cr} {cg} {cb}\n")
+                else:
+                    cr = 0
+                    cg = 0
+                    cb = 0
+                    fout.write(f"v {vx} {vy} {vz}\n")
+                if vert3 <= max_vert:
+                    vx = '{:.20f}'.format(self.vertices[vert3][0])
+                    vy = '{:.20f}'.format(self.vertices[vert3][1])
+                    vz = '{:.20f}'.format(self.vertices[vert3][2])
+                    vert3 += 1
+                else:
+                    vx = 0
+                    vy = 0
+                    vz = 0
+                    vert3 = ""
+                if has_colours and colour3 <= max_colour:
+                    cr = '{:.20f}'.format(self.colours[colour3][0] / 255.0)
+                    cg = '{:.20f}'.format(self.colours[colour3][1] / 255.0)
+                    cb = '{:.20f}'.format(self.colours[colour3][2] / 255.0)
+                    fout.write(f"v {vx} {vy} {vz} {cr} {cg} {cb}\n")
+                else:
+                    cr = 0
+                    cg = 0
+                    cb = 0
+                    fout.write(f"v {vx} {vy} {vz}\n")
+
+                # Write normals
+                if normal1 <= max_normal:
+                    nx = '{:.20f}'.format(self.normals[normal1][0])
+                    ny = '{:.20f}'.format(self.normals[normal1][1])
+                    nz = '{:.20f}'.format(self.normals[normal1][2])
+                    normal1 += 1
+                else:
+                    nx = 0
+                    ny = 0
+                    nz = 0
+                    normal1 = ""
+                fout.write(f"vn {nx} {ny} {nz}\n")
+                if normal2 <= max_normal:
+                    nx = '{:.20f}'.format(self.normals[normal2][0])
+                    ny = '{:.20f}'.format(self.normals[normal2][1])
+                    nz = '{:.20f}'.format(self.normals[normal2][2])
+                    normal2 += 1
+                else:
+                    nx = 0
+                    ny = 0
+                    nz = 0
+                    normal2 = ""
+                fout.write(f"vn {nx} {ny} {nz}\n")
+                if normal3 <= max_normal:
+                    nx = '{:.20f}'.format(self.normals[normal3][0])
+                    ny = '{:.20f}'.format(self.normals[normal3][1])
+                    nz = '{:.20f}'.format(self.normals[normal3][2])
+                    normal3 += 1
+                else:
+                    nx = 0
+                    ny = 0
+                    nz = 0
+                    normal3 = ""
+                fout.write(f"vn {nx} {ny} {nz}\n")
+
+                # Write texture coords
+                if uv1 <= max_uv:
+                    tu = '{:.20f}'.format(self.uvs[uv1][0])
+                    tv = '{:.20f}'.format(self.uvs[uv1][1])
+                    uv1 += 1
+                else:
+                    tu = 0
+                    tv = 0
+                    uv1 = ""
+                fout.write(f"vt {tu} {tv}\n")
+                if uv2 <= max_uv:
+                    tu = '{:.20f}'.format(self.uvs[uv2][0])
+                    tv = '{:.20f}'.format(self.uvs[uv2][1])
+                    uv2 += 1
+                else:
+                    tu = 0
+                    tv = 0
+                    uv2 = ""
+                fout.write(f"vt {tu} {tv}\n")
+                if uv3 <= max_uv:
+                    tu = '{:.20f}'.format(self.uvs[uv3][0])
+                    tv = '{:.20f}'.format(self.uvs[uv3][1])
+                    uv3 += 1
+                else:
+                    tu = 0
+                    tv = 0
+                    uv3 = ""
+                fout.write(f"vt {tu} {tv}\n")
+
+                fout.write(f"f {face_index}/{face_index}/{face_index} {face_index+1}/{face_index+1}/{face_index+1} {face_index+2}/{face_index+2}/{face_index+2} \n")
+                face_index += 3
+
+                face_count += 1
+
+        fout.write("g 70000")
+        for f1, f2, f3, f0 in self.faces[1]:
+            vert1 = f1[0]
+            vert2 = f2[0]
+            vert3 = f3[0]
+            normal1 = f1[1]
+            normal2 = f2[1]
+            normal3 = f3[1]
+            uv1 = f1[2]
+            uv2 = f2[2]
+            uv3 = f3[2]
+            colour1 = f1[3]
+            colour2 = f2[3]
+            colour3 = f3[3]
+
+            # Write verts with colours
+            if vert1 <= max_vert:
+                vx = '{:.20f}'.format(self.vertices[vert1][0])
+                vy = '{:.20f}'.format(self.vertices[vert1][1])
+                vz = '{:.20f}'.format(self.vertices[vert1][2])
+                vert1 += 1
+            else:
+                vx = 0
+                vy = 0
+                vz = 0
+                vert1 = ""
+            if has_colours and colour1 <= max_colour:
+                cr = '{:.20f}'.format(self.colours[colour1][0] / 255.0)
+                cg = '{:.20f}'.format(self.colours[colour1][1] / 255.0)
+                cb = '{:.20f}'.format(self.colours[colour1][2] / 255.0)
+                fout.write(f"v {vx} {vy} {vz} {cr} {cg} {cb}\n")
+            else:
+                cr = 0
+                cg = 0
+                cb = 0
+                fout.write(f"v {vx} {vy} {vz}\n")
+
+            if vert2 <= max_vert:
+                vx = '{:.20f}'.format(self.vertices[vert2][0])
+                vy = '{:.20f}'.format(self.vertices[vert2][1])
+                vz = '{:.20f}'.format(self.vertices[vert2][2])
+                vert2 += 1
+            else:
+                vx = 0
+                vy = 0
+                vz = 0
+                vert2 = ""
+            if has_colours and colour2 <= max_colour:
+                cr = '{:.20f}'.format(self.colours[colour2][0] / 255.0)
+                cg = '{:.20f}'.format(self.colours[colour2][1] / 255.0)
+                cb = '{:.20f}'.format(self.colours[colour2][2] / 255.0)
+                fout.write(f"v {vx} {vy} {vz} {cr} {cg} {cb}\n")
+            else:
+                cr = 0
+                cg = 0
+                cb = 0
+                fout.write(f"v {vx} {vy} {vz}\n")
+            fout.write(f"v {vx} {vy} {vz} {cr} {cg} {cb}\n")
+            if vert3 <= max_vert:
+                vx = '{:.20f}'.format(self.vertices[vert3][0])
+                vy = '{:.20f}'.format(self.vertices[vert3][1])
+                vz = '{:.20f}'.format(self.vertices[vert3][2])
+                vert3 += 1
+            else:
+                vx = 0
+                vy = 0
+                vz = 0
+                vert3 = ""
+            if has_colours and colour3 <= max_colour:
+                cr = '{:.20f}'.format(self.colours[colour3][0] / 255.0)
+                cg = '{:.20f}'.format(self.colours[colour3][1] / 255.0)
+                cb = '{:.20f}'.format(self.colours[colour3][2] / 255.0)
+                fout.write(f"v {vx} {vy} {vz} {cr} {cg} {cb}\n")
+            else:
+                cr = 0
+                cg = 0
+                cb = 0
+                fout.write(f"v {vx} {vy} {vz}\n")
+
+            # Write normals
+            if normal1 <= max_normal:
+                nx = '{:.20f}'.format(self.normals[normal1][0])
+                ny = '{:.20f}'.format(self.normals[normal1][1])
+                nz = '{:.20f}'.format(self.normals[normal1][2])
+                normal1 += 1
+            else:
+                nx = 0
+                ny = 0
+                nz = 0
+                normal1 = ""
+            fout.write(f"vn {nx} {ny} {nz}\n")
+            if normal2 <= max_normal:
+                nx = '{:.20f}'.format(self.normals[normal2][0])
+                ny = '{:.20f}'.format(self.normals[normal2][1])
+                nz = '{:.20f}'.format(self.normals[normal2][2])
+                normal2 += 1
+            else:
+                nx = 0
+                ny = 0
+                nz = 0
+                normal2 = ""
+            fout.write(f"vn {nx} {ny} {nz}\n")
+            if normal3 <= max_normal:
+                nx = '{:.20f}'.format(self.normals[normal3][0])
+                ny = '{:.20f}'.format(self.normals[normal3][1])
+                nz = '{:.20f}'.format(self.normals[normal3][2])
+                normal3 += 1
+            else:
+                nx = 0
+                ny = 0
+                nz = 0
+                normal3 = ""
+            fout.write(f"vn {nx} {ny} {nz}\n")
+
+            # Write texture coords
+            if uv1 <= max_uv:
+                tu = '{:.20f}'.format(self.uvs[uv1][0])
+                tv = '{:.20f}'.format(self.uvs[uv1][1])
+                uv1 += 1
+            else:
+                tu = 0
+                tv = 0
+                uv1 = ""
+            fout.write(f"vt {tu} {tv}\n")
+            if uv2 <= max_uv:
+                tu = '{:.20f}'.format(self.uvs[uv2][0])
+                tv = '{:.20f}'.format(self.uvs[uv2][1])
+                uv2 += 1
+            else:
+                tu = 0
+                tv = 0
+                uv2 = ""
+            fout.write(f"vt {tu} {tv}\n")
+            if uv3 <= max_uv:
+                tu = '{:.20f}'.format(self.uvs[uv3][0])
+                tv = '{:.20f}'.format(self.uvs[uv3][1])
+                uv3 += 1
+            else:
+                tu = 0
+                tv = 0
+                uv3 = ""
+            fout.write(f"vt {tu} {tv}\n")
+
+            #fout.write(f"f {vert1}/{uv1}/{normal1} {vert2}/{uv2}/{normal2} {vert3}/{uv3}/{normal3} \n")
+            fout.write(f"f {face_index}/{face_index}/{face_index} {face_index + 1}/{face_index + 1}/{face_index + 1} {face_index + 2}/{face_index + 2}/{face_index + 2} \n")
+            face_index += 3
+
+            face_count += 1
+
+        return self.vert_count
+
 
     @staticmethod
     def read_faces(file, texture_references):

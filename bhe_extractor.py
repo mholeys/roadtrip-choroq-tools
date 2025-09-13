@@ -7,6 +7,8 @@ import os
 import csv
 from pathlib import Path
 
+# import cProfile
+
 # Create log files or not (probably not that useful for most people)
 CREATE_LOG_FILES = True
 
@@ -105,7 +107,10 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
                         # t.write_palette_to_png(f"{out_path}/pbl/{name}/tex/{texture_name}-p.png")
 
                     for out_format in output_formats:
-                        out = f"{out_path}/pbl/{name}/{name}-{out_index}.{out_format}"
+                        extension = out_format
+                        if out_format == "obj+colour":
+                            extension = "obj"
+                        out = f"{out_path}/pbl/{name}/{name}-{out_index}.{extension}"
                         with open(out, "w") as fout:
                             pbl.write_mesh_to_type(out_format, fout)
                     material_path = f"{out_path}/pbl/{name}/{name}-{out_index}.mtl"
@@ -134,7 +139,10 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
                         # t.write_palette_to_png(f"{out_path}/pbl/{name}/tex/{texture_name}-i.png")
 
                     for out_format in output_formats:
-                        out = f"{out_path}/mpd/{name}/{name}-{out_index}.{out_format}"
+                        extension = out_format
+                        if out_format == "obj+colour":
+                            extension = "obj"
+                        out = f"{out_path}/mpd/{name}/{name}-{out_index}.{extension}"
                         with open(out, "w") as fout:
                             mpd.write_mesh_to_type(out_format, fout)
                     material_path = f"{out_path}/mpd/{name}/{name}-{out_index}.mtl"
@@ -161,7 +169,10 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
                 #     # t.write_palette_to_png(f"{out_path}/pbl/{name}/tex/{texture_name}-p.png")
 
                 for out_format in output_formats:
-                    out = f"{out_path}/hpd/{name}/{name}-{out_index}.{out_format}"
+                    extension = out_format
+                    if out_format == "obj+colour":
+                        extension = "obj"
+                    out = f"{out_path}/hpd/{name}/{name}-{out_index}.{extension}"
                     with open(out, "w") as fout:
                         hpd.write_mesh_to_type(out_format, fout)
                 # material_path = f"{out_path}/hpd/{name}/{name}-{out_index}.mtl"
@@ -245,7 +256,10 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
                         # t.write_palette_to_png(f"{out_path}/mpc/{mpc_index}/{name}/tex/{texture_name}-p.png")
 
                     for out_format in output_formats:
-                        out = f"{out_path}/mpc/{mpc_index}/{name}/{name}-{out_index}.{out_format}"
+                        extension = out_format
+                        if out_format == "obj+colour":
+                            extension = "obj"
+                        out = f"{out_path}/mpc/{mpc_index}/{name}/{name}-{out_index}.{extension}"
                         with open(out, "w") as fout:
                             mpc.write_mesh_to_type(out_format, fout)
                     material_path = f"{out_path}/mpc/{mpc_index}/{name}/{name}-{out_index}.mtl"
@@ -564,9 +578,11 @@ if __name__ == '__main__':
         exit(1)
 
     obj = False
+    obj_colour = False
     ply = False
     if len(sys.argv) == 4:
         obj = True if sys.argv[3] == "1" else False
+        obj_colour = True if sys.argv[3] == "C" or sys.argv[3] == "c" else False
         ply = True if sys.argv[3] == "2" else False
     elif len(sys.argv) > 4:
         show_help()
@@ -589,10 +605,13 @@ if __name__ == '__main__':
     output_formats = []
     if obj:
         output_formats.append("obj")
+    if obj_colour:
+        output_formats.append("obj+colour")
     if ply:
         output_formats.append("ply")
         print("Warning, PLY files are broken, they can be manually fixed, but for now please use OBJ/OBJ+Colours")
 
     if os.path.isfile(cpk_file_in):
         print(f"Reading from {cpk_file_in}")
+        # cProfile.runctx('cpk_decode(a, b, c)', {'a': cpk_file_in, 'b': folder_out, 'c': output_formats, 'cpk_decode': cpk_decode}, {})
         cpk_decode(cpk_file_in, folder_out, output_formats)
