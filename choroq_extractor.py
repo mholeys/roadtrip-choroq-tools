@@ -21,7 +21,7 @@ OUTPUT_CHUNKED_COLLIDER = False
 # Output obj files wih "o" lines, to split sections of the read mesh (probably not that useful for most people)
 OUTPUT_GROUPED_OBJS = False
 # Create log files or not (probably not that useful for most people)
-CREATE_LOG_FILES = True
+CREATE_LOG_FILES = False
 
 should_exit = False
 
@@ -865,14 +865,14 @@ if __name__ == '__main__':
         output_formats = ["comb"]
 
     if os.path.isdir(folder_in):
-        # process_courses(folder_in, folder_out, "COURSE", output_formats)
-        # process_cars(folder_in, folder_out, output_formats)
-        # process_courses(folder_in, folder_out, "ACTION", output_formats)
-        # process_fields(folder_in, folder_out, output_formats)
+        process_courses(folder_in, folder_out, "COURSE", output_formats)
+        process_cars(folder_in, folder_out, output_formats)
+        process_courses(folder_in, folder_out, "ACTION", output_formats)
+        process_fields(folder_in, folder_out, output_formats)
         # These are other bits from the game, might be useful for some
-        # process_items(folder_in, folder_out, output_formats)
-        process_shops(folder_in, folder_out, output_formats)
-        # process_sys(folder_in, folder_out, output_formats)
+        #process_items(folder_in, folder_out, output_formats)
+        #process_shops(folder_in, folder_out, output_formats)
+        #process_sys(folder_in, folder_out, output_formats)
 
     else:
         print(Fore.RED + "ERROR: " + Style.RESET_ALL + "Failed to read source folder")
