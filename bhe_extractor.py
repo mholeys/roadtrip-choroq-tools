@@ -29,8 +29,9 @@ def show_help():
     print("Options: <REQUIRED> [OPTIONAL]")
     print("<source path>")
     print("<output folder>")
-    # print("[type]                    : model output format")
-    # print("                            -- 1 = OBJ only")
+    print("[type]                    : model output format")
+    print("                            -- 1 = OBJ only")
+    print("                            -- C = OBJ with vertex colours, r/g/b after x/y/z (blender)")
     # print("                            -- 2 = PLY only")
 
     print("The output folder structure will be as follows:")

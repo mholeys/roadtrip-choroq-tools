@@ -119,7 +119,7 @@ class BHEMesh(AMesh):
             fout.write("\n")
 
     @staticmethod
-    def write_obj_faces(fout, faces, max_vert=65536, max_normal=65536, max_uv=65536, max_colour=65536):
+    def write_obj_faces(fout, faces, max_vert=65536, max_normal=65536, max_uv=65536, max_colour=65536, start_index=0):
         face_count = 0
         for fv, fvn, fvt, fvc in faces:
             fv1 = fv[0] + 1
@@ -325,7 +325,7 @@ class BHEMesh(AMesh):
 
                 face_count += 1
 
-        fout.write("g 70000")
+        fout.write("g 70000\n")
         for f1, f2, f3, f0 in self.faces[1]:
             vert1 = f1[0]
             vert2 = f2[0]
@@ -382,7 +382,6 @@ class BHEMesh(AMesh):
                 cg = 0
                 cb = 0
                 fout.write(f"v {vx} {vy} {vz}\n")
-            fout.write(f"v {vx} {vy} {vz} {cr} {cg} {cb}\n")
             if vert3 <= max_vert:
                 vx = '{:.20f}'.format(self.vertices[vert3][0])
                 vy = '{:.20f}'.format(self.vertices[vert3][1])
