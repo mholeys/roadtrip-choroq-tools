@@ -95,11 +95,17 @@ class Toc0318:
         print(f"TOC: part_type: {part_type}")
         if part_type != b'\x54\x4F\x43\x00':
             print(f"found different 'TOC' string in header @ {file.tell()}")
+            file.seek(-4, os.SEEK_CUR)
             if Toc0318.STOP_ON_NEW:
                 exit(1)
-        end_offset = U.readLong(file)  # 400
-        size = U.readLong(file)
-        value1 = U.readLong(file)
+            size = 1
+            end_offset = 400
+            value1 = 0
+        else:
+            end_offset = U.readLong(file)  # 400
+            size = U.readLong(file)
+            value1 = U.readLong(file)
+
         # Read toc name
         name = file.read(12).decode('ascii').rstrip("\x00")
         print(f"TOC: name: {name}")

@@ -235,7 +235,7 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
                 out_index = 0
                 name = f"mpc-{index_counts['MPC']}"
                 mpc_index = index_counts['MPC']
-
+                Path(f"{out_path}/mpc/{mpc_index}/tex").mkdir(parents=True, exist_ok=True)
                 index_counts['MPC'] += 1
                 for mpc in sf:
                     # If the object only uses one texture, then why not name it as it might help
@@ -243,7 +243,8 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
 
                     # Create subfolder for each sub mpc
                     Path(f"{out_path}/mpc/{mpc_index}/{name}").mkdir(parents=True, exist_ok=True)
-                    Path(f"{out_path}/mpc/{mpc_index}/{name}/tex").mkdir(parents=True, exist_ok=True)
+
+                    mpc_textures_done = {}
 
                     # Write all required textures
                     for texture_reference in mpc.texture_references:
@@ -253,8 +254,13 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
                                 f"Missing texture in current APT list (Ignore if BODY.CPK), please let developer know, CPK file name and [sf-{index}, MPC, {texture_name}]")
                             continue
                         t = current_texture_group[texture_name]
-                        t.write_texture_to_png(f"{out_path}/mpc/{mpc_index}/{name}/tex/{texture_name}.png")
-                        # t.write_palette_to_png(f"{out_path}/mpc/{mpc_index}/{name}/tex/{texture_name}-p.png")
+                        if texture_name in mpc_textures_done:
+                            if t != mpc_textures_done[texture_name]:
+                                print(f"Found texture that is different between uses for this MPC {mpc} {texture_name} {t} vs {mpc_textures_done[texture_name]}")
+                        else:
+                            mpc_textures_done[texture_name] = t
+                            t.write_texture_to_png(f"{out_path}/mpc/{mpc_index}/tex/{texture_name}.png")
+                            # t.write_palette_to_png(f"{out_path}/mpc/{mpc_index}/{name}/tex/{texture_name}-p.png")
 
                     for out_format in output_formats:
                         extension = out_format
@@ -264,7 +270,7 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
                         with open(out, "w") as fout:
                             mpc.write_mesh_to_type(out_format, fout)
                     material_path = f"{out_path}/mpc/{mpc_index}/{name}/{name}-{out_index}.mtl"
-                    texture_path = f"tex"
+                    texture_path = f"../tex"
                     with open(material_path, "w") as fout:
                         mpc.save_material_file_obj(fout, texture_path)
                     out_index += 1
