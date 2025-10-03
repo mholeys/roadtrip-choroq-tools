@@ -155,7 +155,11 @@ class ChoroQCombImporter(Operator, ImportHelper):
 
             vertCount = int(f.readline().split(' ')[1])
             faceCount = int(f.readline().split(' ')[1])
-            textureName = f.readline().split(' ')[1][0:-1]
+            textureAttempt = f.readline().split(' ')
+            textureName = ""
+            if len(textureAttempt) > 0:
+                if len(textureAttempt[1]) > 0:
+                    textureName = textureAttempt[1][0:-1]
             
             
             # Setup material info
