@@ -835,11 +835,11 @@ def VifDecode(vifCode, vifState):
     # This is not the amount of data in the packet, as it may repeat (See CYCLE register)
     num = (vifCode & 0x00FF0000) >> 16
     if num == 0: 
-        num = 256 # As transfering 0 would make no sense
+        num = 256  # As transferring 0 would make no sense
 
     cmd = (vifCode >> 24) & 0xFF
-    interrupt = cmd & 0b10000000 # interrupt flag
-    cmd = cmd & 0b01111111 # cmd without interrupt flag
+    interrupt = cmd & 0b10000000  # interrupt flag
+    cmd = cmd & 0b01111111  # cmd without interrupt flag
     expected_length_in_packets = VifGetPacketSize(cmd, num, immediate)
     fields = VifDecodeFields(cmd, num, immediate)
     print(VifDebug(vifState, cmd, num, immediate, expected_length_in_packets, fields))
@@ -1804,7 +1804,7 @@ class GsState:
             if self.CLAMP_1["WMS"] > 1:
                 print("CLAMP_1 horiz clamping unhandled")
                 exit()
-            if self.CLAMP_2["WMT"] > 1:
+            if self.CLAMP_1["WMT"] > 1:
                 print("CLAMP_1 vert clamping unhandled")
                 exit()
         elif addr == 0x09: 
