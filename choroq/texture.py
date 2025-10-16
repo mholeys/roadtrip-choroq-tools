@@ -100,7 +100,7 @@ class Texture:
                 width = gs_state.TRXREG["RRW"]
                 height = gs_state.TRXREG["RRH"]
                 if gs_state.TRXPOS["DSAX"] != 0 or gs_state.TRXPOS["DSAY"] != 0:
-                    # This textures address is actually + some amount
+                    # This texture's address is actually + some amount
                     # This must be handled by the next layer, as it does not have
                     # a way to append the data, so return different format
                     if gs_state.TRXPOS["DIR"] != 0:
@@ -367,7 +367,7 @@ class Texture:
             image = Image.frombytes('RGB', (self.width, self.height), self.texture, 'raw')
             return bytes(image.tobytes())
         else:
-            if type(self.palette) == bytes:
+            if type(self.palette) is bytes:
                 if usepalette:
                     image = Image.frombytes('P', (self.width, self.height), self.texture, 'raw', 'P')
                     palette = ImagePalette.raw("RGBA", self.palette)
@@ -396,7 +396,7 @@ class Texture:
             if flip_y:
                 rgbd = ImageOps.flip(rgbd)
 
-            return bytes(rgbd.tobytes())
+            return rgbd.tobytes()
 
     def write_texture_to_png(self, path, flip_x=False, flip_y=False, use_palette=True, use_given_palette=False):
         colour_list = []

@@ -5,8 +5,8 @@ from choroq.texture import Texture
 
 
 class APTexture:
-    STOP_ON_NEW = False
-    PRINT_DEBUG = False
+    STOP_ON_NEW = True
+    PRINT_DEBUG = True
 
     def __init__(self, name, val_a, val_b, total_size, offset):
         self.offset = offset
@@ -230,6 +230,8 @@ class APTexture:
                 g = U.readByte(file)
                 b = U.readByte(file)
                 a = U.readByte(file)
+                if a == 0x80:
+                    a = 255
                 palette.append((r, g, b, a))
             # palette = file.read(palette_size * 4)
             if APTexture.PRINT_DEBUG:
