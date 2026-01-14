@@ -69,15 +69,15 @@ import io
 import sys
 import os
 import math
-from choroq.amesh import AMesh
-from choroq.texture import Texture
-import choroq.read_utils as U
-import choroq.ps2_utils as PS2
+from choroq.egame.amesh import AMesh
+from choroq.egame.texture import Texture
+import choroq.egame.read_utils as U
+import choroq.egame.ps2_utils as PS2
 
 
 class CarModel:
 
-    def __init__(self, name, meshes = [], textures = []):
+    def __init__(self, name, meshes=[], textures=[]):
         self.name = name
         self.meshes = meshes
         self.textures = textures
@@ -108,8 +108,9 @@ class CarModel:
 
         for o in sub_file_offsets:
             mesh = CarMesh.from_file(file, offset+o)
-            if len(mesh) > 0:
-                meshes += mesh
+            # if len(mesh) > 0:
+            #     meshes += mesh
+            meshes.append(mesh)
 
         texture, last = Texture.read_texture(file, offset+texture_offset)
         textures.append(texture)
@@ -122,13 +123,13 @@ class CarModel:
 
 class CarMesh(AMesh):
 
-    def __init__(self, meshVertCount, meshVerts, meshNormals, meshUvs, meshFaces, meshColours):
-        self.meshVertCount   = meshVertCount
-        self.meshVerts       = meshVerts
-        self.meshNormals     = meshNormals
-        self.meshUvs         = meshUvs
-        self.meshFaces       = meshFaces
-        self.meshColours     = meshColours
+    def __init__(self, mesh_vert_count, mesh_verts, mesh_normals, mesh_uvs, mesh_faces, mesh_colours):
+        self.mesh_vert_count = mesh_vert_count
+        self.mesh_verts = mesh_verts
+        self.mesh_normals = mesh_normals
+        self.mesh_uvs = mesh_uvs
+        self.mesh_faces = mesh_faces
+        self.mesh_colours = mesh_colours
 
     @staticmethod
     def _parse_offsets(file, offset):
@@ -333,12 +334,12 @@ class CarMesh(AMesh):
                     # it is changed in VU1 afaik
                     print("Match")
                     print(f"Got to before verts {file.tell()}")
-                    offsetX, offsetY, offsetZ = (0, 0, 0)
+                    offset_x, offset_y, offset_z = (0, 0, 0)
                     if exec_type == 48:
                         # read offset x/y/z/w first
                         # I believe these parts of the data, are probably transparent meshes
-                        offsetX, offsetY, offsetZ = U.readXYZ(file)
-                        offsetW = U.readFloat(file)
+                        offset_x, offset_y, offset_z = U.readXYZ(file)
+                        offset_w = U.readFloat(file)
                     if hg3:
                         # Has extra at start unknown data
                         U.readXYZ(file)
@@ -374,7 +375,7 @@ class CarMesh(AMesh):
                         tw = U.readFloat(file)
 
                         c = (cr, cg, cb, 255)  # Convert to RGBA
-                        verts.append((offsetX + vx, offsetY + vy, offsetZ + vz))
+                        verts.append((offset_x + vx, offset_y + vy, offset_z + vz))
                         colours.append(c)
                         normals.append((nx, ny, nz))
                         uvs.append((tu, 1 - tv, tw))
@@ -404,104 +405,103 @@ class CarMesh(AMesh):
 
     def write_mesh_to_dbg(self, fout, start_index=0, material=None):
         self.write_mesh_to_obj(fout, start_index, material, False)
-        fout.write("#" + str(len(self.meshColours)) + " colours R/G/B/A\n")
-        for i in range(0, len(self.meshFaces)):
-            cr = '{:d}'.format(math.trunc(self.meshColours[i][0]))
-            cg = '{:d}'.format(math.trunc(self.meshColours[i][1]))
-            cb = '{:d}'.format(math.trunc(self.meshColours[i][2]))
-            ca = '{:d}'.format(math.trunc(self.meshColours[i][3]))
+        fout.write("#" + str(len(self.mesh_colours)) + " colours R/G/B/A\n")
+        for i in range(0, len(self.mesh_faces)):
+            cr = '{:d}'.format(math.trunc(self.mesh_colours[i][0]))
+            cg = '{:d}'.format(math.trunc(self.mesh_colours[i][1]))
+            cb = '{:d}'.format(math.trunc(self.mesh_colours[i][2]))
+            ca = '{:d}'.format(math.trunc(self.mesh_colours[i][3]))
             
             fout.write(f"c {cr} {cg} {cb} {ca}\n")
         
-        return len(self.meshVerts)
+        return len(self.mesh_verts)
 
     def write_mesh_to_obj(self, fout, start_index=0, material=None, with_colours=False):
         fout.write(f"usemtl {material}\n")
         fout.write("s off\n")
         # Write vertices
-        for i in range(0, len(self.meshVerts)):
-            vx = '{:.20f}'.format(self.meshVerts[i][0])
-            vy = '{:.20f}'.format(self.meshVerts[i][1])
-            vz = '{:.20f}'.format(self.meshVerts[i][2])
+        for i in range(0, len(self.mesh_verts)):
+            vx = '{:.20f}'.format(self.mesh_verts[i][0])
+            vy = '{:.20f}'.format(self.mesh_verts[i][1])
+            vz = '{:.20f}'.format(self.mesh_verts[i][2])
             if with_colours:
                 # Some programs support additional data, e.g colors after x/y/z
                 # the following section can be used to export with colors (blender supports first set)
-                r = '{:.20f}'.format(self.meshColours[i][0] / 255.0)
-                g = '{:.20f}'.format(self.meshColours[i][1] / 255.0)
-                b = '{:.20f}'.format(self.meshColours[i][2] / 255.0)
+                r = '{:.20f}'.format(self.mesh_colours[i][0] / 255.0)
+                g = '{:.20f}'.format(self.mesh_colours[i][1] / 255.0)
+                b = '{:.20f}'.format(self.mesh_colours[i][2] / 255.0)
                 fout.write(f"v {vx} {vy} {vz} {r} {g} {b}\n")
             else:
                 fout.write(f"v {vx} {vy} {vz}\n")
-        fout.write("#" + str(len(self.meshVerts)) + " vertices\n")
+        fout.write("#" + str(len(self.mesh_verts)) + " vertices\n")
             
         # Write normals
-        for i in range(0, len(self.meshNormals)):
-            nx = '{:.20f}'.format(self.meshNormals[i][0])
-            ny = '{:.20f}'.format(self.meshNormals[i][1])
-            nz = '{:.20f}'.format(self.meshNormals[i][2])
+        for i in range(0, len(self.mesh_normals)):
+            nx = '{:.20f}'.format(self.mesh_normals[i][0])
+            ny = '{:.20f}'.format(self.mesh_normals[i][1])
+            nz = '{:.20f}'.format(self.mesh_normals[i][2])
             fout.write("vn " + nx + " " + ny + " " + nz + "\n")
-        fout.write("#" + str(len(self.meshNormals)) + " vertex normals\n")
+        fout.write("#" + str(len(self.mesh_normals)) + " vertex normals\n")
         
         # Write texture coordinates (uv)
-        for i in range(0, len(self.meshUvs)):
-            tu = '{:.20f}'.format(self.meshUvs[i][0])
-            tv = '{:.20f}'.format(self.meshUvs[i][1])
+        for i in range(0, len(self.mesh_uvs)):
+            tu = '{:.20f}'.format(self.mesh_uvs[i][0])
+            tv = '{:.20f}'.format(self.mesh_uvs[i][1])
             fout.write("vt " + tu + " " + tv + "\n")
-        fout.write("#" + str(len(self.meshUvs)) + " texture vertices\n")
+        fout.write("#" + str(len(self.mesh_uvs)) + " texture vertices\n")
         
         # Write mesh face order/list
-        for i in range(0, len(self.meshFaces)):
-            fx = self.meshFaces[i][0] + start_index
-            fy = self.meshFaces[i][1] + start_index
-            fz = self.meshFaces[i][2] + start_index
+        for i in range(0, len(self.mesh_faces)):
+            fx = self.mesh_faces[i][0] + start_index
+            fy = self.mesh_faces[i][1] + start_index
+            fz = self.mesh_faces[i][2] + start_index
             
             fout.write(f"f {fx}/{fx}/{fx} {fy}/{fy}/{fy} {fz}/{fz}/{fz}\n")
-        fout.write("#" + str(len(self.meshFaces)) + " faces\n")
+        fout.write("#" + str(len(self.mesh_faces)) + " faces\n")
     
-        return len(self.meshVerts)
+        return len(self.mesh_verts)
 
     def write_mesh_to_comb(self, fout, start_index=0, material=None):
-        fout.write(f"vertex_count {len(self.meshVerts)}\n")
-        fout.write(f"face_count {len(self.meshFaces)}\n")
+        fout.write(f"vertex_count {len(self.mesh_verts)}\n")
+        fout.write(f"face_count {len(self.mesh_faces)}\n")
         fout.write(f"texture {material}\n")
         fout.write("end_header\n")
 
         # Write verticies, colours, normals
-        for i in range(0, len(self.meshVerts)):
-            vx = '{:.20f}'.format(self.meshVerts[i][0])
-            vy = '{:.20f}'.format(self.meshVerts[i][1])
-            vz = '{:.20f}'.format(self.meshVerts[i][2])
+        for i in range(0, len(self.mesh_verts)):
+            vx = '{:.20f}'.format(self.mesh_verts[i][0])
+            vy = '{:.20f}'.format(self.mesh_verts[i][1])
+            vz = '{:.20f}'.format(self.mesh_verts[i][2])
 
-            cr = '{:d}'.format(math.trunc(self.meshColours[i][0]))
-            cg = '{:d}'.format(math.trunc(self.meshColours[i][1]))
-            cb = '{:d}'.format(math.trunc(self.meshColours[i][2]))
-            ca = '{:d}'.format(math.trunc(self.meshColours[i][3]))
+            cr = '{:d}'.format(math.trunc(self.mesh_colours[i][0]))
+            cg = '{:d}'.format(math.trunc(self.mesh_colours[i][1]))
+            cb = '{:d}'.format(math.trunc(self.mesh_colours[i][2]))
+            ca = '{:d}'.format(math.trunc(self.mesh_colours[i][3]))
 
-            nx = '{:.20f}'.format(self.meshNormals[i][0])
-            ny = '{:.20f}'.format(self.meshNormals[i][1])
-            nz = '{:.20f}'.format(self.meshNormals[i][2])
+            nx = '{:.20f}'.format(self.mesh_normals[i][0])
+            ny = '{:.20f}'.format(self.mesh_normals[i][1])
+            nz = '{:.20f}'.format(self.mesh_normals[i][2])
 
-            tu = '{:.10f}'.format(self.meshUvs[i][0])
-            tv = '{:.10f}'.format(self.meshUvs[i][1])
+            tu = '{:.10f}'.format(self.mesh_uvs[i][0])
+            tv = '{:.10f}'.format(self.mesh_uvs[i][1])
 
             fout.write(f"{vx} {vy} {vz} {nx} {ny} {nz} {cr} {cg} {cb} {ca} {tu} {tv}\n")
         
         # Write mesh face order/list
-        for i in range(0, len(self.meshFaces)):
-            fx = self.meshFaces[i][0] - 1 + start_index
-            fy = self.meshFaces[i][1] - 1 + start_index
-            fz = self.meshFaces[i][2] - 1 + start_index
+        for i in range(0, len(self.mesh_faces)):
+            fx = self.mesh_faces[i][0] - 1 + start_index
+            fy = self.mesh_faces[i][1] - 1 + start_index
+            fz = self.mesh_faces[i][2] - 1 + start_index
             
             fout.write(f"4 {fx} {fy} {fz}\n")
         
-        return len(self.meshVerts)
+        return len(self.mesh_verts)
 
-
-    def write_mesh_to_ply(self, fout, start_index = 0):
+    def write_mesh_to_ply(self, fout, start_index=0):
         # Write header
         fout.write("ply\n")
         fout.write("format ascii 1.0\n")
-        fout.write(f"element vertex {len(self.meshVerts)}\n")
+        fout.write(f"element vertex {len(self.mesh_verts)}\n")
         fout.write("property float x\n")
         fout.write("property float y\n")
         fout.write("property float z\n")
@@ -514,39 +514,39 @@ class CarMesh(AMesh):
         fout.write("property uchar alpha\n")
         fout.write("property float s\n")
         fout.write("property float t\n")
-        fout.write(f"element face {len(self.meshFaces)}\n")
+        fout.write(f"element face {len(self.mesh_faces)}\n")
         fout.write("property list uint8 int vertex_index\n")
-        #fout.write(f"element texture {len(self.mesh_uvs)}\n")
-        #fout.write("property list uint8 float texcoord\n")
+        # fout.write(f"element texture {len(self.mesh_uvs)}\n")
+        # fout.write("property list uint8 float texcoord\n")
         fout.write("end_header\n")
 
         # Write verticies, colours, normals
-        for i in range(0, len(self.meshVerts)):
-            vx = '{:.20f}'.format(self.meshVerts[i][0])
-            vy = '{:.20f}'.format(self.meshVerts[i][1])
-            vz = '{:.20f}'.format(self.meshVerts[i][2])
+        for i in range(0, len(self.mesh_verts)):
+            vx = '{:.20f}'.format(self.mesh_verts[i][0])
+            vy = '{:.20f}'.format(self.mesh_verts[i][1])
+            vz = '{:.20f}'.format(self.mesh_verts[i][2])
 
-            cr = '{:d}'.format(math.trunc(self.meshColours[i][0]))
-            cg = '{:d}'.format(math.trunc(self.meshColours[i][1]))
-            cb = '{:d}'.format(math.trunc(self.meshColours[i][2]))
-            ca = '{:d}'.format(math.trunc(self.meshColours[i][3]))
+            cr = '{:d}'.format(math.trunc(self.mesh_colours[i][0]))
+            cg = '{:d}'.format(math.trunc(self.mesh_colours[i][1]))
+            cb = '{:d}'.format(math.trunc(self.mesh_colours[i][2]))
+            ca = '{:d}'.format(math.trunc(self.mesh_colours[i][3]))
 
-            nx = '{:.20f}'.format(self.meshNormals[i][0])
-            ny = '{:.20f}'.format(self.meshNormals[i][1])
-            nz = '{:.20f}'.format(self.meshNormals[i][2])
+            nx = '{:.20f}'.format(self.mesh_normals[i][0])
+            ny = '{:.20f}'.format(self.mesh_normals[i][1])
+            nz = '{:.20f}'.format(self.mesh_normals[i][2])
 
-            tu = '{:.10f}'.format(self.meshUvs[i][0])
-            tv = '{:.10f}'.format(self.meshUvs[i][1])
+            tu = '{:.10f}'.format(self.mesh_uvs[i][0])
+            tv = '{:.10f}'.format(self.mesh_uvs[i][1])
 
             fout.write(f"{vx} {vy} {vz} {nx} {ny} {nz} {cr} {cg} {cb} {ca} {tu} {tv}\n")
         
         # Write mesh face order/list
-        for i in range(0, len(self.meshFaces)):
-            fx = self.meshFaces[i][0] - 1 + start_index
-            fy = self.meshFaces[i][1] - 1 + start_index
-            fz = self.meshFaces[i][2] - 1 + start_index
+        for i in range(0, len(self.mesh_faces)):
+            fx = self.mesh_faces[i][0] - 1 + start_index
+            fy = self.mesh_faces[i][1] - 1 + start_index
+            fz = self.mesh_faces[i][2] - 1 + start_index
             
             fout.write(f"4 {fx} {fy} {fz}\n")
 
-        return len(self.meshVerts)
+        return len(self.mesh_verts)
         

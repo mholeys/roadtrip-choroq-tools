@@ -63,7 +63,7 @@ import os
 import io
 import struct
 import math
-import choroq.read_utils as U
+import choroq.egame.read_utils as U
 from dataclasses import dataclass    
 
 def decode_DMATag(file):

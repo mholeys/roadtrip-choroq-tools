@@ -88,6 +88,8 @@ def cpk_decode(path, out_path, output_formats, save_all_textures=True):
                 name = f"pbl-{index_counts['PBL']}"
 
                 index_counts['PBL'] += 1
+                if sf is None:
+                    continue
                 for pbl in sf:
                     # If the object only uses one texture, then why not name it as it might help
                     if len(pbl.texture_references) == 1:

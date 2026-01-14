@@ -6,12 +6,10 @@
 
 import io
 import os
-from choroq.amesh import AMesh
-from choroq.texture import Texture
-from choroq.car import CarModel, CarMesh
-from choroq.car_hg3 import HG3CarModel, HG3CarMesh
-import choroq.ps2_utils as PS2
-import choroq.read_utils as U
+from choroq.egame.amesh import AMesh
+from choroq.egame.texture import Texture
+import choroq.egame.ps2_utils as PS2
+import choroq.egame.read_utils as U
 
 
 class Shop():

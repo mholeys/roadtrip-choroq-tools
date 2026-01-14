@@ -11,13 +11,13 @@ import tkinter as tk
 from tkinter import filedialog
 import weakref
 
-from choroq.texture import Texture as QTexture
-from choroq.car import CarModel as QCar
-from choroq.car_hg3 import HG3CarModel as QHG3Car
+from choroq.egame.texture import Texture as QTexture
+from choroq.egame.car import CarModel as QCar
+#from choroq.egame.car_hg3 import HG3CarModel as QHG3Car
 
-from choroq.course import CourseModel as QCourse
+from choroq.egame.course import CourseModel as QCourse
 
-import choroq.read_utils as U
+import choroq.egame.read_utils as U
 
 from enum import Enum
 
@@ -867,66 +867,67 @@ class CarViewer(RenderStackItem):
             file_size = f.tell()
             f.seek(0, os.SEEK_SET)
 
-            if car.game_version == GameVersions.CHOROQ_HG_2:
-                car = QCar.read_car(f, 0, file_size)
-            elif car.game_version == GameVersions.CHOROQ_HG_3:
-                car = QHG3Car.from_file(f, 0, file_size)
+            #if car.game_version == GameVersions.CHOROQ_HG_2:
+            car = QCar.read_car(f, 0, file_size)
+            # elif car.game_version == GameVersions.CHOROQ_HG_3:
+            #     car = QHG3Car.from_file(f, 0, file_size)
 
             # Convert to raylib models
             self.car_options[slot].set_size(len(car.meshes))
-            for mesh in car.meshes:
-                rMesh, material = self.ConvertCarModel(mesh, car.textures)
-                self.loaded_cars[slot].models.meshes.append(rMesh)
-                self.loaded_cars[slot].models.materials.append(material)
+            for subfile in car.meshes:
+                for mesh in subfile:
+                    rMesh, material = self.ConvertCarModel(mesh, car.textures)
+                    self.loaded_cars[slot].models.meshes.append(rMesh)
+                    self.loaded_cars[slot].models.materials.append(material)
 
     def ConvertCarModel(self, mesh, textures):
         # Mesh is CarMesh obj
-        # mesh.meshVertCount
-        # mesh.meshVerts
-        # mesh.meshNormals
-        # mesh.meshUvs
-        # mesh.meshFaces
-        # mesh.meshColours
+        # mesh.mesh_vert_count
+        # mesh.mesh_verts
+        # mesh.mesh_normals
+        # mesh.mesh_uvs
+        # mesh.mesh_faces
+        # mesh.mesh_colours
         # Mesh
 
         rMesh = ffi.new("struct Mesh*")
-        vertices_c = ffi.new(f"float [{mesh.meshVertCount * 3}]")
+        vertices_c = ffi.new(f"float [{mesh.mesh_vert_count * 3}]")
         rMesh.vertices = vertices_c
-        for i in range(0, mesh.meshVertCount):
-            rMesh.vertices[i * 3] = -mesh.meshVerts[i][0]
-            rMesh.vertices[i * 3 + 1] = mesh.meshVerts[i][1]
-            rMesh.vertices[i * 3 + 2] = mesh.meshVerts[i][2]
+        for i in range(0, mesh.mesh_vert_count):
+            rMesh.vertices[i * 3] = -mesh.mesh_verts[i][0]
+            rMesh.vertices[i * 3 + 1] = mesh.mesh_verts[i][1]
+            rMesh.vertices[i * 3 + 2] = mesh.mesh_verts[i][2]
 
-        normals_c = ffi.new(f"float [{mesh.meshVertCount * 3}]")
+        normals_c = ffi.new(f"float [{mesh.mesh_vert_count * 3}]")
         rMesh.normals = normals_c
-        for i in range(0, mesh.meshVertCount):
-            rMesh.normals[i * 3] = -mesh.meshNormals[i][0]
-            rMesh.normals[i * 3 + 1] = -mesh.meshNormals[i][1]
-            rMesh.normals[i * 3 + 2] = -mesh.meshNormals[i][2]
+        for i in range(0, mesh.mesh_vert_count):
+            rMesh.normals[i * 3] = -mesh.mesh_normals[i][0]
+            rMesh.normals[i * 3 + 1] = -mesh.mesh_normals[i][1]
+            rMesh.normals[i * 3 + 2] = -mesh.mesh_normals[i][2]
 
-        uvs_c = ffi.new(f"float [{mesh.meshVertCount * 2}]")
+        uvs_c = ffi.new(f"float [{mesh.mesh_vert_count * 2}]")
         rMesh.texcoords = uvs_c
-        for i in range(0, mesh.meshVertCount):
-            rMesh.texcoords[i * 2] = mesh.meshUvs[i][0]
-            rMesh.texcoords[i * 2 + 1] = -mesh.meshUvs[i][1]
+        for i in range(0, mesh.mesh_vert_count):
+            rMesh.texcoords[i * 2] = mesh.mesh_uvs[i][0]
+            rMesh.texcoords[i * 2 + 1] = -mesh.mesh_uvs[i][1]
 
-        faces_c = ffi.new(f"unsigned short [{mesh.meshVertCount * 3}]")
+        faces_c = ffi.new(f"unsigned short [{mesh.mesh_vert_count * 3}]")
         rMesh.indices = faces_c
-        for i in range(0, len(mesh.meshFaces)):
-            rMesh.indices[i * 3] = mesh.meshFaces[i][2] - 1
-            rMesh.indices[i * 3 + 1] = mesh.meshFaces[i][1] - 1
-            rMesh.indices[i * 3 + 2] = mesh.meshFaces[i][0] - 1
+        for i in range(0, len(mesh.mesh_faces)):
+            rMesh.indices[i * 3] = mesh.mesh_faces[i][2] - 1
+            rMesh.indices[i * 3 + 1] = mesh.mesh_faces[i][1] - 1
+            rMesh.indices[i * 3 + 2] = mesh.mesh_faces[i][0] - 1
 
-        colours_c = ffi.new(f"unsigned char [{mesh.meshVertCount * 4}]")
+        colours_c = ffi.new(f"unsigned char [{mesh.mesh_vert_count * 4}]")
         rMesh.colors = colours_c
-        for i in range(0, mesh.meshVertCount):
-            rMesh.colors[i * 4] = int(mesh.meshColours[i][0])
-            rMesh.colors[i * 4 + 1] = int(mesh.meshColours[i][1])
-            rMesh.colors[i * 4 + 2] = int(mesh.meshColours[i][2])
-            rMesh.colors[i * 4 + 3] = int(mesh.meshColours[i][3])
+        for i in range(0, mesh.mesh_vert_count):
+            rMesh.colors[i * 4] = int(mesh.mesh_colours[i][0])
+            rMesh.colors[i * 4 + 1] = int(mesh.mesh_colours[i][1])
+            rMesh.colors[i * 4 + 2] = int(mesh.mesh_colours[i][2])
+            rMesh.colors[i * 4 + 3] = int(mesh.mesh_colours[i][3])
 
-        rMesh.vertexCount = mesh.meshVertCount
-        rMesh.triangleCount = len(mesh.meshFaces)
+        rMesh.vertexCount = mesh.mesh_vert_count
+        rMesh.triangleCount = len(mesh.mesh_faces)
 
         self.global_weakkeydict[rMesh] = (vertices_c, normals_c, uvs_c, faces_c, colours_c)
         self.global_weakkeydict[mesh] = rMesh

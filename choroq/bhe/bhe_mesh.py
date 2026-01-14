@@ -495,6 +495,7 @@ class BHEMesh(AMesh):
             # texture assignment, from texture list (by name) at the start
             texture_index = U.BreadShort(file)
             face_type = U.readShort(file)  # This might not be useful, but it varies
+            pos = file.tell()
             face_filler = U.readShort(file)  # This might not be useful, but its either 0 or FFFF
 
             file.seek(4, os.SEEK_CUR)

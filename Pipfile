@@ -12,6 +12,8 @@ colorama = "*"
 pillow = "*"
 customtkinter = "*"
 lzstring = "*"
+pyelftools = "*"
+pycdlib = "*"
 
 [requires]
 python_version = "3.12"

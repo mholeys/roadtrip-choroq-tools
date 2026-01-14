@@ -17,11 +17,10 @@ import os
 import math
 import sys
 
-from choroq.amesh import AMesh
-from choroq.texture import Texture
-from choroq.car import CarModel, CarMesh
-from choroq.car_hg3 import HG3CarModel, HG3CarMesh
-import choroq.read_utils as U
+from choroq.egame.amesh import AMesh
+from choroq.egame.texture import Texture
+from choroq.egame.car import CarModel, CarMesh
+import choroq.egame.read_utils as U
 
 
 class GarageModel:
@@ -65,6 +64,7 @@ class GarageModel:
             next_try = (math.floor(current / 2048) + 1) * 2048
             current = file.tell()
         print(f"Skipped until {file.tell()}")
+
 
 class GarageEntry:
 

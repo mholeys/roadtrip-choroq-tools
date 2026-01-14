@@ -1,10 +1,10 @@
-from choroq.texture import Texture
-from choroq.car import CarModel, CarMesh
-from choroq.car_hg3 import HG3CarModel, HG3CarMesh
-from choroq.course import CourseModel, Course
-from choroq.garage import GarageModel
-from choroq.shop import Shop
-from choroq.quickpic import QuickPic
+from choroq.egame.texture import Texture
+from choroq.egame.car import CarModel, CarMesh
+# from choroq.egame.car_hg3 import HG3CarModel, HG3CarMesh
+from choroq.egame.course import CourseModel, Course
+from choroq.egame.garage import GarageModel
+from choroq.egame.shop import Shop
+from choroq.egame.quickpic import QuickPic
 
 import io
 import os
@@ -303,9 +303,16 @@ def process_course_type(course_file, dest_folder, file_number, out_type, file_pr
             for e, extra in enumerate(course.extras):
                 if should_exit:
                     break
-                for i, mesh in enumerate(extra.meshes):
-                    with open(f"{dest_folder}/{file_prefix}{file_number}-extra{e}-{i}.{extension}", "w") as fout:
-                        mesh.write_mesh_to_type(out_type, fout)
+                # Check for [subfile]/[mesh] vs [mesh]
+                if type(extra.meshes) is list and type(extra.meshes[0]) is list:
+                    for i, subfile in enumerate(extra.meshes):
+                        for mi, mesh in enumerate(subfile):
+                            with open(f"{dest_folder}/{file_prefix}{file_number}-extra{e}-{i}-{mi}.{extension}", "w") as fout:
+                                mesh.write_mesh_to_type(out_type, fout)
+                else:
+                    for i, mesh in enumerate(extra.meshes):
+                        with open(f"{dest_folder}/{file_prefix}{file_number}-extra{e}-{i}.{extension}", "w") as fout:
+                            mesh.write_mesh_to_type(out_type, fout)
                 for i in range(0, len(extra.textures)):
                     address, texture = extra.textures[i]
                     if texture is None:
@@ -521,52 +528,71 @@ def process_cars(source, dest, output_formats):
                     if entry.name == "STICKER.BIN":
                         continue
                     if not entry.name.startswith('.') and entry.is_file():
-                        process_file(entry, dest, output_formats, version, True)
+                        process_entry(entry, dest, output_formats, version, True)
 
 
-def process_file(entry, folder_out, output_formats, version, is_car=False):
+def process_entry(entry, folder_out, output_formats, version, is_car=False):
     if type(entry) is str:
         entry = Path(entry)
     basename = entry.name[0 : entry.name.find('.')]
     print(f"Processing {entry}")
-    with open(entry, "rb") as f:
-        out_folder = f"{folder_out}/CARS/{basename}"
-        Path(out_folder).mkdir(parents=True, exist_ok=True)
-        if CREATE_LOG_FILES:
-            log_dest = f"{out_folder}/log.log"
-        else:
-            log_dest = os.devnull
-        prev_std_out = sys.stdout
-        with open(log_dest, "w") as sys.stdout:
-            f.seek(0, os.SEEK_END)
-            file_size = f.tell()
-            f.seek(0, os.SEEK_SET)
-            if version == 2:
-                car = CarModel.read_car(f, 0, file_size)
-            elif version == 3:
-                car = HG3CarModel.from_file(f, 0, file_size)
+    with open(entry, "rb") as file:
+        process_file(file, basename, folder_out, output_formats, version, is_car)
 
-            # Get texture, and fix clut/palette
-            address, texture = car.textures[0]
-            clut_address, clut = car.textures[1]
-            # assign palette
-            unswizzled = Texture.unswizzle_bytes(clut)
-            texture.palette = unswizzled  # Set the texture's palette accordingly
-            texture.palette_width = clut.width
-            texture.palette_height = clut.height
 
-            # Save texture and material for use in mesh
-            texture.write_texture_to_png(f"{out_folder}/{basename}.png")
-            # texture.writePaletteToPNG(f"{out_folder}/{basename}-{i}-p.png")
-            texture_path = f"{basename}.png"
+def process_file(file, basename, folder_out, output_formats, version, is_car=False):
+    out_folder = f"{folder_out}/CARS/{basename}"
+    Path(out_folder).mkdir(parents=True, exist_ok=True)
+    if CREATE_LOG_FILES:
+        log_dest = f"{out_folder}/log.log"
+    else:
+        log_dest = os.devnull
+    prev_std_out = sys.stdout
+    with open(log_dest, "w") as sys.stdout:
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0, os.SEEK_SET)
+        # if version == 2:
+        car = CarModel.read_car(file, 0, file_size)
+        # elif version == 3:
+        #     car = HG3CarModel.from_file(file, 0, file_size)
 
-            mesh_section_names = ["body", "lights", "brake-light", "lp-body", "lp-lights", "spoiler", "spoiler2", "jets", "sticker"]
-            mesh_section_names_10 = ["body", "lights", "brake-light", "lp-body", "lp-lights", "spoiler", "spoiler-brake", "spoiler2", "jets", "sticker"]
-            # this varies by car currently (HG3) so it is not implemented
-            mesh_section_names_hg3 = ["body", "brake-light", "lights", "lights2", "lp-body", "lp-lights", "lp-lights-2",
-                                      "7", "spoiler", "9", "10", "11"]
+        # Get texture, and fix clut/palette
+        address, texture = car.textures[0]
+        clut_address, clut = car.textures[1]
+        # assign palette
+        unswizzled = Texture.unswizzle_bytes(clut)
+        texture.palette = unswizzled  # Set the texture's palette accordingly
+        texture.palette_width = clut.width
+        texture.palette_height = clut.height
 
-            for i, mesh in enumerate(car.meshes):
+        # Save texture and material for use in mesh
+        texture.write_texture_to_png(f"{out_folder}/{basename}.png")
+        # texture.writePaletteToPNG(f"{out_folder}/{basename}-{i}-p.png")
+        texture_path = f"{basename}.png"
+
+        mesh_section_names = [
+            ["body", "lights", "brake-light"],
+            ["lp-body", "lp-lights"],
+            ["spoiler"],
+            ["spoiler2"],
+            ["jets"],
+            ["sticker"]]
+
+        mesh_section_names_hg3 = [
+            ["body", "unknown", "brake-light", "lights", "lights2"],
+            ["lp-body", "null", "lp-lights", "lp-lights-2"],
+            ["spoiler"],
+            ["f1-spoiler"],
+            ["boat-adapter"],
+            ["hover-adapter"],
+            ["sticker"]]
+
+        if version == 3:
+            mesh_section_names = mesh_section_names_hg3
+
+        for i, subfile in enumerate(car.meshes):
+            for mi, mesh in enumerate(subfile):
                 if should_exit:
                     break
                 for outType in output_formats:
@@ -575,13 +601,12 @@ def process_file(entry, folder_out, output_formats, version, is_car=False):
                     extension = outType
                     if outType == "obj+colour":
                         extension = "obj"
-                    if is_car and len(car.meshes) == 9:
-                        mesh_path = f"{mesh_section_names[i]}.{extension}"
-                    elif is_car and len(car.meshes) == 10:
-                        mesh_path = f"{mesh_section_names_10[i]}.{extension}"
+
+                    if is_car and i < len(mesh_section_names) and mi < len(mesh_section_names[i]):
+                        mesh_path = f"{i}-{mi}-{mesh_section_names[i][mi]}"
                     else:
-                        mesh_path = f"{i}.{extension}"
-                    with open(f"{out_folder}/{basename}-{mesh_path}", "w") as fout:
+                        mesh_path = f"{i}"
+                    with open(f"{out_folder}/{basename}-{mesh_path}.{extension}", "w") as fout:
                         if outType == "comb":
                             mesh.write_mesh_to_type(outType, fout, material=texture_path)
                         else:
@@ -589,8 +614,7 @@ def process_file(entry, folder_out, output_formats, version, is_car=False):
                     if outType == "obj" or outType == "obj+colour":
                         with open(f"{out_folder}/{basename}-{mesh_path}.mtl", "w") as fout:
                             Texture.save_material_file_obj(fout, basename, texture_path)
-        sys.stdout = prev_std_out
-
+    sys.stdout = prev_std_out
 
 def process_items(source, dest, output_formats):
     print("Processing items")
@@ -809,7 +833,7 @@ def process_sys(source, dest, output_formats):
                                     save_course_type_grouped(mesh_by_material, number_of_meshes, out_folder,
                                                              basename, out_type, "", textures)
                             elif extension == "BIN":
-                                process_file(entry, out_folder, output_formats, 2)
+                                process_entry(entry, out_folder, output_formats, 2)
 
                         sys.stdout = prev_std_out
 

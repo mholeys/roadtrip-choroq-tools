@@ -79,7 +79,9 @@ class PBLModel(BHEMesh):
                         name = name[0:end_letter].decode("ascii").rstrip('\00')
                     except Exception as e2:
                         print("Cannot parse name, other error occurred")
+                        print(f"Read failed at {file.tell()}")
                         raise e2
+                        # return
 
                 texture_references.append((name, (t_width, t_height, t_format, t_unknown)))
 

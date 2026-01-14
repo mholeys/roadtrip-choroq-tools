@@ -107,11 +107,11 @@
 import io
 import os
 import math
-from choroq.amesh import AMesh
-from choroq.texture import Texture
-from choroq.car import CarModel, CarMesh
-import choroq.read_utils as U
-import choroq.ps2_utils as PS2
+from choroq.egame.amesh import AMesh
+from choroq.egame.texture import Texture
+from choroq.egame.car import CarModel, CarMesh
+import choroq.egame.read_utils as U
+import choroq.egame.ps2_utils as PS2
 
 
 class CourseModel:

@@ -1,6 +1,6 @@
-from choroq.texture import Texture
-from choroq.car import CarModel, CarMesh
-from choroq.car_hg3 import HG3CarModel, HG3CarMesh
+from choroq.egame.texture import Texture
+from choroq.egame.car import CarModel, CarMesh
+# from choroq.egame.car_hg3 import HG3CarModel, HG3CarMesh
 
 import io
 import os
@@ -47,7 +47,7 @@ def process_file(entry, folder_out, obj=True, ply=True, gameVersion = 2, with_co
         # if gameVersion == 2:
         car = CarModel.read_car(f, 0, file_size)
         # elif gameVersion == 3:
-        #     car = HG3CarModel.from_file(f, 0, file_size)
+        #     car = HG3CarModel.read_car(f, 0, file_size)
 
         # Get texture, and fix clut/palette
         address, texture = car.textures[0]
@@ -60,28 +60,46 @@ def process_file(entry, folder_out, obj=True, ply=True, gameVersion = 2, with_co
 
         # Save texture and material for use in mesh
         texture.write_texture_to_png(f"{out_folder}{basename}.png")
-        # texture.writePaletteToPNG(f"{out_folder}/{basename}-{i}-p.png")
+        # texture.write_texture_to_png(f"{out_folder}{basename}-raw.png", use_palette=False)
+        # texture.write_palette_to_png(f"{out_folder}/{basename}-p.png")
         texture_path = f"{basename}.png"
 
+        mesh_section_names = [
+            ["body", "lights", "brake-light"],
+            ["lp-body", "lp-lights"],
+            ["spoiler"],
+            ["spoiler2"],
+            ["jets"],
+            ["sticker"]]
 
-        mesh_section_names = ["body", "lights", "brake-light", "lp-body", "lp-lights", "spoiler", "spoiler2", "jets",
-                              "sticker"]
-        # this varies by car currently (HG3) so it is not implemented
-        mesh_section_names_hg3 = ["body", "brake-light", "lights", "lights2", "lp-body", "lp-lights", "lp-lights-2", "7", "spoiler", "9", "10", "11"]
+        mesh_section_names_hg3 = [
+            ["body",  "unknown", "brake-light", "lights", "lights2"],
+            ["lp-body", "null", "lp-lights", "lp-lights-2"],
+            ["spoiler"],
+            ["f1-spoiler"],
+            ["boat-adapter"],
+            ["hover-adapter"],
+            ["sticker"]]
 
-        for i, mesh in enumerate(car.meshes):
-            if len(car.meshes) == 9:
-                mesh_path = mesh_section_names[i]
-            else:
-                mesh_path = i
-            if obj:
-                with open(f"{out_folder}{basename}-{mesh_path}.obj", "w") as fout:
-                    mesh.write_mesh_to_obj(fout, material=basename, with_colours=with_colour)
-                with open(f"{out_folder}{basename}-{mesh_path}.mtl", "w") as fout:
-                    Texture.save_material_file_obj(fout, basename, texture_path)
-            if ply:
-                with open(f"{out_folder}{basename}-{mesh_path}.ply", "w") as fout:
-                    mesh.write_mesh_to_ply(fout)
+        if gameVersion == 3:
+            mesh_section_names = mesh_section_names_hg3
+
+        index = 0
+        for i, subfile in enumerate(car.meshes):
+            for mi, mesh in enumerate(subfile):
+                if i < len(mesh_section_names) and mi < len(mesh_section_names[i]):
+                    mesh_path = f"{i}-{mi}-{mesh_section_names[i][mi]}"
+                else:
+                    mesh_path = f"{i}-{mi}"
+                if obj:
+                    with open(f"{out_folder}{basename}-{mesh_path}.obj", "w") as fout:
+                        mesh.write_mesh_to_obj(fout, material=basename, with_colours=with_colour)
+                    with open(f"{out_folder}{basename}-{mesh_path}.mtl", "w") as fout:
+                        Texture.save_material_file_obj(fout, basename, texture_path)
+                if ply:
+                    with open(f"{out_folder}{basename}-{mesh_path}.ply", "w") as fout:
+                        mesh.write_mesh_to_ply(fout)
+                index += 1
 
 
 if __name__ == '__main__':

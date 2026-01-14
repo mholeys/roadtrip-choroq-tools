@@ -6,14 +6,14 @@
 import io
 import os
 import math
-from choroq.texture import Texture
-from choroq.car import CarMesh
-import choroq.read_utils as U
+from choroq.egame.texture import Texture
+from choroq.egame.car import CarMesh
+import choroq.egame.read_utils as U
 
 
 class QuickPic:
 
-    def __init__(self, textures = []):
+    def __init__(self, textures=[]):
         self.textures = textures
 
     @staticmethod
