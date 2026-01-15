@@ -37,7 +37,7 @@ class MessageBox(customtkinter.CTkToplevel):
 
         self.callback = callback
 
-        message_label = customtkinter.CTkLabel(self, text=message, fg_color="gray30", corner_radius=6)
+        message_label = customtkinter.CTkLabel(self, text=message, corner_radius=6)
 
         self.rowconfigure(0, weight=1)
 
@@ -145,7 +145,6 @@ class ModdingUi(customtkinter.CTk):
                             borderwidth=0)
         treestyle.map('Treeview', background=[('selected', bg_color)], foreground=[('selected', selected_color)])
         treestyle.configure("Treeview.Heading",
-                            background="gray30",
                             foreground="white",
                             relief="flat")
         treestyle.map("Treeview.Heading",
@@ -338,16 +337,16 @@ class FileInfoFrame(CTkFrame):
         self.rowconfigure(1, weight=1)
         self.rowconfigure(2, weight=100)
 
-        self.top_label = customtkinter.CTkLabel(self, text="File Info", fg_color="gray30", corner_radius=6)
+        self.top_label = customtkinter.CTkLabel(self, text="File Info", corner_radius=6)
         self.top_label.grid(row=0, column=0, sticky="new")
         self.top_label.cget("font").configure(size=15)
 
         self.name_var = customtkinter.StringVar()
-        self.name_label = customtkinter.CTkLabel(self, textvariable=self.name_var, fg_color="gray30", corner_radius=6)
+        self.name_label = customtkinter.CTkLabel(self, textvariable=self.name_var, corner_radius=6)
         self.name_label.grid(row=1, column=0, sticky="nesw")
         self.name_label.cget("font").configure(size=15)
 
-        self.main_text = customtkinter.CTkTextbox(self, fg_color="gray30", corner_radius=6)
+        self.main_text = customtkinter.CTkTextbox(self, corner_radius=6)
         # self.main_text.configure(state="disabled")
         self.main_text.grid(row=2, column=0, sticky="nesw")
 
@@ -381,7 +380,7 @@ class FileEntryTree(CTkFrame):
 
     def __init__(self, master, **kwargs):
         super().__init__(master, **kwargs)
-        self.label = customtkinter.CTkLabel(self, text="Disk Contents", fg_color="gray30", corner_radius=6)
+        self.label = customtkinter.CTkLabel(self, text="Disk Contents", corner_radius=6)
         self.label.grid(row=0, sticky="nesw")
 
         self.treeview = ttk.Treeview(self, show=("tree", "headings"), selectmode="browse",
