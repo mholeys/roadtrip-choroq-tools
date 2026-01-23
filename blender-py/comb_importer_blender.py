@@ -1,6 +1,10 @@
-# ImportHelper is a helper class, defines filename and
-# invoke() function which calls the file selector.
 # Expect this to be buggy, try the single mesh option if it doesn't work first time
+# I have tested this on
+# - 2.80 does not work, as it does not support colour attributes
+# - 3.0 does not work, as it does not support colour attributes
+# - 3.2 works, as in no errors
+# - 3.3 works, as in no errors
+# - 4.5 works, as in no errors
 
 import sys
 import bmesh
@@ -310,7 +314,7 @@ class ChoroQCombImporter(Operator, ImportHelper):
         line = file.readline().split(' ')
         x = y = z = nx = ny = nz = 0
         r = g = b = a = s = t = 0
-        nr = ng = nb = 0
+        nr = ng = nb = na = 0
         fx = fy = fz = 0
         data = map(lambda x: float(x), line)
         if combType == "1":

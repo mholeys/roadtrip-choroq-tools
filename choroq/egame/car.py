@@ -462,6 +462,11 @@ class CarMesh(AMesh):
         return len(self.mesh_verts)
 
     def write_mesh_to_comb(self, fout, start_index=0, material=None):
+        fout.write("comb - mesh data format\n")
+        fout.write(f"meshes 1\n")
+        fout.write(f"type 1\n")
+        fout.write(f"s 1\n")  # Start of a mesh
+
         fout.write(f"vertex_count {len(self.mesh_verts)}\n")
         fout.write(f"face_count {len(self.mesh_faces)}\n")
         fout.write(f"texture {material}\n")
@@ -494,6 +499,8 @@ class CarMesh(AMesh):
             fz = self.mesh_faces[i][2] - 1 + start_index
             
             fout.write(f"4 {fx} {fy} {fz}\n")
+
+        fout.write(f"e 1\n")  # End of a mesh
         
         return len(self.mesh_verts)
 
