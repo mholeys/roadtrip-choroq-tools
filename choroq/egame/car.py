@@ -88,6 +88,7 @@ class CarModel:
         sub_file_offsets = []
         o = U.readLong(file)
         sub_file_offsets.append(o)
+        # read until we are either at the first offset read, or until the offset becomes 0
         while o != size and o != 0 and (len(sub_file_offsets) == 0 or (file.tell() < offset+sub_file_offsets[0])):
             o = U.readLong(file)
             if o == 0:

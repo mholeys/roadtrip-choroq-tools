@@ -5,7 +5,7 @@ verify_ssl = true
 
 [dev-packages]
 pyinstaller = "*"
-customtkinter = "*"
+auto-py-to-exe = "*"
 
 [packages]
 colorama = "*"

@@ -71,7 +71,7 @@ class DialogueReader:
             section_offset = section.header.sh_offset
             section_size = section.header.sh_size
 
-            if section_addr <= position < section_addr + section_size: # check in range
+            if section_addr <= position < section_addr + section_size:  # check in range
                 # The ptr is in this section, so adjust ptr to position in file
                 return -section_addr + section_offset
         else:
@@ -105,17 +105,17 @@ class DialogueReader:
 
         for ptr in language_ptrs:
             offset = self.get_section_offset(ptr)
-            dialogues.append(self.read_dialogue_hg2(ptr + offset, offset))
+            dialogues.append(self.read_dialogue_hg2(ptr + offset))
 
-    def read_dialogue_hg2(self, offset, start_offset):
+    def read_dialogue_hg2(self, offset):
         # hg2 structure is nested ptrs
         # - Language ptr
         # -- [Town ptrs] # This one
-        # --- [Shop ptrs]
+        # --- [Shop ptrs] # each shop list is null terminated for english/Pal
         # ---- [Line ptrs]
         # ----- Line/text/precodes
         decoded = []
-        print(f"Reading language from [{offset-start_offset:x}]")
+        print(f"Reading language from [{offset:x}]")
         for i, (town, count) in enumerate(DialogueReader.HG2_TOWNS):
             print(f"Reading [{town}] with {count}")
             self.file.seek(offset + i * 4, os.SEEK_SET)

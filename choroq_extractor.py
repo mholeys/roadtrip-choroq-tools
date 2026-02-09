@@ -1,3 +1,4 @@
+from choroq.egame import texture
 from choroq.egame.texture import Texture
 from choroq.egame.car import CarModel, CarMesh
 # from choroq.egame.car_hg3 import HG3CarModel, HG3CarMesh
@@ -22,6 +23,11 @@ OUTPUT_CHUNKED_COLLIDER = False
 OUTPUT_GROUPED_OBJS = False
 # Create log files or not (probably not that useful for most people)
 CREATE_LOG_FILES = False
+
+# If this is set to true, for each field/course/action it will try and create textures that were missed
+# or not referenced by any meshes. Warning this makes many attempts, and saves them all, may produce lots more
+# files and takes up more space. Output into new folder, e.g "C00/tex-unused/"
+TRY_DUMP_UNUSED_TEXTURES = False
 
 should_exit = False
 
@@ -122,6 +128,8 @@ def save_course_type_grouped(mesh_by_material, number_of_meshes, dest_folder, fi
 
     Path(f"{dest_folder}/meshes/tex/").mkdir(parents=True, exist_ok=True)
     mat_index = 0
+    # Build a list of used and unused textures, so we can save the other ones too
+    done_addresses = []
     done_textures = []
     for key, mm in mesh_by_material.items():
         if should_exit:
@@ -129,6 +137,7 @@ def save_course_type_grouped(mesh_by_material, number_of_meshes, dest_folder, fi
         # Export textures
         material_name = f"{file_prefix}{file_number}-{mat_index}"
         texture_path_relative = f"tex/t{file_number}-{mat_index}.png"
+
         # save texture for this mesh
         if key not in done_textures:
             clut_address, texture_address = key
@@ -204,6 +213,8 @@ def save_course_type_grouped(mesh_by_material, number_of_meshes, dest_folder, fi
                         Texture.save_material_file_obj(fout, material_name, texture_path_relative)
 
                 done_textures.append(key)
+                done_addresses.append(key[0]) # clut/texture address vs key
+                done_addresses.append(key[1])
 
         # If you come across this, this is a custom file format I have made, expect this to change over time
         # you will have to modify this file to get this to output
@@ -234,6 +245,78 @@ def save_course_type_grouped(mesh_by_material, number_of_meshes, dest_folder, fi
                     vert_count += mesh.write_mesh_to_type(out_type, fout, vert_count, material_name)
 
         mat_index += 1
+    if TRY_DUMP_UNUSED_TEXTURES:
+        # Save all unreferenced textures, such as the skybox
+        # This ofc will be referenced by the game somewhere, but its not directly addressed here
+        unused_textures = []
+        unreferenced_textures = []
+
+        for address in textures:
+            if address not in done_addresses:
+                # Ignore any none or invalid types
+                if isinstance(textures[address], Texture):
+                    unused_textures.append(address)
+
+        if len(unused_textures) > 0:
+            Path(f"{dest_folder}/tex-unused/").mkdir(parents=True, exist_ok=True)
+
+        # Now try and combine the textures using a guess at its palette
+        for texture_address in unused_textures:
+            texture = textures[texture_address]
+
+            if texture.bpp > 8 and texture.width > 16 and texture.height > 16:
+                # Does not need a clut
+                # write as is
+                texture.write_texture_to_png(f"{dest_folder}/tex-unused/unused-{texture_address:x}-full.png", use_palette=False)
+                # Save this address, so we do not use it as a palette
+                unreferenced_textures.append(texture_address)
+            else:
+                # This texture needs a clut, or is b&w (unlikely)
+                # Save a raw copy
+                texture.write_texture_to_png(f"{dest_folder}/tex-unused/unused-{texture_address:x}-raw.png", use_palette=False)
+
+                # Locate next palette and use that, might not work, but we do not know how it gets referenced so we do not
+                # have two addresses, this makes lots of attempts, x*x for number of textures/cluts
+                for clut_address in unused_textures:
+                    clut = textures[clut_address]
+                    if clut is None:
+                        continue
+                    if clut.bpp <= 8 or clut.width > 64 or clut.height > 64:
+                        continue  # skip this as it is not a clut, probably a texture
+
+                    print("Found next clut for unreferenced texture")
+                    # Clut valid enough
+                    # Unswizzle the palette, as these are (should) be swizzled for the PS2
+                    unswizzled = Texture.unswizzle_bytes(clut)
+                    texture.palette = unswizzled  # Set the texture's palette accordingly
+                    texture.palette_width = clut.width
+                    texture.palette_height = clut.height
+                    try:
+                        # Save the texture using the given clut
+                        texture.write_texture_to_png(f"{dest_folder}/tex-unused/unused-{texture_address:x}-{clut_address:x}.png")
+                        print(f"Attempted to save unreferenced texture: unused-{texture_address:x}.png")
+                        print()
+                    except Exception as e:
+                        if isinstance(e, ValueError):
+                            if len(e.args) == 1 and e.args[0] == "invalid palette size":
+                                # Assume this is a normal b&w texture and the clut is probably just a different tex
+                                print(f"Not using CLUT: as bpp {clut.bpp} is not right")
+                                print(f"{dest_folder}/tex-unused/unused-{texture_address:x}.png")
+                                texture.palette = []
+                                texture.palette_width = 0
+                                texture.palette_height = 0
+                                texture.write_texture_to_png(f"{dest_folder}/tex-unused/unused-{texture_address:x}-raw.png", use_palette=False)
+                        else:
+                            texture.write_texture_to_png(
+                                f"{dest_folder}/tex-unused/failed-unused-{texture_address:x}.png",
+                                use_palette=False)
+                            clut.write_texture_to_png(
+                                f"{dest_folder}/tex-unused/failed-clut-unused-{clut_address:x}.png")
+                            print(
+                                f"Failed to write texture probably decoded badly Course:{file_number} Texture: {texture_address} {clut_address} {texture}")
+                            print(
+                                f"Info: W: {texture.width} x H:{texture.height}  pW: {texture.palette_width} x pH: {texture.palette_height}")
+                            print(e)
 
 
 def save_course_type(meshes, dest_folder, file_number, out_type, file_prefix):
@@ -608,7 +691,7 @@ def process_file(file, basename, folder_out, output_formats, version, is_car=Fal
                         mesh_path = f"{i}"
                     with open(f"{out_folder}/{basename}-{mesh_path}.{extension}", "w") as fout:
                         if outType == "comb":
-                            mesh.write_mesh_to_type(outType, fout, material=texture_path)
+                            mesh.write_mesh_to_type(outType, fout, material=f"{out_folder}/tex/{basename}.png")
                         else:
                             mesh.write_mesh_to_type(outType, fout, material=basename)
                     if outType == "obj" or outType == "obj+colour":
