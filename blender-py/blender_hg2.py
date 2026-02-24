@@ -153,11 +153,14 @@ def export_hg2(context, filepath):
     # 0 = Sub0 / Body
     # 1 = Sub1 / Lights
     # 2 = Sub2 / Brake lights
-    vertices = [[], [], []]
-    normals = [[], [], []]
-    colours = [[], [], []]
-    uvs = [[], [], []]
-    colour_indices = [[], [], []]  # each inner will have 1 element of 0/1/2 to select which two-tone colour to use
+    vertices = [[[], []], [[], []], [[], []]]
+    normals = [[[], []], [[], []], [[], []]]
+    colours = [[[], []], [[], []], [[], []]]
+    uvs = [[[], []], [[], []], [[], []]]
+    colour_indices = [[[], []], [[], []], [[], []]]  # each inner will have 1 element of 0/1/2 to select which two-tone colour to use
+
+    ever_textured = [False, False, False]
+    ever_untextured = [False, False, False]
 
     for obj in bpy.context.selected_objects:
         print(f"processing [{obj.name}]")
@@ -185,9 +188,10 @@ def export_hg2(context, filepath):
 
         # Convert mesh into tristrips
         # Create pyffi mesh to convert to tristrips
-        pyffi_mesh_0 = [Mesh(), Mesh(), Mesh()]  # One mesh per colour selector?
-        pyffi_mesh_1 = [Mesh(), Mesh(), Mesh()]
-        pyffi_mesh_2 = [Mesh(), Mesh(), Mesh()]
+        # On mesh for textured/untextured per colour index
+        pyffi_mesh_0 = [[Mesh(), Mesh()], [Mesh(), Mesh()], [Mesh(), Mesh()]]
+        pyffi_mesh_1 = [[Mesh(), Mesh()], [Mesh(), Mesh()], [Mesh(), Mesh()]]
+        pyffi_mesh_2 = [[Mesh(), Mesh()], [Mesh(), Mesh()], [Mesh(), Mesh()]]
         pyffi_meshes = [pyffi_mesh_0, pyffi_mesh_1, pyffi_mesh_2]
 
         # Bad but possibly needed vertex -> face table. Probably bad
@@ -207,80 +211,107 @@ def export_hg2(context, filepath):
             if colour_index not in [0, 1, 2]:
                 raise Exception("Invalid colour index attribute, must be 0/1/2")
             # Build up all faces into are temporary mesh, for tristripping
-            pyffi_meshes[object_index][colour_index].add_face(face.vertices[0], face.vertices[1], face.vertices[2])
+
+            # Check to see if any are textured, as we want to draw theses in a different strip
+            v0_uv = mesh.uv_layers.active.data[face.loop_indices[0]].uv
+            v1_uv = mesh.uv_layers.active.data[face.loop_indices[1]].uv
+            v2_uv = mesh.uv_layers.active.data[face.loop_indices[2]].uv
+
+            # print(f"v0_uv {v0_uv}")
+            # print(f"v1_uv {v1_uv}")
+            # print(f"v2_uv {v2_uv}")
+
+            v0_textured = v0_uv[0] != 0 or v0_uv[1] != 0
+            v1_textured = v1_uv[0] != 0 or v1_uv[1] != 0
+            v2_textured = v2_uv[0] != 0 or v2_uv[1] != 0
+
+            textured = 0
+            if ((
+                    v0_textured or v1_textured or v2_textured)
+                    and
+                    (v0_uv != v1_uv or v0_uv != v2_uv or v1_uv != v2_uv)):
+                textured = 1
+                ever_textured[object_index] = True
+            else:
+                ever_untextured[object_index] = True
+
+            pyffi_meshes[object_index][colour_index][textured].add_face(face.vertices[0], face.vertices[1], face.vertices[2])
             face_dict[face.vertices[0]] = (face, face.loop_indices[0])
             face_dict[face.vertices[1]] = (face, face.loop_indices[1])
             face_dict[face.vertices[2]] = (face, face.loop_indices[2])
+
+        print(f"Ever textured? {ever_textured[0]} {ever_textured[1]} {ever_textured[2]}")
+        print(f"Ever untextured? {ever_untextured[0]} {ever_untextured[1]} {ever_untextured[2]}")
 
         # Calculate tristrips, per block of colour, as there is no way to reconstruct the original faces from verts
         for sub_obj_index in [0, 1, 2]:
             print(f"Tristripping {obj} for subj_obj [{sub_obj_index}]")
             for colour_index in [0, 1, 2]:
-                pyffi_meshes[sub_obj_index][colour_index].lock()
-                pyffi_stripper = TriangleStripifier(pyffi_meshes[sub_obj_index][colour_index])
+                for textured_index in [0, 1]:
+                    pyffi_meshes[sub_obj_index][colour_index][textured_index].lock()
+                    pyffi_stripper = TriangleStripifier(pyffi_meshes[sub_obj_index][colour_index][textured_index])
 
-                strips = pyffi_stripper.find_all_strips()
+                    strips = pyffi_stripper.find_all_strips()
 
-                # Add the converted values to our lists
-                # strips_x = [[index,], [index,]], # sub list for each strip for obj x
-                for strip in strips:
-                    new_verts = []
-                    new_normals = []
-                    new_colours = []
-                    new_uv = []
-                    new_colour_index = [colour_index]
-                    for vert_index in strip:
-                        # capture world position/rotation
-                        x, y, z = obj.matrix_world @ mesh.vertices[vert_index].co
-                        new_verts.append((x, y, z))
-                        nx, nz, ny = mesh.vertices[vert_index].normal
-                        new_normals.append((nx, ny, nz))
-                        #if mesh.attributes.active_color is not None:
-                        r, g, b, a = mesh.attributes.active_color.data[vert_index].color_srgb
-                        #else:
-                        #    r, g, b, a = 128.0, 128.0, 128.0, 128.0
-                        new_colours.append((r, g, b, a))
-                        unique_rbga.add((r * 256.0, g * 256.0, b * 256.0, a * 256.0))
-                        #u, v = mesh.uv_layers.active.data[vert_index].uv
-                        # u = mesh.polygons[face_dict[vert_index].index].uv[0]
-                        # v = mesh.polygons[face_dict[vert_index].index].uv[1]
-                        # Have to access uvs via loop index
-                        u, v = mesh.uv_layers.active.data[face_dict[vert_index][1]].uv
-                        new_uv.append((u, v))
-                    vertices[sub_obj_index].append(new_verts)
-                    normals[sub_obj_index].append(new_normals)
-                    colours[sub_obj_index].append(new_colours)
-                    uvs[sub_obj_index].append(new_uv)
-                    colour_indices[sub_obj_index].append(new_colour_index)
-        for i in [0, 1, 2]:
-            print(f"For sub obj [{i}]")
-            dim2 = len(vertices[i])
-            dim3 = None
-            if dim2 != 0:
-                dim3 = len(vertices[i][0])
-            print(f"Vertices length stripCount:[{dim2}] first:[{dim3}] ")
-            print(vertices[i])
+                    # Add the converted values to our lists
+                    # strips_x = [[index,], [index,]], # sub list for each strip for obj x
+                    for strip in strips:
+                        new_verts = []
+                        new_normals = []
+                        new_colours = []
+                        new_uv = []
+                        new_colour_index = [colour_index]
+                        for vert_index in strip:
+                            # capture world position/rotation
+                            x, y, z = obj.matrix_world @ mesh.vertices[vert_index].co
+                            new_verts.append((x, y, z))
+                            nx, nz, ny = mesh.vertices[vert_index].normal
+                            new_normals.append((nx, ny, nz))
+                            if mesh.attributes.active_color is not None:
+                                r, g, b, a = mesh.attributes.active_color.data[vert_index].color_srgb
+                            else:
+                                r, g, b, a = 128.0, 128.0, 128.0, 128.0
+                            new_colours.append((r, g, b, a))
+                            unique_rbga.add((r * 256.0, g * 256.0, b * 256.0, a * 256.0))
 
-            dim2 = len(normals[i])
-            dim3 = None
-            if dim2 != 0:
-                dim3 = len(normals[i][0])
-            print(f"Normals length stripCount:[{dim2}] first:[{dim3}] ")
-
-            dim2 = len(colours[i])
-            dim3 = None
-            if dim2 != 0:
-                dim3 = len(colours[i][0])
-            print(f"Colours length stripCount:[{dim2}] first:[{dim3}] ")
-
-            dim2 = len(uvs[i])
-            dim3 = None
-            if dim2 != 0:
-                dim3 = len(uvs[i][0])
-            print(f"Uvs length stripCount:[{dim2}] first:[{dim3}] ")
-
-            dim2 = len(colour_indices[i])
-            print(f"colour_indices length stripCount:[{dim2}]")
+                            # Have to access uvs via loop index
+                            u, v = mesh.uv_layers.active.data[face_dict[vert_index][1]].uv
+                            new_uv.append((u, v))
+                        vertices[sub_obj_index][textured_index].append(new_verts)
+                        normals[sub_obj_index][textured_index].append(new_normals)
+                        colours[sub_obj_index][textured_index].append(new_colours)
+                        uvs[sub_obj_index][textured_index].append(new_uv)
+                        colour_indices[sub_obj_index][textured_index].append(new_colour_index)
+        # for i in [0, 1, 2]:
+        #     for textured_index in [0, 1]:
+        #         print(f"For sub obj [{i}]")
+        #         dim2 = len(vertices[i][textured_index])
+        #         dim3 = None
+        #         if dim2 != 0:
+        #             dim3 = len(vertices[i][textured_index][0])
+        #         print(f"Vertices length stripCount:[{dim2}] first:[{dim3}] ")
+        #         print(vertices[i])
+        #
+        #         dim2 = len(normals[i][textured_index])
+        #         dim3 = None
+        #         if dim2 != 0:
+        #             dim3 = len(normals[i][textured_index][0])
+        #         print(f"Normals length stripCount:[{dim2}] first:[{dim3}] ")
+        #
+        #         dim2 = len(colours[i][textured_index])
+        #         dim3 = None
+        #         if dim2 != 0:
+        #             dim3 = len(colours[i][textured_index][0])
+        #         print(f"Colours length stripCount:[{dim2}] first:[{dim3}] ")
+        #
+        #         dim2 = len(uvs[i])
+        #         dim3 = None
+        #         if dim2 != 0:
+        #             dim3 = len(uvs[i][textured_index][0])
+        #         print(f"Uvs length stripCount:[{dim2}] first:[{dim3}] ")
+        #
+        #         dim2 = len(colour_indices[i][textured_index])
+        #         print(f"colour_indices length stripCount:[{dim2}]")
 
     return save_mesh(filepath, vertices, normals, colours, uvs, colour_indices)
 
@@ -303,7 +334,7 @@ def save_mesh(filepath, vertices, normals, colours, uvs, colour_indices):
             # Each face will also have GIF tag (16 bytes)
             # Each face will have x/y/z*3 nx/ny/z*3 r/g/b*3 uv.u/uv.v/0*3 (144 bytes)
             # Each face will also have Exec call (4 bytes)
-            # Each Part will have a end dma tag (16 bytes)
+            # Each Part will have an end dma tag (16 bytes)
             exec_call = exec_call_per_object[obj_index]
 
             dma_tag_size = 4
@@ -315,27 +346,39 @@ def save_mesh(filepath, vertices, normals, colours, uvs, colour_indices):
             # Depends on exec call
             bytes_per_vertex = {EXEC_ADDR_NORMAL: 48, EXEC_ADDR_TRANSPARENT: 48}
 
-            strip_count = len(vertices[obj_index])
             gif_count = 0
 
+            # VIF here is set cycle tag, this is 3/4 of the dma tag
             part_header_size = dma_tag_size + zero_pad_dma_size + vif_tag_size
 
             mesh_size = 0
-            for strip_index in range(strip_count):
-                mesh_size += vif_tag_size + gif_tag_size + vif_tag_size  # copy tag with gif, and expand tag with data
-                vert_count = len(vertices[obj_index][strip_index])
-                mesh_size += vert_count * bytes_per_vertex[exec_call]
-                mesh_size += vif_exec_size
-                gif_count += 1
+            # calculate byte length per strip
+            for textured_index in [0, 1]:
+                print(f"Object [{obj_index}]  has  {len(vertices[obj_index][textured_index])} strips")
+                for strip_index in range(len(vertices[obj_index][textured_index])):
+                    print(f"Object [{obj_index}] doing {strip_index} / {len(vertices[obj_index][textured_index])} strips {len(vertices[obj_index][textured_index][strip_index])}")
+                    # copy gif tag (vif expand false), and expand tag with data
+                    mesh_size += vif_tag_size + gif_tag_size + vif_tag_size
 
-            # VIF here is set cycle tag
+                    vert_count = len(vertices[obj_index][textured_index][strip_index])
+                    if vert_count < 3:
+                        raise Exception("Created a triangle strip, with no triangles")
+                    mesh_size += vert_count * bytes_per_vertex[exec_call]
+
+                    mesh_size += vif_exec_size  # call to run VU1 program
+                    gif_count += 1
+
             total_size = part_header_size + mesh_size
 
             # Total size of this part (1 part of subsection)
             # Fix size to be padded to end on 16 boundary, to align dma tags (end dma tag)
+
+            print(f"Padding required: total_size: {total_size} %16: {total_size % 16} + 16")
+
             padding = 0
             if total_size % 16 != 0:
                 padding = 16 - (total_size % 16)
+            print(f"Padding required: total_size: {total_size} %16: {total_size % 16} ({padding}) + {end_dma_tag_size}")
             total_size += padding + end_dma_tag_size
             sizes.append(total_size)
             paddings.append(padding)
@@ -364,8 +407,8 @@ def save_mesh(filepath, vertices, normals, colours, uvs, colour_indices):
         for obj_index in [0, 1, 2]:
             # Check position in file, we should know where we are at all points
             if file.tell() != positions[obj_index]:
-                print(f"File position incorrect {file.tell()} vs positions[{obj_index}] = {positions[obj_index]}")
-                break
+                print(f"File position incorrect got {file.tell()} vs expected positions[{obj_index}] = {positions[obj_index]} obj: {obj_index}")
+                raise Exception("Miscalculated size of object, bug in code, no solution in blender")
 
             # Write DMA tag
             dma_tag_suffix = [0x00, 0x10]
@@ -387,116 +430,131 @@ def save_mesh(filepath, vertices, normals, colours, uvs, colour_indices):
             file.write(bytes([0x01, 0x01, 0x00, 0x01]))
 
             exec_call = exec_call_per_object[obj_index]
+            for textured_index in [0, 1]:
+                # Write mesh data
+                # Loop over all strips and write out the data
+                for strip_index in range(len(vertices[obj_index][textured_index])):
+                    # Write VIF V4-32 tag, this just copies the GIF tag to the VIF for later use, so is always this
+                    file.write(bytes([0x00, 0x80, 0x01, 0x6C]))
 
-            # Write mesh data
-            # Loop over all strips and write out the data
-            for strip_index in range(len(vertices[obj_index])):
-                # Write VIF V4-32 tag, this just copies the GIF tag to the VIF for later use, so is always this
-                file.write(bytes([0x00, 0x80, 0x01, 0x6C]))
+                    # Write GIF tag (to say what we are sending) (always same for cars AFAIK)
+                    # e.g 3 verts = 03 80 00 00 00 40 36 31 12 04 00 00 00 00 00 00
+                    vert_count = len(vertices[obj_index][textured_index][strip_index])
+                    if vert_count > 255:
+                        raise Exception(f"Strip too long, vert_count: {vert_count} max is 255 per strip.\n"
+                                        f"No current fix sorry")
+                    colour_group = colour_indices[obj_index][textured_index][strip_index][0]
+                    texture_marker = 0
 
-                # Write GIF tag (to say what we are sending) (always same for cars AFAIK)
-                # e.g 3 verts = 03 80 00 00 00 40 36 31 12 04 00 00 00 00 00 00
-                vert_count = len(vertices[obj_index][strip_index])
-                if vert_count > 255:
-                    raise Exception(f"Strip too long, vert_count: {vert_count} max is 255 per strip.\n"
-                                    f"No current fix sorry")
-                colour_group = colour_indices[obj_index][strip_index][0]
-                texture_marker = 0
+                    # check for texturing required primitive
+                    textured = textured_index == 1
 
-                # check for texturing required primitive
-                textured = False
+                    # # Check to see if any have texture coords
+                    # for vertex_index in range(vert_count):
+                    #     u, v = uvs[obj_index][textured_index][strip_index][vertex_index]
+                    #     if u != 0 or v != 0:
 
-                # Check to see if any have texture coords
-                for vertex_index in range(vert_count):
-                    u, v = uvs[obj_index][strip_index][vertex_index]
-                    if u != 0 or v != 0:
-                        # Unsure what 2 means, but it is what is in the game
-                        # There might be other values, needs investigating
-                        texture_marker = 0x00
-                        textured = True
-                # 0x32 Tristrip flat shaded
-                # 0x36 Tristrip Gouraud shaded
-                # 0x3A Tristrip flat shaded + textured
-                # 0x3C Tristrip Gouraud shaded + textured
-                if textured:
-                    prim = 0x3A  # 0x03C
-                else:
-                    prim = 0x32
-
-                gif_tag = [vert_count, 0x80, 0x00, 0x00,
-                           texture_marker, 0x40, prim, 0x31,  # First byte on this row, changes 0 or 1 or 2 ?
-                           0x12, 0x04, 0x00, 0x00,
-                           # First byte on this row v, sets the colour block I think, 0=texture, 1=colour1, 2=colour2
-                           colour_group, 0x00, 0x00, 0x00]
-                file.write(bytes(gif_tag))
-
-                # Write VIF expand tag
-                vif_expand_count = vert_count * 4
-                vif_tag = [0x01, 0x80, vif_expand_count, 0x68]
-                file.write(bytes(vif_tag))
-
-                # Write out each vertex
-                for vertex_index in range(vert_count):
-                    x, y, z = vertices[obj_index][strip_index][vertex_index]
-                    r, g, b, a = colours[obj_index][strip_index][vertex_index]
-                    u, v = uvs[obj_index][strip_index][vertex_index]
-                    # TODO: shiny/smoothness value
-                    # dump(mesh.vertices[vert_index])
-
-                    # print(f"x {x} y {y} z {z}")
-                    # print(f"nx {nx} ny {ny} nz {nz}")
-                    print(f"r {r} g {g} b {b} a {a}")
-                    # print(f"u {u} v {v}")
-
-                    # Guess smoothness
+                    #         # There might be other values, needs investigating
+                    #         texture_marker = 0x00
+                    #         textured = True
+                    # 0x32 Tristrip flat shaded; not sure what this is used on
+                    # 0x36 Tristrip Gouraud shaded
+                    # 0x3A Tristrip flat shaded + textured; used on all textured surfaces afaik
+                    # 0x3C Tristrip Gouraud shaded + textured; doesn't work
                     if textured:
-                        smoothness = 51.0
                         if exec_call == EXEC_ADDR_TRANSPARENT:
-                            smoothness = 204
+                            prim = 0x3E
+                            # Unsure what 2 means, but it is what is in the game
+                            texture_marker = 0x02
+                        else:
+                            prim = 0x3A
                     else:
-                        if colour_group == 0:
-                            smoothness = 1
-                        if colour_group == 1:
-                            smoothness = 280.5
-                        if 0.0025 <= r <= 0.0035 and 0.0045 <= g <= 0.0055 and 0.0065 <= b <= 0.0075:
-                            # Windscreen og colour
-                            smoothness = 357.0
-                        elif 0.0044 <= r <= 0.0046 and 0.0044 <= g <= 0.0046 and 0.0044 <= b <= 0.0046:
-                            # window trim
-                            smoothness = 0
-                        elif 0.0020 <= r <= 0.0039 and 0.0020 <= g <= 0.0039 and 0.0020 <= b <= 0.0039:
-                            smoothness = 0
-                    # round numbers to be the closest whole number, as the game seems to have an int in float
-                    r = round(r * 256.0, 0)
-                    g = round(g * 256.0, 0)
-                    b = round(b * 256.0, 0)
-                    rgba_allowed = [10, 30, 50, 60, 80, 128, 200, 230, 256]
-                    tolerance = 1
-                    # Only do this for numbers which are all the same. like 128/128/128 30/30/30
-                    for close in rgba_allowed:
-                        if abs(r - close) < tolerance:
-                            if abs(g - close) < tolerance:
-                                if abs(b - close) < tolerance:
-                                    r = close
-                                    g = close
-                                    b = close
+                        prim = 0x36
 
-                    if exec_call == EXEC_ADDR_NORMAL or exec_call == EXEC_ADDR_TRANSPARENT:
-                        nx, ny, nz = normals[obj_index][strip_index][vertex_index]
-                        vert_out = struct.pack('ffffffffffff',
-                                               x, z, y, # Tested this is correct (x , z, y)
-                                               -nx, ny, nz,  # Tested closest result is this (-nx, ny, nz)
-                                               r, g, b,
-                                               u, v, smoothness)
-                    file.write(vert_out)
-                # Write Exec VIF tag
-                if exec_call == EXEC_ADDR_NORMAL:
-                    exec_call_value = [0x04, 0x00, 0x00, 0x15]
-                elif exec_call == EXEC_ADDR_TRANSPARENT:
-                    exec_call_value = [0x0A, 0x00, 0x00, 0x15]
-                else:
-                    raise Exception("Invalid exec call, this is a bug")
-                file.write(bytes(exec_call_value))
+                    gif_tag = [vert_count, 0x80, 0x00, 0x00,
+                               texture_marker, 0x40, prim, 0x31,  # First byte on this row, changes 0 or 1 or 2 ?
+                               0x12, 0x04, 0x00, 0x00,
+                               # First byte on this row v, sets the colour block I think, 0=texture, 1=colour1, 2=colour2
+                               colour_group, 0x00, 0x00, 0x00]
+                    file.write(bytes(gif_tag))
+
+                    # Write VIF expand tag
+                    vif_expand_count = vert_count * 4
+                    vif_tag = [0x01, 0x80, vif_expand_count, 0x68]
+                    file.write(bytes(vif_tag))
+
+                    # Write out each vertex
+                    for vertex_index in range(vert_count):
+                        x, y, z = vertices[obj_index][textured_index][strip_index][vertex_index]
+                        r, g, b, a = colours[obj_index][textured_index][strip_index][vertex_index]
+                        u, v = uvs[obj_index][textured_index][strip_index][vertex_index]
+                        # TODO: shiny/smoothness value
+                        # dump(mesh.vertices[vert_index])
+
+                        v = 1 - v
+
+                        # print(f"x {x} y {y} z {z}")
+                        # print(f"nx {nx} ny {ny} nz {nz}")
+                        # print(f"r {r} g {g} b {b} a {a}")
+                        # print(f"u {u} v {v}")
+
+                        # round numbers to be the closest whole number, as the game seems to have an int in float
+                        r = round(r * 256.0, 0)
+                        g = round(g * 256.0, 0)
+                        b = round(b * 256.0, 0)
+                        rgba_allowed = [10, 30, 50, 60, 80, 128, 200, 230, 256]
+                        tolerance = 1
+                        # Only do this for numbers which are all the same. like 128/128/128 30/30/30
+                        for close in rgba_allowed:
+                            if abs(r - close) < tolerance:
+                                if abs(g - close) < tolerance:
+                                    if abs(b - close) < tolerance:
+                                        r = close
+                                        g = close
+                                        b = close
+
+                        # Guess smoothness
+                        if textured:
+                            smoothness = 51.0
+                            if exec_call == EXEC_ADDR_TRANSPARENT:
+                                smoothness = 1.0
+                        else:
+                            if colour_group == 0:
+                                smoothness = 1.0
+                            if colour_group == 1:
+                                smoothness = 280.5
+
+                            if 9 <= r <= 12 and 14 <= g <= 16 and 19 <= b <= 21:
+                                # Windscreen og colour
+                                # approx 0A0F14
+                                smoothness = 357.0
+                            elif 59 <= r <= 61 and 59 <= g <= 61 and 59 <= b <= 61:
+                                # window trim
+                                # approx 3C3C3C
+                                smoothness = 0.0
+                            # elif 0.0020 <= r <= 0.0039 and 0.0020 <= g <= 0.0039 and 0.0020 <= b <= 0.0039:
+                            #     smoothness = 0
+                            #elif body panels gaps:
+                                # body panel gaps: #1E1E1E
+                            #elif body:
+                                # body E5E5E5
+
+                        if exec_call == EXEC_ADDR_NORMAL or exec_call == EXEC_ADDR_TRANSPARENT:
+                            nx, ny, nz = normals[obj_index][textured_index][strip_index][vertex_index]
+                            vert_out = struct.pack('ffffffffffff',
+                                                   x, z, y, # Tested this is correct (x , z, y)
+                                                   -nx, nz, ny,  # Tested closest result is this (-nx, ny, nz)
+                                                   r, g, b,
+                                                   u, v, smoothness)
+                        file.write(vert_out)
+                    # Write Exec VIF tag
+                    if exec_call == EXEC_ADDR_NORMAL:
+                        exec_call_value = [0x04, 0x00, 0x00, 0x15]
+                    elif exec_call == EXEC_ADDR_TRANSPARENT:
+                        exec_call_value = [0x0A, 0x00, 0x00, 0x15]
+                    else:
+                        raise Exception("Invalid exec call, this is a bug")
+                    file.write(bytes(exec_call_value))
 
             # Pad file so end dma is 16 aligned
             print(f"Padding required for obj {obj_index}: {paddings[obj_index]}")
