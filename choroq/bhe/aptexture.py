@@ -1,7 +1,7 @@
 import os
 from PIL import Image, ImagePalette, ImageOps
-import choroq.read_utils as U
-from choroq.texture import Texture
+import choroq.egame.read_utils as U
+from choroq.egame.texture import Texture
 
 
 class APTexture:

@@ -200,7 +200,7 @@ class HG2SetupAttributesOperator(bpy.types.Operator):
         return {'FINISHED'}
 
 
-def export_hg2(context, filepath):
+def export_hg2(context, filepath, options):
     select_objects = bpy.context.selected_objects
     dump(select_objects)
 
@@ -379,13 +379,29 @@ def export_hg2(context, filepath):
         #         dim2 = len(colour_indices[i][textured_index])
         #         print(f"colour_indices length stripCount:[{dim2}]")
 
-    return save_mesh(filepath, vertices, normals, colours, uvs, colour_indices, smoothness)
+    return save_mesh(filepath, vertices, normals, colours, uvs, colour_indices, smoothness, options)
 
 
-def save_mesh(filepath, vertices, normals, colours, uvs, colour_indices, smoothness):
-    # TODO: move this to the save dialog, as option to say which of the exec calls to use
-    # TODO: (cnt) Ideally we could use both calls in one mesh, but means adding way more overhead
+def save_mesh(filepath, vertices, normals, colours, uvs, colour_indices, smoothness, options):
+    mesh_type_0, mesh_type_1, mesh_type_2, normal_type = options
+
+    # Handle dialog choices for which mesh type we are saving
     exec_call_per_object = [EXEC_ADDR_NORMAL, EXEC_ADDR_TRANSPARENT, EXEC_ADDR_TRANSPARENT]
+
+    if mesh_type_0 == "OPT_EXEC_NORMAL":
+        exec_call_per_object[0] = EXEC_ADDR_NORMAL
+    elif mesh_type_0 == "OPT_EXEC_TRANSPARENT":
+        exec_call_per_object[0] = EXEC_ADDR_TRANSPARENT
+
+    if mesh_type_1 == "OPT_EXEC_NORMAL":
+        exec_call_per_object[1] = EXEC_ADDR_NORMAL
+    elif mesh_type_1 == "OPT_EXEC_TRANSPARENT":
+        exec_call_per_object[1] = EXEC_ADDR_TRANSPARENT
+
+    if mesh_type_2 == "OPT_EXEC_NORMAL":
+        exec_call_per_object[2] = EXEC_ADDR_NORMAL
+    elif mesh_type_2 == "OPT_EXEC_TRANSPARENT":
+        exec_call_per_object[2] = EXEC_ADDR_TRANSPARENT
 
     with (open(filepath, "wb") as file):
         sizes = [16]
@@ -608,12 +624,20 @@ def save_mesh(filepath, vertices, normals, colours, uvs, colour_indices, smoothn
 
                         if exec_call == EXEC_ADDR_NORMAL or exec_call == EXEC_ADDR_TRANSPARENT:
                             nx, ny, nz = normals[obj_index][textured_index][strip_index][vertex_index]
+
+                            normals_adjusted = [nx, ny, nz]
+                            if normal_type == "OPT_NORMALS_REGULAR":
+                                # Tested next closest result (-nx, ny, nz)
+                                normals_adjusted = [-nx, ny, -nz]
+                            elif normal_type == "OPT_NORMALS_ALT":
+                                # this one works best for reimported HG2 cars; oddly
+                                # -nx, nz, ny,
+                                normals_adjusted = [-nx, nz, ny]
+
                             vert_out = struct.pack('ffffffffffff',
                                                    x, z, y,  # Tested this is correct (x , z, y)
-                                                   -nx, ny, -nz,  # Tested I think this is it (-nx, ny, -nz)
-                                                   # Tested next closest result (-nx, ny, nz)
-                                                   # this one works best for reimported HG2 cars; oddly
-                                                   # -nx, nz, ny,
+                                                   normals_adjusted[0], normals_adjusted[1], normals_adjusted[2],
+
                                                    r, g, b,
                                                    u, v, smoothness_value)
                         file.write(vert_out)
@@ -654,8 +678,50 @@ class HG2Exporter(bpy.types.Operator, ExportHelper):
         maxlen=255,  # Max internal buffer length, longer would be clamped.
     )
 
+    mesh_type_0: bpy.props.EnumProperty(
+        name="Mesh type ([0] / Body)",
+        description="Mesh format, most meshes are Solid, Body, Wheels, Spoiler",
+        items=(
+            ('OPT_EXEC_NORMAL', "Normal mesh", "Solid, no transparent, XYZ NormXYZ RGB TexXY Smoothness"),
+            ('OPT_EXEC_TRANSPARENT', "Transparent mesh (lights)", "Transparent from texture alpha, XYZ NormXYZ RGB TexXY Smoothness"),
+        ),
+        default='OPT_EXEC_NORMAL',
+    )
+
+    mesh_type_1: bpy.props.EnumProperty(
+        name="Mesh type ([1] / Lights)",
+        description="Mesh format, most meshes are Solid, Body, Wheels, Spoiler, except lights",
+        items=(
+            ('OPT_EXEC_NORMAL', "Normal mesh", "Solid, no transparent, XYZ NormXYZ RGB TexXY Smoothness"),
+            ('OPT_EXEC_TRANSPARENT', "Transparent mesh (lights)",
+             "Transparent from texture alpha, XYZ NormXYZ RGB TexXY Smoothness"),
+        ),
+        default='OPT_EXEC_TRANSPARENT',
+    )
+
+    mesh_type_2: bpy.props.EnumProperty(
+        name="Mesh type ([2] / Brake lights)",
+        description="Mesh format, most meshes are Solid, Body, Wheels, Spoiler, except lights",
+        items=(
+            ('OPT_EXEC_NORMAL', "Normal mesh", "Solid, no transparent, XYZ NormXYZ RGB TexXY Smoothness"),
+            ('OPT_EXEC_TRANSPARENT', "Transparent mesh (lights)",
+             "Transparent from texture alpha, XYZ NormXYZ RGB TexXY Smoothness"),
+        ),
+        default='OPT_EXEC_TRANSPARENT',
+    )
+
+    normal_type: bpy.props.EnumProperty(
+        name="Normal type",
+        description="Which way the normals face, needs trial and error",
+        items=(
+            ('OPT_NORMALS_REGULAR', "Default", "Blender based normals"),
+            ('OPT_NORMALS_ALT', "Alternative", "Alternative, usually for imported models"),
+        ),
+        default='OPT_NORMALS_REGULAR',
+    )
+
     def execute(self, context):
-        return export_hg2(context, self.filepath)
+        return export_hg2(context, self.filepath, (self.mesh_type_0, self.mesh_type_1, self.mesh_type_2, self.normal_type))
 
 
 # Only needed if you want to add into a dynamic menu

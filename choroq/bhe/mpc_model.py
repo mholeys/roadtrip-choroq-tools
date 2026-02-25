@@ -4,7 +4,7 @@
 # subsections have extensions, .pb seen
 
 import os
-import choroq.read_utils as U
+import choroq.egame.read_utils as U
 from choroq.bhe.bhe_mesh import BHEMesh
 
 

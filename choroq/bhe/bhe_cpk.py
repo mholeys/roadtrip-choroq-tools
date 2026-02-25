@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-import choroq.read_utils as U
+import choroq.egame.read_utils as U
 from choroq.bhe.aptexture import APTexture
 from choroq.bhe.hpd_model import HPDModel
 from choroq.bhe.mpd_model import MPDModel

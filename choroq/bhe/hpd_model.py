@@ -1,6 +1,6 @@
 import os
-import choroq.read_utils as U
-from choroq.amesh import AMesh
+import choroq.egame.read_utils as U
+from choroq.egame.amesh import AMesh
 from choroq.bhe.bhe_mesh import BHEMesh
 
 

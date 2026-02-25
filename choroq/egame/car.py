@@ -124,13 +124,14 @@ class CarModel:
 
 class CarMesh(AMesh):
 
-    def __init__(self, mesh_vert_count, mesh_verts, mesh_normals, mesh_uvs, mesh_faces, mesh_colours):
+    def __init__(self, mesh_vert_count, mesh_verts, mesh_normals, mesh_uvs, mesh_faces, mesh_colours, mesh_extra):
         self.mesh_vert_count = mesh_vert_count
         self.mesh_verts = mesh_verts
         self.mesh_normals = mesh_normals
         self.mesh_uvs = mesh_uvs
         self.mesh_faces = mesh_faces
         self.mesh_colours = mesh_colours
+        self.mesh_extra = mesh_extra
 
     @staticmethod
     def _parse_offsets(file, offset):
@@ -201,6 +202,7 @@ class CarMesh(AMesh):
         mesh_uvs = []
         mesh_faces = []
         mesh_colours = []
+        mesh_extra = []
         mesh_vert_count = 0
 
         # Follows this pattern:
@@ -241,12 +243,13 @@ class CarMesh(AMesh):
                     # exec == 80 is also for cars, could be colour1 (32) vs colour2 (80)
                     vif_processed_bytes.seek(0, os.SEEK_SET)
                     vif_processed_bytes.seek(0, os.SEEK_SET)
-                    verts, normals, uvs, faces, colours, count = CarMesh.parse_mesh(vif_processed_bytes, processed_size, gs_state, vif_state.ExecAddr, mesh_vert_count, hg3)
+                    verts, normals, uvs, faces, colours, extra, count = CarMesh.parse_mesh(vif_processed_bytes, processed_size, gs_state, vif_state.ExecAddr, mesh_vert_count, hg3)
                     mesh_verts += verts
                     mesh_normals += normals
                     mesh_uvs += uvs
                     mesh_faces += faces
                     mesh_colours += colours
+                    mesh_extra += extra
                     mesh_vert_count += len(verts)
                     gif_count += count
                     extracted_data = True
@@ -297,7 +300,7 @@ class CarMesh(AMesh):
         if len(mesh_verts) == 0:
             return None
         # returns [CarMesh]
-        return CarMesh(len(mesh_verts), mesh_verts, mesh_normals, mesh_uvs, mesh_faces, mesh_colours)
+        return CarMesh(len(mesh_verts), mesh_verts, mesh_normals, mesh_uvs, mesh_faces, mesh_colours, mesh_extra)
 
     @staticmethod
     def parse_mesh(file, length, gs_state, exec_type, vert_count_offset, hg3=False):
@@ -306,6 +309,7 @@ class CarMesh(AMesh):
         uvs = []
         faces = []
         colours = []
+        extra = []
 
         count = 0  # Number of GIF tags read
         # Read GIFTag
@@ -345,6 +349,7 @@ class CarMesh(AMesh):
                         # Has extra at start unknown data
                         U.readXYZ(file)
                         U.readFloat(file)
+                    colour_selection = 0
                     if not hg3:
                         # Colour mode is set via GIF tag
                         # - 0 Colour is as is
@@ -379,8 +384,8 @@ class CarMesh(AMesh):
                         verts.append((offset_x + vx, offset_y + vy, offset_z + vz))
                         colours.append(c)
                         normals.append((nx, ny, nz))
-                        uvs.append((tu, 1 - tv, tw))
-
+                        uvs.append((tu, tv, tw))
+                        extra.append((colour_selection, exec_type, unkw2))
                     faces = CarMesh.create_face_list(nloop, 1, vert_count_offset=vert_count_offset)
                     print(f"Got to after verts {file.tell()}")
                 else:
@@ -402,7 +407,7 @@ class CarMesh(AMesh):
             print(registers)
             count += 1
 
-        return verts, normals, uvs, faces, colours, count
+        return verts, normals, uvs, faces, colours, extra, count
 
     def write_mesh_to_dbg(self, fout, start_index=0, material=None):
         self.write_mesh_to_obj(fout, start_index, material, False)
@@ -428,9 +433,44 @@ class CarMesh(AMesh):
             if with_colours:
                 # Some programs support additional data, e.g colors after x/y/z
                 # the following section can be used to export with colors (blender supports first set)
-                r = '{:.20f}'.format(self.mesh_colours[i][0] / 255.0)
-                g = '{:.20f}'.format(self.mesh_colours[i][1] / 255.0)
-                b = '{:.20f}'.format(self.mesh_colours[i][2] / 255.0)
+                r = '{:.20f}'.format(self.mesh_colours[i][0] / 256.0)
+                g = '{:.20f}'.format(self.mesh_colours[i][1] / 256.0)
+                b = '{:.20f}'.format(self.mesh_colours[i][2] / 256.0)
+
+                # r = '{:.20f}'.format(self.mesh_extra[i][0] / 10.0)
+                # g = 0#'{:.20f}'.format(self.mesh_extra[i][1] / 100.0)
+                # b = 0
+                # s = self.mesh_extra[i][2]
+                # if s == 0:
+                #     r = 0
+                #     g = 0
+                #     b = 0
+                # if s == 1:
+                #     r = 1
+                #     g = 1
+                #     b = 1
+                # if s == 51:
+                #     r = 1
+                #     g = 0
+                #     b = 0
+                # if s == 255:
+                #     r = 1
+                #     g = 0
+                #     b = 1
+                # if s == 280.5:
+                #     r = 0
+                #     g = 1
+                #     b = 0
+                # if s == 357:
+                #     r = 0
+                #     g = 0
+                #     b = 1
+
+
+                #b = '{:.20f}'.format(self.mesh_extra[i][2] / 1000.0)
+                # fout.write(f"# s {e_colour_select} {e_exec_addr} {e_smoothness} \n")
+
+
                 fout.write(f"v {vx} {vy} {vz} {r} {g} {b}\n")
             else:
                 fout.write(f"v {vx} {vy} {vz}\n")
@@ -449,8 +489,17 @@ class CarMesh(AMesh):
             tu = '{:.20f}'.format(self.mesh_uvs[i][0])
             tv = '{:.20f}'.format(self.mesh_uvs[i][1])
             fout.write("vt " + tu + " " + tv + "\n")
+
         fout.write("#" + str(len(self.mesh_uvs)) + " texture vertices\n")
-        
+
+        # Write extra info (debug)
+        for i in range(0, len(self.mesh_extra)):
+            e_colour_select = '{:.20f}'.format(self.mesh_extra[i][0])
+            e_exec_addr = '{:.20f}'.format(self.mesh_extra[i][1])
+            e_smoothness = '{:.20f}'.format(self.mesh_extra[i][2])
+            fout.write(f"# s {e_colour_select} {e_exec_addr} {e_smoothness} \n")
+        fout.write("#" + str(len(self.mesh_extra)) + " debug extras \n")
+
         # Write mesh face order/list
         for i in range(0, len(self.mesh_faces)):
             fx = self.mesh_faces[i][0] + start_index
