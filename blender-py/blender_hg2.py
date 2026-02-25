@@ -40,6 +40,7 @@ class HG2ExportHelperPanel(bpy.types.Panel):
     object_panel_open_id = "hg2_export_helper_panel.object_open"
     object_index_panel_open_id = "hg2_export_helper_panel.object.index_open"
     object_colour_panel_open_id = "hg2_export_helper_panel.object.colour_open"
+    object_smoothness_panel_open_id = "hg2_export_helper_panel.object.smoothness_open"
 
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -51,10 +52,21 @@ class HG2ExportHelperPanel(bpy.types.Panel):
         layout_header.label(text='Verbose Instructions/actions')
         if layout_body is not None:
             instructions.append('Requirements:')
+            instructions.append('Forwards is positive Y')
+            instructions.append('Upwards is positive Z')
+            instructions.append('')
             instructions.append('For car body:')
             instructions.append('- [0] Main body')
             instructions.append('- [1] Lights (front+back)')
             instructions.append('- [2] Brake Lights')
+            # instructions.append('For Default Car Spoiler :')
+            # instructions.append('- [0] Spoiler')
+            # instructions.append('- [1] Upper brake light')
+            # instructions.append('- [2] None')
+            # instructions.append('For Second Car Spoiler:')
+            # instructions.append('- [0] Spoiler')
+            # instructions.append('- [1] None')
+            # instructions.append('- [2] None')
             instructions.append('For other:')
             instructions.append('Look at the original')
             instructions.append('Copy the order of that [0/1/2]')
@@ -62,12 +74,16 @@ class HG2ExportHelperPanel(bpy.types.Panel):
             instructions.append('Just skip as needed')
             instructions.append('')
             instructions.append('It is recommended that all objects have')
-            instructions.append('- The same texture, 128x128')
             instructions.append('- Colour attributes (vertex colours)')
             instructions.append('- [0] < 1500 triangles')
             instructions.append('- [1] < 200 triangles')
             instructions.append('- [2] < 200 triangles')
             instructions.append('Triangles make up the size')
+            instructions.append('Have a go with different sizes/shapes')
+            instructions.append('but generally having the bottom of the car')
+            instructions.append('at around a height of 0.2')
+            instructions.append('World position is taken into account, ')
+            instructions.append('everything should be placed around 0, 0, 0')
 
             for line in instructions:
                 layout_body.label(text=line)
@@ -81,33 +97,66 @@ class HG2ExportHelperPanel(bpy.types.Panel):
             layout_body2.operator(HG2SetupAttributesOperator.bl_idname, text="Configure attributes")
 
             layout_header3, layout_body3 = layout_body2.panel(self.object_index_panel_open_id, default_closed=False)
-            layout_header3.label(text="Object assignment")
+            layout_header3.label(text="Object assignment 0/1/2")
             if layout_body3 is not None:
-                layout_body3.label(text='With all objects selected')
+                layout_body3.label(text='See info above for [0] vs [1] vs [2]')
+                layout_body3.label(text='With all objects(s) selected')
                 layout_body3.label(text='switch to edit mode (Faces)')
                 layout_body3.label(text='1 Go to Properties->Data->Attributes')
                 layout_body3.label(text='2 Select \"ObjectIndex\"')
-                layout_body3.label(text='3 Now select all faces for [1]')
-                layout_body3.label(text='4 Then Mesh->Set Attribute -> 1')
+                layout_body3.label(text='3 Now select all faces for [0] (body)')
+                layout_body3.label(text='4 Then Mesh->Set Attribute -> 0')
                 layout_body3.separator()
-                layout_body3.label(text='Repeat for [2] setting to 2')
+                layout_body3.label(text='Repeat for [1] setting to 1 (lights)')
+                layout_body3.label(text='Repeat for [2] setting to 2 (brakes)')
 
             layout_header3, layout_body3 = layout_body2.panel(self.object_colour_panel_open_id, default_closed=False)
             layout_header3.label(text="Object colour assignment")
             if layout_body3 is not None:
-                layout_body3.label(text='In Object mode')
-                layout_body3.label(text='Select all objects you wish to use')
+                layout_body3.label(text='Assigns the Two tone paint system')
+                layout_body3.label(text='0 = colour from texture/vertex colour')
+                layout_body3.label(text='1 = Primary colour in paint shop')
+                layout_body3.label(text='2 = Secondary colour in paint shop')
+                layout_body3.separator()
 
-                layout_body3.label(text='With all objects selected')
+                layout_body3.label(text='In Object mode')
+                layout_body3.label(text='Select the object(s) you wish to set')
+
                 layout_body3.label(text='switch to edit mode (Faces)')
                 layout_body3.label(text='1 Go to Properties->Data->Attributes')
                 layout_body3.label(text='2 Select \"ColourIndex\"')
-                layout_body3.label(text='3 Select all faces for texturing')
+                layout_body3.label(text='3 Select all faces that have a texture')
                 layout_body3.label(text='4 Then Mesh->Set Attribute -> 0')
                 layout_body3.label(text='5 Select all faces for colour 1')
                 layout_body3.label(text='6 Then Mesh->Set Attribute -> 1')
                 layout_body3.label(text='5 Select all faces for colour 2')
                 layout_body3.label(text='6 Then Mesh->Set Attribute -> 2')
+                layout_body3.separator()
+
+            layout_header3, layout_body3 = layout_body2.panel(self.object_smoothness_panel_open_id, default_closed=False)
+            layout_header3.label(text="Object smoothness assignment")
+            if layout_body3 is not None:
+                layout_body3.label(text='This defines the reflections')
+                layout_body3.label(text='Guidelines: only these values work')
+                layout_body3.label(text='357 = Windows')
+                layout_body3.label(text='280.5 = Normal/Top body panels')
+                layout_body3.label(text='51 = side facing (side of car)')
+                layout_body3.label(text='1 = Headlights/brakes')
+                layout_body3.label(text='0 = Trim/body gaps/undercarriage/dark bits')
+                layout_body3.separator()
+
+                layout_body3.label(text='In Object mode')
+                layout_body3.label(text='Select the object(s) you wish to set')
+
+                layout_body3.label(text='switch to edit mode (Faces)')
+                layout_body3.label(text='1 Go to Properties->Data->Attributes')
+                layout_body3.label(text='2 Select \"SmoothnessHG2\"')
+                layout_body3.label(text='3 Select all faces for you wish to set')
+                layout_body3.label(text='4 Then Mesh->Set Attribute -> (value)')
+                layout_body3.label(text='This is a trial and error thing')
+                layout_body3.label(text='but using the values, as defined')
+                layout_body3.label(text='above, should produce reasonable results')
+
                 layout_body3.separator()
 
         self.layout.label(text='Once you have configure the ObjectIndex')
@@ -142,8 +191,14 @@ class HG2SetupAttributesOperator(bpy.types.Operator):
 
                 if new_attribute.name != 'ColourIndex':
                     raise Exception(f"Failed to setup ColourIndex face attribute, sorry this is still WIP. Error with: {obj}")
+            if 'SmoothnessHG2' not in obj.data.attributes:
+                new_attribute = obj.data.attributes.new('SmoothnessHG2', 'FLOAT', 'FACE')
+
+                if new_attribute.name != 'SmoothnessHG2':
+                    raise Exception(f"Failed to setup SmoothnessHG2 face attribute, sorry this is still WIP. Error with: {obj}")
 
         return {'FINISHED'}
+
 
 def export_hg2(context, filepath):
     select_objects = bpy.context.selected_objects
@@ -157,8 +212,12 @@ def export_hg2(context, filepath):
     normals = [[[], []], [[], []], [[], []]]
     colours = [[[], []], [[], []], [[], []]]
     uvs = [[[], []], [[], []], [[], []]]
-    colour_indices = [[[], []], [[], []], [[], []]]  # each inner will have 1 element of 0/1/2 to select which two-tone colour to use
+    # each inner will have 1 element of 0/1/2 to select which two-tone colour to use
+    colour_indices = [[[], []], [[], []], [[], []]]
+    # each inner will have 1 element, usually one of the predetermined values
+    smoothness = [[[], []], [[], []], [[], []]]
 
+    # Debug for ensuring the texturing checks are working
     ever_textured = [False, False, False]
     ever_untextured = [False, False, False]
 
@@ -178,6 +237,7 @@ def export_hg2(context, filepath):
         # mesh1.uv_layers.active = uv_layer
 
         # Check for colour attributes
+        # TODO: check if the colour attributes are per vertex or per face
         #if not mesh.color_attributes or len(mesh.color_attributes) == 0:
         #    mesh.color_attributes.new("Color", 'BYTE_COLOR', 'CORNER')
         # dump(mesh.attributes.active_color)
@@ -188,13 +248,13 @@ def export_hg2(context, filepath):
 
         # Convert mesh into tristrips
         # Create pyffi mesh to convert to tristrips
-        # On mesh for textured/untextured per colour index
+        # One mesh for textured/untextured per colour index
         pyffi_mesh_0 = [[Mesh(), Mesh()], [Mesh(), Mesh()], [Mesh(), Mesh()]]
         pyffi_mesh_1 = [[Mesh(), Mesh()], [Mesh(), Mesh()], [Mesh(), Mesh()]]
         pyffi_mesh_2 = [[Mesh(), Mesh()], [Mesh(), Mesh()], [Mesh(), Mesh()]]
         pyffi_meshes = [pyffi_mesh_0, pyffi_mesh_1, pyffi_mesh_2]
 
-        # Bad but possibly needed vertex -> face table. Probably bad
+        # Bad but possibly needed vertex -> face table. Probably bad, it does work tho :-)
         face_dict = {}
 
         # We know they are triangles, as it's been force converted
@@ -210,9 +270,9 @@ def export_hg2(context, filepath):
             colour_index = mesh.attributes['ColourIndex'].data[face.index].value
             if colour_index not in [0, 1, 2]:
                 raise Exception("Invalid colour index attribute, must be 0/1/2")
-            # Build up all faces into are temporary mesh, for tristripping
+            # Build up all faces into our temporary mesh, for tristripping
 
-            # Check to see if any are textured, as we want to draw theses in a different strip
+            # Check to see if any are textured, as we want to draw theses in a different strip from untextured
             v0_uv = mesh.uv_layers.active.data[face.loop_indices[0]].uv
             v1_uv = mesh.uv_layers.active.data[face.loop_indices[1]].uv
             v2_uv = mesh.uv_layers.active.data[face.loop_indices[2]].uv
@@ -226,6 +286,7 @@ def export_hg2(context, filepath):
             v2_textured = v2_uv[0] != 0 or v2_uv[1] != 0
 
             textured = 0
+            # Basically if 0, 0 or all three points are the same value, we say its untextured
             if ((
                     v0_textured or v1_textured or v2_textured)
                     and
@@ -261,6 +322,9 @@ def export_hg2(context, filepath):
                         new_colours = []
                         new_uv = []
                         new_colour_index = [colour_index]
+                        # Get the smoothness set for this face, from the first vertex in the triangle
+                        new_smoothness = [mesh.attributes['SmoothnessHG2'].data[face_dict[strip[0]][0].index].value]
+
                         for vert_index in strip:
                             # capture world position/rotation
                             x, y, z = obj.matrix_world @ mesh.vertices[vert_index].co
@@ -277,11 +341,13 @@ def export_hg2(context, filepath):
                             # Have to access uvs via loop index
                             u, v = mesh.uv_layers.active.data[face_dict[vert_index][1]].uv
                             new_uv.append((u, v))
+
                         vertices[sub_obj_index][textured_index].append(new_verts)
                         normals[sub_obj_index][textured_index].append(new_normals)
                         colours[sub_obj_index][textured_index].append(new_colours)
                         uvs[sub_obj_index][textured_index].append(new_uv)
                         colour_indices[sub_obj_index][textured_index].append(new_colour_index)
+                        smoothness[sub_obj_index][textured_index].append(new_smoothness)
         # for i in [0, 1, 2]:
         #     for textured_index in [0, 1]:
         #         print(f"For sub obj [{i}]")
@@ -313,13 +379,14 @@ def export_hg2(context, filepath):
         #         dim2 = len(colour_indices[i][textured_index])
         #         print(f"colour_indices length stripCount:[{dim2}]")
 
-    return save_mesh(filepath, vertices, normals, colours, uvs, colour_indices)
+    return save_mesh(filepath, vertices, normals, colours, uvs, colour_indices, smoothness)
 
 
-def save_mesh(filepath, vertices, normals, colours, uvs, colour_indices):
+def save_mesh(filepath, vertices, normals, colours, uvs, colour_indices, smoothness):
+    # TODO: move this to the save dialog, as option to say which of the exec calls to use
+    # TODO: (cnt) Ideally we could use both calls in one mesh, but means adding way more overhead
     exec_call_per_object = [EXEC_ADDR_NORMAL, EXEC_ADDR_TRANSPARENT, EXEC_ADDR_TRANSPARENT]
-    # todo smoothness other than 280.5
-    smoothness = 0  # 280.5
+
     with (open(filepath, "wb") as file):
         sizes = [16]
         paddings = []
@@ -386,12 +453,12 @@ def save_mesh(filepath, vertices, normals, colours, uvs, colour_indices):
 
         # Write offset table for subsection
         # offset 0 = 16 is implicit
-        print("Size table: ")
-        print(sizes)
-        print("Padding required: ")
-        print(paddings)
-        print("GifCounts: ")
-        print(gif_counts)
+        # print("Size table: ")
+        # print(sizes)
+        # print("Padding required: ")
+        # print(paddings)
+        # print("GifCounts: ")
+        # print(gif_counts)
 
         sizes[0] = 16
         # Force alignment to 16byte boundary (needed for dma I think)
@@ -444,6 +511,7 @@ def save_mesh(filepath, vertices, normals, colours, uvs, colour_indices):
                         raise Exception(f"Strip too long, vert_count: {vert_count} max is 255 per strip.\n"
                                         f"No current fix sorry")
                     colour_group = colour_indices[obj_index][textured_index][strip_index][0]
+                    smoothness_value = smoothness[obj_index][textured_index][strip_index][0]
                     texture_marker = 0
 
                     # check for texturing required primitive
@@ -488,7 +556,6 @@ def save_mesh(filepath, vertices, normals, colours, uvs, colour_indices):
                         x, y, z = vertices[obj_index][textured_index][strip_index][vertex_index]
                         r, g, b, a = colours[obj_index][textured_index][strip_index][vertex_index]
                         u, v = uvs[obj_index][textured_index][strip_index][vertex_index]
-                        # TODO: shiny/smoothness value
                         # dump(mesh.vertices[vert_index])
 
                         v = 1 - v
@@ -513,39 +580,42 @@ def save_mesh(filepath, vertices, normals, colours, uvs, colour_indices):
                                         g = close
                                         b = close
 
-                        # Guess smoothness
-                        if textured:
-                            smoothness = 51.0
-                            if exec_call == EXEC_ADDR_TRANSPARENT:
-                                smoothness = 1.0
-                        else:
-                            if colour_group == 0:
-                                smoothness = 1.0
-                            if colour_group == 1:
-                                smoothness = 280.5
-
-                            if 9 <= r <= 12 and 14 <= g <= 16 and 19 <= b <= 21:
-                                # Windscreen og colour
-                                # approx 0A0F14
-                                smoothness = 357.0
-                            elif 59 <= r <= 61 and 59 <= g <= 61 and 59 <= b <= 61:
-                                # window trim
-                                # approx 3C3C3C
-                                smoothness = 0.0
-                            # elif 0.0020 <= r <= 0.0039 and 0.0020 <= g <= 0.0039 and 0.0020 <= b <= 0.0039:
-                            #     smoothness = 0
-                            #elif body panels gaps:
-                                # body panel gaps: #1E1E1E
-                            #elif body:
-                                # body E5E5E5
+                        # # Guess smoothness
+                        # if textured:
+                        #     smoothness = 51.0
+                        #     if exec_call == EXEC_ADDR_TRANSPARENT:
+                        #         smoothness = 1.0
+                        # else:
+                        #     if colour_group == 0:
+                        #         smoothness = 1.0
+                        #     if colour_group == 1:
+                        #         smoothness = 280.5
+                        #
+                        #     if 9 <= r <= 12 and 14 <= g <= 16 and 19 <= b <= 21:
+                        #         # Windscreen og colour
+                        #         # approx 0A0F14
+                        #         smoothness = 357.0
+                        #     elif 59 <= r <= 61 and 59 <= g <= 61 and 59 <= b <= 61:
+                        #         # window trim
+                        #         # approx 3C3C3C
+                        #         smoothness = 0.0
+                        #     # elif 0.0020 <= r <= 0.0039 and 0.0020 <= g <= 0.0039 and 0.0020 <= b <= 0.0039:
+                        #     #     smoothness = 0
+                        #     #elif body panels gaps:
+                        #         # body panel gaps: #1E1E1E
+                        #     #elif body:
+                        #         # body E5E5E5
 
                         if exec_call == EXEC_ADDR_NORMAL or exec_call == EXEC_ADDR_TRANSPARENT:
                             nx, ny, nz = normals[obj_index][textured_index][strip_index][vertex_index]
                             vert_out = struct.pack('ffffffffffff',
-                                                   x, z, y, # Tested this is correct (x , z, y)
-                                                   -nx, nz, ny,  # Tested closest result is this (-nx, ny, nz)
+                                                   x, z, y,  # Tested this is correct (x , z, y)
+                                                   -nx, ny, -nz,  # Tested I think this is it (-nx, ny, -nz)
+                                                   # Tested next closest result (-nx, ny, nz)
+                                                   # this one works best for reimported HG2 cars; oddly
+                                                   # -nx, nz, ny,
                                                    r, g, b,
-                                                   u, v, smoothness)
+                                                   u, v, smoothness_value)
                         file.write(vert_out)
                     # Write Exec VIF tag
                     if exec_call == EXEC_ADDR_NORMAL:
@@ -621,31 +691,3 @@ if __name__ == "__main__":
 
     # Test call.
     #bpy.ops.export_choroq.hg2('INVOKE_DEFAULT')
-
-
-# Pseudo code to implement
-# Take given objects
-# For each object?
-#   Create holders for mesh types
-#   facesByColourGroup = {}
-#   For each mesh do:
-#    triangulate(mesh)
-#    For each face do:
-#      if face has attribute colourGroup
-#        meshByColourGroup[face.attribytes[colourgroup]
-#
-#  for each in facesByColourGroup
-#    Create pyffi mesh, adding all faces/points
-#    Tristrip the mesh
-#    store this for later use
-#
-#
-#
-
-
-# Set a face to be for a certain object
-#bpy.ops.geometry.attribute_add(name="ObjectIndex", domain='FACE', data_type='INT') # for selected face
-#bpy.ops.mesh.attribute_set(value_int=1) # For selected face and attribute
-
-#bpy.context.selected_objects[0].data.attributes['ObjectIndex'].data.foreach_get('value', out)
-
