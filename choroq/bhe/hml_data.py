@@ -1,5 +1,5 @@
 import os
-import choroq.read_utils as U
+import choroq.egame.read_utils as U
 from choroq.bhe.bhe_mesh import BHEMesh
 
 class HML(BHEMesh):

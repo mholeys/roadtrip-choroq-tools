@@ -34,7 +34,7 @@ The course/field/action files contain multiple sub-files:
   - The field files seem to use this section for most of the level in lower detail
   - I believe after playing with the meshes more, that this is used as an allowed boundary.
     I would guess the cars check if they are on the mesh (probably 4 corners), to detect collisions into walls and other solid objects. 
-  - There are properties set within this data, such as an underwater or water parameter, and friction, these values are not yet understood fully
+  - There are properties set within this data, such as an underwater or water parameter, and friction, these values are not yet understood fully 
   - The format of this is similar to the mesh/model data but the chunk size is halved (16x16 chunks for each region)
     - This also has the size/count table, but it is 16x16
     - There are no DMA or VIF tags, but instead there is a GIF or very similar tag
@@ -45,20 +45,39 @@ The course/field/action files contain multiple sub-files:
       - Peach that falls from the peach tree in Field 223 (Peach town)
       - Stage cover in Fuji city (hiding the princess)
       - Treasure chest parts in the maze action
+    - The positions at which these get spawned, and their logic is coded directly into the game
 
 For HG3 files, there are some differences, key differences are that the size of the chunk array is often 16x16 for meshes, and 32x32 for collider, and that other functions of the GS/VIF are used. The exec addresses are different as the VU1 code is different between the games.
 
 ##### Car model file format
 The car file format is the most understood, and it is possible to get the car body model, texture, as well as its accessories.
+Each sub file for the car model contains 3 meshes, the first one is always populated, but the second and third might be empty.
+
 Sub-File structure (HG2):
-- 0 Car body
-- 1 Lights (front/back) probably used for night driving lights
-- 2 Rear Lights, probably used for brake lights
-- 3 Car body (low poly/reduced detail)
-- 4 Lights (front/back) probably used at night for cars far away with lower detail car
-- 5 Rear Spoiler 1
-- 6 Rear Spoiler 2
-- 7 Rockets (optional), used to change where the rocket model connects to the car
-- 8 Sticker area model, not all cars have stickers
+- [0] First part (Main body):
+  - Mesh 0 : Car body (used for rendering the car in shops, and when it is close to the camera)
+  - Mesh 1 : Front/Rear lights, used for nighttime rendering, horn, and when talking
+  - Mesh 2: Rear Lights, used when the brakes are being shown
+- [1] Second part (lower quality LOD body):
+  - Mesh 0: Lower quality (reduced Level of detail, LOD) car body
+  - Mesh 1: Lights (front/back) probably used at night for cars far away with lower detail car
+- [2] Third part (Spoiler):
+  - Mesh 0: Rear Spoiler, the default one when the Wing option is not selected
+  - Mesh 1: I think this is the high level brake light when the spoiler is used
+  - Mesh 2: Always empty
+- [3] Fourth part (Spoiler 2/ Wing option):
+  - Mesh 0: Rear Spoiler, Wing option
+  - Mesh 1: Always empty
+  - Mesh 2: Always empty
+- [4] Fifth part (Jets):
+  - Mesh 0: Jet booster mesh (location of flame emission is defined somewhere in code)
+  - Mesh 1: Always empty
+  - Mesh 2: Always empty
+- [5] Sixth Part (Stickers):
+  - Mesh 0: Sticker model, not all cars have this, but used to show sponser stickers
+  - Mesh 1: Always empty
+  - Mesh 2: Always empty
+- [6] Seventh Part (Texture):
+- [7] This is always just a position to the end of the car (EOF)
 
 The car file format uses a similar system to the Field/Course/Action meshes, it uses DMA/VIF/GIF tags, and has different EXECADDRes (so a different VU1 program executes)
