@@ -94,7 +94,7 @@ Once you are in your python folder you will need to type the following commands.
 ```python.exe -m pip install --force-reinstall pyffi```
 
 You should then see something along the lines of the following
-![Screeenshot in command prompt installing pyffi](/docs/images/blender-python-pip.jpg)
+![Screeenshot in command prompt installing pyffi](docs/images/blender-python-pip.jpg)
 
 If you have seen any errors please consult guides online on how to install packages to pip. 
 This is a common task and there are multiple guides available, specifically for blender.
@@ -104,11 +104,11 @@ This is a common task and there are multiple guides available, specifically for 
 Once you have all the above ready, open blender (if you haven't already), and go to the scripting tab at the top (red arrow).
 Then press on Open in the middle (blue arrow) and browse to the blender script ([download](/blender-py/blender_hg2.py))
 
-![Screenshot showing the scripting tab, and open button in Blender](/docs/images/blender-scripting-tab.jpg)
+![Screenshot showing the scripting tab, and open button in Blender](docs/images/blender-scripting-tab.jpg)
 
 Once loaded, you will need to press run script, again in the middle.
 
-![Screenshot showing the script script loaded in Blender](/docs/images/blender-script-loaded.jpg)
+![Screenshot showing the script script loaded in Blender](docs/images/blender-script-loaded.jpg)
 
 After this has executed, check that there are no errors in the bottom left, and that there is a message saying "bpy.ops.text.run_script()"
 If you do encounter any errors at this point, there is an error with your blender setup, or the script, and you may not be able to use the script.
@@ -121,11 +121,11 @@ This is hidden within the side window, with settings for Tool/View/Animation and
 
 Open this panel (shown in red), and if you see HG2 Exporter click that, it also means everything has worked so far.
 
-![Screenshot showing the location of the panel on the right edge of the layout view](/docs/images/blender-panel-closed.jpg)
+![Screenshot showing the location of the panel on the right edge of the layout view](docs/images/blender-panel-closed.jpg)
 
 Once open you should see the following:
 
-![Screenshot showing the new HG2 Exporter panel on the right edge of the layout view](/docs/images/blender-hg2-exporter-panel.jpg)
+![Screenshot showing the new HG2 Exporter panel on the right edge of the layout view](docs/images/blender-hg2-exporter-panel.jpg)
 
 At this point you can proceed to read everything in the new panel, but I will cover some essential information to make things easier to follow for the first time.
 
@@ -137,9 +137,9 @@ After this there will be some new attributes assigned for each selected object, 
 __Remember where this is, and it is essential to remember to select the one you wish to edit highlighted when you are setting the mesh parameters.__
 
 Before:
-![Screenshot showing attributes of the selected object before setup](/docs/images/blender-config-attributes-before.jpg)
+![Screenshot showing attributes of the selected object before setup](docs/images/blender-config-attributes-before.jpg)
 After:
-![Screenshot showing attributes of the selected object after setup](/docs/images/blender-config-attributes-after.jpg)
+![Screenshot showing attributes of the selected object after setup](docs/images/blender-config-attributes-after.jpg)
 
 ### Configuring your model
 
@@ -148,11 +148,11 @@ This is a slow process, and a manual one, which may require some trial and error
 To set values for these attributes you will need to select the mesh you wish to edit,
 and change into edit mode.
 
-![Screenshot showing the location of the edit mode](/docs/images/blender-edit-mode.jpg)
+![Screenshot showing the location of the edit mode](docs/images/blender-edit-mode.jpg)
 
 All the data is configured in the FACE domain (except vertex colours), this means you will have to work by selecting faces of the car.
 
-![Screenshot showing the location of the face selection mode](/docs/images/blender-edit-faces-mode.jpg)
+![Screenshot showing the location of the face selection mode](docs/images/blender-edit-faces-mode.jpg)
 
 The first thing is to select all faces you wish to set as the same value, you can select as many faces as you want, or do it in smaller chunks.
 To set a value for the selected faces, you first need to select the attribute you wish to change, under Data->Attributes. 
@@ -161,9 +161,9 @@ Then to set the value, you select Mesh from the top bar, and choose Set Attribut
 A window will appear, moving your mouse outside this window closes it, and may or may not set the value (I do not know)
 At this point enter the value you wish (see the guide below or in blender) and hit enter while your mouse is not over the value box (black background)
 
-![Screenshot showing the set attribute button](/docs/images/blender-set-attribute-menu.jpg)
+![Screenshot showing the set attribute button](docs/images/blender-set-attribute-menu.jpg)
 
-![Screenshot showing the set attribute window](/docs/images/blender-set-attribute-window.jpg)
+![Screenshot showing the set attribute window](docs/images/blender-set-attribute-window.jpg)
 
 You will need to set up the UV maps for only the faces you want texturing, I think this means you might need to split all textured faces into a separate mesh. 
 This is due to the code assuming any face having a UV map being treated as a textured face.
@@ -200,7 +200,7 @@ I have moved the lights/brake lights to make this easier to see, you should have
 - Red means object index of 1
 - Green means object index of 2
 
-![Screenshot demonstrating the values for smoothness with a visual guide](/docs/images/object-index-hg2-demo.jpg)
+![Screenshot demonstrating the values for smoothness with a visual guide](docs/images/object-index-hg2-demo.jpg)
 
 ColourIndex demonstration car:
 I have moved the lights/brake lights to make this easier to see, you should have yours positioned as you want them to show up in the game
@@ -208,11 +208,11 @@ I have moved the lights/brake lights to make this easier to see, you should have
 - Red means colour index of 1
 - Green means colour index of 2
 
-![Screenshot demonstrating the values for smoothness with a visual guide](/docs/images/colour-index-hg2-demo.jpg)
+![Screenshot demonstrating the values for smoothness with a visual guide](docs/images/colour-index-hg2-demo.jpg)
 
 Smoothness value demonstration car:
-![Screenshot demonstrating the values for smoothness with a visual guide](/docs/images/smoothness-hg2-demo1.jpg)
-![Screenshot demonstrating the values for smoothness with a visual guide](/docs/images/smoothness-hg2-demo2.jpg)
+![Screenshot demonstrating the values for smoothness with a visual guide](docs/images/smoothness-hg2-demo1.jpg)
+![Screenshot demonstrating the values for smoothness with a visual guide](docs/images/smoothness-hg2-demo2.jpg)
 
 ### Exporting the Part
 
@@ -271,7 +271,7 @@ The spreadsheet will show values for the current object you have selected (only 
 If you select the little Arrowhead in the spreadsheet window you can show only the selected faces.
 This way you can see if you have missed any selected faces.
 
-![Opening the blender spreadsheet window](/docs/images/blender-spreadsheet-window.jpg)
-![Example of the data shown in the blender spreadsheet window (face)](/docs/images/blender-spreadsheet-demo.jpg)
+![Opening the blender spreadsheet window](docs/images/blender-spreadsheet-window.jpg)
+![Example of the data shown in the blender spreadsheet window (face)](docs/images/blender-spreadsheet-demo.jpg)
 
  It might also be useful to you to create/use the test materials provided in the example blender as shown below, they mimic the same view as the demo cars shown above under "Configuring your model" section towards the end.
