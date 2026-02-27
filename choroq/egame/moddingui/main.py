@@ -13,7 +13,7 @@ from customtkinter import CTkFrame
 
 from choroq.egame.moddingui.common import *
 from choroq.egame.moddingui.entries.game_entry import GameEntry, UnknownGameEntry
-from choroq.egame.moddingui.entries.hg2_car_entry import HG2CarEntry
+from choroq.egame.moddingui.entries.hg2_car_entry import HG2CarEntry, HG2ObjectEntry
 from choroq.egame.moddingui.entries.hg2_course_entry import HG2CourseEntry
 from choroq.egame.moddingui.entries.hg2_field_entry import HG2FieldEntry
 from choroq.egame.moddingui.entries.hg2_shop_entry import HG2ShopEntry
@@ -119,12 +119,58 @@ class CarPartReplaceMenu(customtkinter.CTkToplevel):
         self.valid_label.grid(row=4, column=0, padx=5, pady=(2, 0), sticky="ew", columnspan=2)
 
         parts_string = [
-            "Body & Lights & Brake-light",
-            "Low Poly Body & Lights",
-            "Spoiler (default)",
-            "Spoiler (wing)",
-            "Jets",
-            "Stickers"]
+            "[0] Body & [1] Lights & [2] Brake-light",
+            "[0] Low Poly Body & [1] Lights",
+            "[0] Spoiler (default), [1] optional high level light",
+            "[0] Spoiler (wing)",
+            "[0] Jets",
+            "[0] Stickers"]
+
+        if type(entry) == HG2ObjectEntry:
+            if entry.filename == "TIRE.BIN":
+                parts_string = [
+                    "[0] Front left wheel (world)",
+                    "[0] Front right wheel (world)",
+                    "[0] Pair wheels (rear) (world)",
+                    "[0] 4 wheels (far away car) (world)",
+                    "[0] Big tire left",
+                    "[0] Big tire right",
+                ]
+            elif entry.filename == "WHEEL.BIN":
+                parts_string = [
+                    "[0] Outer tire",
+                    "[0] Normal Wheel 3D",
+                    "[0] Mesh Wheel 3D",
+                    "[0] Spoke 1 Wheel 3D",
+                    "[0] Spoke 2 Wheel 3D",
+                    "[0] Flush 1 Wheel 3D",
+                    "[0] Spoke 3 Wheel 3D",
+                    "[0] Flush 2 Wheel 3D",
+                    "[0] Spoke 4 Wheel 3D",
+                    "[0] Spoke 5 Wheel 3D",
+                    "[0] Spoke 6 Wheel 3D",
+                    "[0] Flush 3 Wheel 3D",
+                    "[0] Flush 4 Wheel 3D",
+                    "[0] Flush 5 Wheel 3D",
+                    "[0] Spoke 7 Wheel 3D",
+                    "[0] Spoke 666 Wheel 3D",
+                ]
+            elif entry.filename == "PARTS.BIN":
+                parts_string = [
+                    "[0] Hood scoop",
+                    "[0] Devil hood \"scoop\" & [1] Devil light covers",
+                    "[0] Flight wing (closed)",
+                    "[0] Flight wing (open)",
+                    "[0] Light frame & [1] Light lens",
+                    "[0] Police sign",
+                    "[0] Propeller frame",
+                    "[0] Propeller blade",
+                    "[0] Water Skii",
+                    "[0] Advert roof sign",
+                    "[0] Big wheel axles/subframe",
+                    "[0] Propeller special part unknown",
+                ]
+
 
         car_part_count = len(self.offsets) - 2  # -2 one for texture, and one for eof
         print(F"Car part count {car_part_count} vs {len(parts_string)}")
@@ -521,6 +567,9 @@ class ModdingUi(customtkinter.CTk):
         if self.game_version == GameVersion.CHOROQ_HG_2:
             matches = [
                 (re.compile("/CAR[0-4,S]/Q[0-9]([0-9]+).BIN"), HG2CarEntry),
+                (re.compile("/CARS/TIRE.BIN"), HG2ObjectEntry),
+                (re.compile("/CARS/WHEEL.BIN"), HG2ObjectEntry),
+                (re.compile("/CARS/PARTS.BIN"), HG2ObjectEntry),
                 (re.compile("/COURSE/C[0-9][0-9].BIN"), HG2CourseEntry),
                 (re.compile("/ACTION/A[0-9][0-9].BIN"), HG2CourseEntry),
                 (re.compile("/FIELD/[0-9][0-9][0-9].BIN"), HG2FieldEntry),
@@ -709,8 +758,9 @@ class EntryMenu(Menu):
             with_str = "HG3"
             if entry.game_version == GameVersion.CHOROQ_HG_3:
                 with_str = "HG2"
-            self.add_command(label=f"Replace with {with_str}",
-                             command=functools.partial(self.import_replacement, iso, entry))
+            if type(entry) is HG2CarEntry:
+                self.add_command(label=f"Replace with {with_str}",
+                                 command=functools.partial(self.import_replacement, iso, entry))
             if entry.game_version == GameVersion.CHOROQ_HG_2:
                 self.add_command(label=f"Replace part",
                                  command=functools.partial(self.import_hg2_part, iso, entry))
@@ -761,7 +811,7 @@ class EntryMenu(Menu):
     def import_hg2_part(self, iso: pycdlib.PyCdlib, entry: GameEntry):
         # Warn user
         if self.root.iso_writable:
-            return self.import_replacement_confirmed(iso, entry, 0, 0)
+            return self.import_part_hg2_confirmed(iso, entry, 0, 0)
         MessageBox(self.root, ["Understood"],
                    "This method will attempt to edit your game iso, IN PLACE,\n"
                    "I recommend you make a clean copy before performing any modifications\n"

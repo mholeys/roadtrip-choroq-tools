@@ -602,13 +602,11 @@ def process_cars(source, dest, output_formats):
                 for entry in it:
                     if should_exit:
                         break
-                    if entry.name == "WHEEL.BIN":
-                        continue
-                    if entry.name == "FASHION.BIN":
-                        continue
                     if entry.name == "FROG.BIN":
+                        # Frog is Mesh, followed by multiple Textures
                         continue
                     if entry.name == "STICKER.BIN":
+                        # just Textures
                         continue
                     if not entry.name.startswith('.') and entry.is_file():
                         process_entry(entry, dest, output_formats, version, True)
@@ -639,20 +637,22 @@ def process_file(file, basename, folder_out, output_formats, version, is_car=Fal
         car = CarModel.read_car(file, 0, file_size)
         # elif version == 3:
         #     car = HG3CarModel.from_file(file, 0, file_size)
-
-        # Get texture, and fix clut/palette
-        address, texture = car.textures[0]
-        clut_address, clut = car.textures[1]
-        # assign palette
-        unswizzled = Texture.unswizzle_bytes(clut)
-        texture.palette = unswizzled  # Set the texture's palette accordingly
-        texture.palette_width = clut.width
-        texture.palette_height = clut.height
-
-        # Save texture and material for use in mesh
-        texture.write_texture_to_png(f"{out_folder}/{basename}.png")
-        # texture.writePaletteToPNG(f"{out_folder}/{basename}-{i}-p.png")
+        has_textures = len(car.textures) >= 2
         texture_path = f"{basename}.png"
+
+        if has_textures:
+            # Get texture, and fix clut/palette
+            address, texture = car.textures[0]
+            clut_address, clut = car.textures[1]
+            # assign palette
+            unswizzled = Texture.unswizzle_bytes(clut)
+            texture.palette = unswizzled  # Set the texture's palette accordingly
+            texture.palette_width = clut.width
+            texture.palette_height = clut.height
+
+            # Save texture and material for use in mesh
+            texture.write_texture_to_png(f"{out_folder}/{basename}.png")
+            # texture.writePaletteToPNG(f"{out_folder}/{basename}-{i}-p.png")
 
         mesh_section_names = [
             ["body", "lights", "brake-light"],
@@ -685,18 +685,19 @@ def process_file(file, basename, folder_out, output_formats, version, is_car=Fal
                     if outType == "obj+colour":
                         extension = "obj"
 
-                    if is_car and i < len(mesh_section_names) and mi < len(mesh_section_names[i]):
+                    if basename not in ["PARTS", "TIRE", "WHEEL", "FASHION"] and is_car and i < len(mesh_section_names) and mi < len(mesh_section_names[i]):
                         mesh_path = f"{i}-{mi}-{mesh_section_names[i][mi]}"
                     else:
-                        mesh_path = f"{i}"
+                        mesh_path = f"{i}-{mi}"
                     with open(f"{out_folder}/{basename}-{mesh_path}.{extension}", "w") as fout:
                         if outType == "comb":
                             mesh.write_mesh_to_type(outType, fout, material=f"{out_folder}/tex/{basename}.png")
                         else:
                             mesh.write_mesh_to_type(outType, fout, material=basename)
-                    if outType == "obj" or outType == "obj+colour":
-                        with open(f"{out_folder}/{basename}-{mesh_path}.mtl", "w") as fout:
-                            Texture.save_material_file_obj(fout, basename, texture_path)
+                    if has_textures:
+                        if outType == "obj" or outType == "obj+colour":
+                            with open(f"{out_folder}/{basename}-{mesh_path}.mtl", "w") as fout:
+                                Texture.save_material_file_obj(fout, basename, texture_path)
     sys.stdout = prev_std_out
 
 def process_items(source, dest, output_formats):

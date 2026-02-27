@@ -113,12 +113,28 @@ class CarModel:
             #     meshes += mesh
             meshes.append(mesh)
 
-        texture, last = Texture.read_texture(file, offset+texture_offset)
-        textures.append(texture)
-        while not last:
-            texture, last = Texture.read_texture(file, file.tell())
-            textures.append(texture)
+        has_textures = True
+        if has_textures:
+            file.seek(offset + texture_offset, os.SEEK_SET)
+            # Check for texture DMA tag, and check that the tag is not larger than file (which would be invalid)
+            dmaQWordCount = U.readShort(file)
+            dmaOther = U.readByte(file)
+            dmaFlag = U.readByte(file)
+            if (texture_offset + (dmaQWordCount * 16) > eof_offset) or dmaFlag != 0x10:
+                has_textures = False
+                # Treat this offset as another part
+                mesh = CarMesh.from_file(file, offset + texture_offset)
+                meshes.append(mesh)
 
+        if has_textures:
+            texture, last = Texture.read_texture(file, offset+texture_offset)
+            textures.append(texture)
+            while not last:
+                texture, last = Texture.read_texture(file, file.tell())
+                textures.append(texture)
+
+        # Seek to the end incase any code relies on this
+        file.seek(offset + eof_offset, os.SEEK_SET)
         return CarModel("", meshes, textures)
 
 

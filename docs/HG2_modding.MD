@@ -238,12 +238,16 @@ These settings configure how the data is saved, the main things to know for cars
 ### Putting you car in the game
 #### GUI method:
 
-TODO: sorry this is still being written at this point, and so I cannot show you how it works. 
-I also realise that at this point the HxD method shown below is very much lacking. 
+By using the Modding UI (see releases) you can now open the HG2 ISO and select any car Qxx right click it and replace any of the car parts. 
+The UI will check that the given part will fit, and will handle putting all the data into the game. 
+It should be possible to replace any game part, but for now all the car parts are supported, and TIRE/WHEEL/PARTS should also work.
+
 
 #### Hex editor method (HxD recommended)
 If you wish to edit a different part of the game from a car, you will need to use a hex editor. 
 The steps to take this are as follows, but are simplified as you will need to get comfortable doing this without my guide.
+
+I realise that at this point the HxD method shown below is very much lacking.
 
 __You should never change the size of the file (ISO) this will break it__
 
