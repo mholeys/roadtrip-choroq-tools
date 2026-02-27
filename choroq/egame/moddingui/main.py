@@ -65,6 +65,251 @@ class MessageBox(customtkinter.CTkToplevel):
             self.destroy()
 
 
+class CarPartReplaceMenu(customtkinter.CTkToplevel):
+
+    def __init__(self, root, iso: pycdlib.PyCdlib, entry: GameEntry):
+        super().__init__()
+        self.wm_transient(root)
+        self.root = root
+
+        self.iso = iso
+        self.entry = entry
+
+        self.original_data = BytesIO()
+        iso.get_file_from_iso_fp(self.original_data, iso_path=entry.path)
+        # Find texture offset
+        self.original_data.seek(0, os.SEEK_SET)
+
+        self.offsets = []
+        self.load_offsets()
+
+        self.columnconfigure(0, weight=15)
+        self.columnconfigure(1, weight=10)
+        self.rowconfigure(0, weight=1)
+        self.rowconfigure(1, weight=1)
+        self.rowconfigure(2, weight=1)
+        self.rowconfigure(3, weight=1)
+        self.rowconfigure(4, weight=1)
+        self.rowconfigure(5, weight=20)
+        self.rowconfigure(6, weight=1)
+        self.rowconfigure(7, weight=1)
+
+        self.part_label = customtkinter.CTkLabel(self, text="Part path", fg_color="gray30", corner_radius=6)
+        self.part_label.grid(row=0, column=0, padx=5, pady=(2, 0), sticky="ew", columnspan=2)
+        self.part_path = customtkinter.StringVar()
+        self.part_path_entry = customtkinter.CTkEntry(self, textvariable=self.part_path)
+        self.part_path_entry.grid(row=1, column=0, sticky="ew")
+
+        self.browse_part_button = customtkinter.CTkButton(self, text="Browse", command=self.browse_part_cb)
+        self.browse_part_button.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+
+        self.offsets_list = customtkinter.StringVar()
+        self.offsets_list.set(f"Offset table: {str(self.offsets)}")
+        self.offsets_list_label = customtkinter.CTkLabel(self, textvariable=self.offsets_list, fg_color="gray30", corner_radius=6)
+        self.offsets_list_label.grid(row=2, column=0, padx=5, pady=(2, 0), sticky="ew", columnspan=2)
+
+        self.output_var = customtkinter.StringVar()
+        self.output_var.set(f"")
+        self.output_label = customtkinter.CTkLabel(self, textvariable=self.output_var, fg_color="gray30", corner_radius=6)
+        self.output_label.grid(row=3, column=0, padx=5, pady=(2, 0), sticky="ew", columnspan=2)
+
+        self.valid_var = customtkinter.StringVar()
+        self.valid_var.set(f"")
+        self.valid_label = customtkinter.CTkLabel(self, textvariable=self.valid_var, fg_color="gray30", corner_radius=6)
+        self.valid_label.grid(row=4, column=0, padx=5, pady=(2, 0), sticky="ew", columnspan=2)
+
+        parts_string = [
+            "Body & Lights & Brake-light",
+            "Low Poly Body & Lights",
+            "Spoiler (default)",
+            "Spoiler (wing)",
+            "Jets",
+            "Stickers"]
+
+        car_part_count = len(self.offsets) - 2  # -2 one for texture, and one for eof
+        print(F"Car part count {car_part_count} vs {len(parts_string)}")
+        self.part_options = []
+        self.part_sizes = []
+
+        self.replacement_part_size = 0
+
+        for i in range(len(parts_string)):
+            size = self.offsets[i+1] - self.offsets[i]
+            self.part_sizes.append(size)
+
+            if car_part_count == len(parts_string):
+                part = parts_string[i]
+            else:
+                part = f"Part [{i}]"
+            self.part_options.append(f"Part [{i}]: {part}: size: {size}")
+            print(self.part_options[i])
+
+        self.part_chosen = customtkinter.StringVar(value=self.part_options[0])
+
+        # Dropdown menu
+        self.drop_down_label = customtkinter.CTkLabel(self, text="Part to replace:", fg_color="gray30", corner_radius=6)
+        self.drop_down_label.grid(row=5, column=0, padx=5, pady=(2, 0), sticky="ew")
+        self.part_drop_down = customtkinter.CTkOptionMenu(self, variable=self.part_chosen, values=self.part_options)
+        self.part_drop_down.grid(row=5, column=1, sticky="ew")
+
+        # Add callback for on change event, for the part chooser
+        self.part_chosen.trace_add(['read', 'write', 'unset'], self.on_part_choice_change)
+        # Add callback for when user selects a new file
+        self.part_path.trace_add(['read', 'write', 'unset'], self.on_replacement_file_selected)
+
+        # TODO: have checkbox to allow overwriting LP body, only do this on replace (and check and lock if o[0] == 0[1])
+
+        self.replace_btn = customtkinter.CTkButton(self, text="Replace", command=self.replace, state="disabled")
+        self.cancel_btn = customtkinter.CTkButton(self, text="Cancel", command=self.cancel)
+        self.replace_btn.grid(row=6, column=0, sticky="nesw")
+        self.cancel_btn.grid(row=6, column=1, sticky="nesw")
+
+        self.columnconfigure(0, weight=1)
+
+        self.check_size_valid()
+
+    def check_size_valid(self):
+        print("Checking if part will fit")
+        value = self.part_chosen.get()
+        if value in self.part_options:
+            index = self.part_options.index(value)
+            #print(f"Does it ({self.replacement_part_size}) fit for part: {value}")
+            # Disable unless it fits
+            self.replace_btn.configure(state="disabled")
+            if self.replacement_part_size != 0:
+                # TODO handle check for when we allow replacing/merging low poly
+                if self.replacement_part_size <= self.part_sizes[index]:
+                    # Enable replace button, as it fits
+                    self.replace_btn.configure(state="enabled")
+                    self.valid_var.set("Replacement part will fit")
+                else:
+                    self.valid_var.set("Replacement part too big!")
+        else:
+            self.valid_var.set("Invalid part choice")
+            print(f"Invalid part choice {value}")
+
+    def on_replacement_file_selected(self, variable, other, trace_mode):
+        print(f"File: {variable} | {other} | {trace_mode}")
+        value = self.root.getvar(variable)
+        print(value)
+        if trace_mode == 'write':
+            print(f"New replacement part path {value}")
+            try:
+                with open(value, "rb") as file:
+                    # Get size of the part they wish to
+                    file.seek(0, os.SEEK_END)
+                    self.replacement_part_size = file.tell()
+                    file.seek(0, os.SEEK_SET)
+                    self.output_var.set(f"Replacement file is {self.replacement_part_size} bytes")
+                    self.check_size_valid()
+            except Exception as e:
+                self.output_var.set("Failed to read replacement part, check path\n {e}")
+                print(e)
+
+    def on_part_choice_change(self, variable, other, trace_mode):
+        self.check_size_valid()
+
+    def load_offsets(self):
+        self.offsets = EntryMenu.find_offsets(self.original_data)
+
+    def browse_part_cb(self):
+        print("Asking for replacement part file path")
+        self.part_path.set(filedialog.askopenfilename(defaultextension='.BIN'))
+
+    def replace(self):
+        # TODO: check if adding a new file works?
+        print("Replacing file, checking everything")
+
+        # Reopen the iso as read and write
+        if not self.root.iso_writable:
+            try:
+                self.root.iso.close()
+                self.root.iso.open(self.root.iso_path, 'r+b')
+                self.root.iso_open = True
+                self.root.iso_writable = True
+            except Exception as e:
+                print("failed to open iso")
+                print(e)
+                MessageBox(self.root, ["Close"],
+                           "Failed reopen the ISO for writing\n" + str(e),
+                           "Problem during replacement", warn=True)
+                return False
+
+        path = self.part_path.get()
+        try:
+            # write the replacement mesh at the correct location into the iso
+            with open(path, "rb") as replacement_in:
+                print("Replacing file, checking validity of given Part")
+                offset1 = U.readLong(replacement_in)
+                offset2 = U.readLong(replacement_in)
+                size1 = U.readLong(replacement_in)
+                size2 = U.readLong(replacement_in)
+
+                # Sanity check the given data
+                invalid_data = False
+                if offset1 > self.replacement_part_size:
+                    invalid_data = True
+                if offset2 > self.replacement_part_size:
+                    invalid_data = True
+                if size1 > 65535:
+                    invalid_data = True
+                if size2 > 65535:
+                    invalid_data = True
+
+                if invalid_data:
+                    MessageBox(self.root, ["Close"], f"Issue with the given replacement part", "Problem", warn=True)
+                    return
+                else:
+                    print("Replacing file, replacement seems valid")
+
+                # Move back to the start after sanity check
+                replacement_in.seek(0, os.SEEK_SET)
+
+                # Find which offset we are replacing, and move to it
+                part_value = self.part_chosen.get()
+                if part_value in self.part_options:
+                    index = self.part_options.index(part_value)
+
+                    part_offset = self.offsets[index]
+
+                    # Dirty, open file again then write where it should be,
+                    # without doing this the data positions change
+                    print(f"Replacing file, replacing {part_value}")
+                    with open(self.entry.record.data_fp.name, "r+b") as edited_out:
+                        # Move to the iso's file position, and move to the start of the part
+                        part_offset = self.entry.record.fp_offset + part_offset
+                        edited_out.seek(part_offset, os.SEEK_SET)
+
+                        amount_written = edited_out.write(replacement_in.read())
+                        if amount_written < self.replacement_part_size:
+                            print(f"Failed to replace, did not write full size")
+
+                    # Do not use this function, it changes LBA and file positions
+                    # This is here to remind me to not do this
+                    # # Pad data until replacement is the same size, as required
+                    # replacement_bytes.seek(0, os.SEEK_END)
+                    # replacement_bytes.write(b'\x00' * (entry.get_size() - converted_size))
+                    # converted_size = replacement_bytes.tell()
+                    # replacement_bytes.seek(0, os.SEEK_SET)
+                    # iso.modify_file_in_place(replacement_bytes, converted_size, entry.path)
+                    MessageBox(self.root, ["Close"],
+                               f"Replacement successful","Completed")
+                else:
+                    MessageBox(self.root, ["Close"],
+                               f"Issue with destination part, probably a bug", "Problem", warn=True)
+                    return
+        except Exception as e:
+            MessageBox(self.root, ["Close"],
+                       "Failed to replace bytes in the ISO\n"
+                       "If the following message makes no sense, assume\n"
+                       "that I have not yet finished support for part of the given file\n\n" + str(e),
+                       "Problem during replacement",
+                       warn=True)
+
+    def cancel(self):
+        self.destroy()
+
+
 class ModdingUi(customtkinter.CTk):
     def __init__(self):
         super().__init__()
@@ -150,14 +395,11 @@ class ModdingUi(customtkinter.CTk):
         treestyle.map("Treeview.Heading",
                       background=[('active', '#3484F0')])
 
-    def changes_made(self) -> bool:
-        pass
-
     def open_iso_cb(self):
         # Check if we already have an iso open
-        if self.iso_open and self.changes_made:
-            MessageBox(self, ["Open another ISO", "Cancel opening"],
-                       "There is already an ISO open, are you sure you want to open another?",
+        if self.iso_open:
+            MessageBox(self, ["Close application", "Cancel"],
+                       "There is already an ISO open, please close the UI and reopen if you wish to switch ISOs",
                        "ISO open", callback=self.open_iso_discard_changes_cb,
                        warn=True)
             return
@@ -165,13 +407,15 @@ class ModdingUi(customtkinter.CTk):
         # Warn user
         MessageBox(self, ["Understood"],
                    "Opening an iso is safe from modification, unless you press replace!",
-                   "Warning", callback=None)
+                   "Warning", callback=self.ask_iso_path)
 
+    def ask_iso_path(self, button_index, button_name):
+        print("Asking for game iso path")
         self.iso_path_var.set(filedialog.askopenfilename(defaultextension="iso"))
 
         if self.iso_path_var.get() is None:
             MessageBox(self, ["Close"],
-                       "The path supplied, is either invalid or inaccessible",
+                       "The path supplied is either invalid or inaccessible",
                        "ISO not found", callback=None, warn=True)
             return
 
@@ -180,24 +424,24 @@ class ModdingUi(customtkinter.CTk):
         if not self.iso_path.exists() or not self.iso_path.is_file():
             self.iso_path = None
             MessageBox(self, ["Close"],
-                       "The path supplied, is either invalid or inaccessible",
+                       "The path supplied is either invalid or inaccessible",
                        "ISO not found", callback=None, warn=True)
             return
 
         if not self.check_and_load_iso():
             self.iso_path = None
             MessageBox(self, ["Close"],
-                       "The path supplied, is either invalid or inaccessible",
-                       "ISO not found", callback=None, warn=True)
+                       "The given ISO path is invalid, or incompatible",
+                       "ISO not valid", callback=None, warn=True)
             return
 
     def check_and_load_iso(self) -> bool:
         # Open iso using cdlib, and check what the disk is
-        # read only, as we do not want to edit this original ever
         self.iso = pycdlib.PyCdlib()
         try:
             self.iso.open(self.iso_path, 'rb')
             self.iso_open = True
+            # read only, as we do not want to edit unless the user says so
             self.iso_writable = False
         except Exception as e:
             print("failed to open iso")
@@ -258,7 +502,13 @@ class ModdingUi(customtkinter.CTk):
     def open_iso_discard_changes_cb(self, button_index, button_name):
         if button_index == 0:
             # TODO: Clear changes, close iso, and recall function
-            self.open_iso_cb()
+            self.iso_open = False
+            try:
+                self.iso.close()
+                self.iso_open = False
+                self.destroy()
+            except Exception as e:
+                print(e)
             return
         # Otherwise user wishes to cancel the open request
         pass
@@ -461,32 +711,37 @@ class EntryMenu(Menu):
                 with_str = "HG2"
             self.add_command(label=f"Replace with {with_str}",
                              command=functools.partial(self.import_replacement, iso, entry))
+            if entry.game_version == GameVersion.CHOROQ_HG_2:
+                self.add_command(label=f"Replace part",
+                                 command=functools.partial(self.import_hg2_part, iso, entry))
 
         self.post(x, y)
 
     def dump_cb(self, iso: pycdlib.PyCdlib, entry: GameEntry):
         # Open save file dialog
+        print("Asking for destination file, to save dump to")
         path = filedialog.asksaveasfilename(defaultextension=entry.extension, initialfile=entry.basename)
         try:
             with open(path, "wb") as fout:
                 iso.get_file_from_iso_fp(fout, iso_path=entry.path)
 
-                MessageBox(self, ["Close"], "Dump complete", "Completed")
+                MessageBox(self.root, ["Close"], "Dump complete", "Completed")
         except Exception as e:
-            MessageBox(self, ["Close"],
+            MessageBox(self.root, ["Close"],
                        "Failed to dump the file from the ISO\n" + str(e),
                        "Problem dumping file", warn=True)
 
     def extract_cb(self, iso: pycdlib.PyCdlib, entry: GameEntry):
         # Open save file dialog
+        print("Asking for destination folder, to save extracted data to")
         path = filedialog.askdirectory(title="Select the output folder")
         try:
             if entry.extract(iso, [], path):
-                MessageBox(self, ["Close"], "Extraction complete", "Completed")
+                MessageBox(self.root, ["Close"], "Extraction complete", "Completed")
             else:
-                MessageBox(self, ["Close"], "Extraction failed", "Failed to extract", warn=True)
+                MessageBox(self.root, ["Close"], "Extraction failed", "Failed to extract", warn=True)
         except Exception as e:
-            MessageBox(self, ["Close"],
+            MessageBox(self.root, ["Close"],
                        "Failed to extract from the ISO\n" + str(e),
                        "Problem extracting file", warn=True)
 
@@ -494,13 +749,26 @@ class EntryMenu(Menu):
         # Warn user
         if self.root.iso_writable:
             return self.import_replacement_confirmed(iso, entry, 0, 0)
-        MessageBox(self, ["Understood"],
+        MessageBox(self.root, ["Understood"],
                    "This method will attempt to edit your game iso, IN PLACE,\n"
                    "I recommend you make a clean copy before performing any modifications\n"
                    "such as replacements, as this cannot be undone using this tool\n"
                    "The first thing it will do is reopen the iso, as writable if allowed",
                    "Warning",
                    callback=functools.partial(self.import_replacement_confirmed, iso, entry),
+                   warn=True)
+
+    def import_hg2_part(self, iso: pycdlib.PyCdlib, entry: GameEntry):
+        # Warn user
+        if self.root.iso_writable:
+            return self.import_replacement_confirmed(iso, entry, 0, 0)
+        MessageBox(self.root, ["Understood"],
+                   "This method will attempt to edit your game iso, IN PLACE,\n"
+                   "I recommend you make a clean copy before performing any modifications\n"
+                   "such as replacements, as this cannot be undone using this tool\n"
+                   "The first thing it will do is reopen the iso, as writable if allowed",
+                   "Warning",
+                   callback=functools.partial(self.import_part_hg2_confirmed, iso, entry),
                    warn=True)
 
     def import_replacement_confirmed(self, iso: pycdlib.PyCdlib, entry: GameEntry, button_index, button_name):
@@ -514,7 +782,7 @@ class EntryMenu(Menu):
             except Exception as e:
                 print("failed to open iso")
                 print(e)
-                MessageBox(self, ["Close"],
+                MessageBox(self.root, ["Close"],
                            "Failed reopen the ISO for writing\n" + str(e),
                            "Problem during replacement", warn=True)
                 return False
@@ -525,6 +793,7 @@ class EntryMenu(Menu):
         # After we know the size, we can calculate if it will fit
         # If it will fit, copy out the texture transfer bytes (ensures addressing issues)
         # If not, tell user to try a different mesh
+        print("Asking for replacement HG[2/3] BIN")
         path = filedialog.askopenfilename(defaultextension='.BIN')
         try:
             with open(path, "rb") as replacement_in:
@@ -539,7 +808,7 @@ class EntryMenu(Menu):
                 replacement_bytes.seek(0, os.SEEK_SET)
 
                 if converted_size > entry.get_size():
-                    MessageBox(self, ["Close"],
+                    MessageBox(self.root, ["Close"],
                                "Replacement unsuccessful, the car would be larger than "
                                f"the one you wish to replace, size {converted_size}",
                                "Not possible",
@@ -596,17 +865,19 @@ class EntryMenu(Menu):
                     # replacement_bytes.seek(0, os.SEEK_SET)
                     # iso.modify_file_in_place(replacement_bytes, converted_size, entry.path)
 
-                    MessageBox(self, ["Close"],
-                               f"Replacement successful (replaced {converted_size} bytes), "
-                               "make sure to save ISO changes",
+                    MessageBox(self.root, ["Close"],
+                               f"Replacement successful (replaced {converted_size} bytes)",
                                "Completed")
         except Exception as e:
-            MessageBox(self, ["Close"],
+            MessageBox(self.root, ["Close"],
                        "Failed to replace bytes in the ISO\n"
                        "If the following message makes no sense, assume\n"
                        "that I have not yet finished support for part of the given file\n\n" + str(e),
                        "Problem during replacement",
                        warn=True)
+
+    def import_part_hg2_confirmed(self, iso: pycdlib.PyCdlib, entry: GameEntry, button_index, button_name):
+        CarPartReplaceMenu(self.root, iso, entry)
 
     @staticmethod
     def find_offsets(stream):

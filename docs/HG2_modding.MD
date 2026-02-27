@@ -252,6 +252,7 @@ __You should never change the size of the file (ISO) this will break it__
 2. Open the ISO in HxD using the Open Disk Image (Ctrl+Shift+I)
 3. Enter the sector number at the top of HxD (little text box in menu bar)
 4. You should look at the offset table shown, this wil be multiple 4 byte numbers (readable using View->Toolbars->Data inspector)
+5. The second number should be less than the size of your car part (the data you will copy in a sec) This can be viewed with windows right click properties "Size" not "Size on Disk" e.g 57,653 bytes the second UInt32 should be less than 57,653 - 48 if the first offset is 30 00 00 00
 5. Using the Data inspector highlight the first 4 bytes and see the UInt32 value, this is how much further down you need to move (from your current position)
 4. Open your exported Part.BIN and copy all content (the warning is fine, if you get one)
 5. Back in the ISO's tab, find which offset you need to replace, and navigate to it
