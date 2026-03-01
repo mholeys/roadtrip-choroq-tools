@@ -3,11 +3,11 @@
 
 As usual no responsibility is taken by me with whatever you use/do to your game/console/pc/whatever; you are doing this, not me!
 I am merely trying to provide tools that make things easier, and if they do something that breaks things I will not be responsible.
-You have been warned. Although I do not forsee any issues, they may still occur.
+You have been warned. Although I do not foresee any issues, they may still occur.
 
 This quite a long guide, with both simple and complex sections, some you may be able to skip over quickly, others will need a good read.
 
-This is a developing tool, that might have some changes over time, so this guide will be an overview on how to take any given mesh and place it into the game.
+This is a developing tool, which might have some changes over time, so this guide will be an overview on how to take any given mesh and place it into the game.
 You will also have to read the documentation within the blender UI, and this will probably be kept up-to-date more than this document.
 
 
@@ -29,7 +29,9 @@ This means we can create 7 parts for each car, and fully populate/replace a Qxx.
 
 See [Car model format](https://github.com/mholeys/roadtrip-choroq-tools/blob/master/docs/HG2_HG3.MD#car-model-file-format) to understand a which part of the car is used for which bit.
 
-## Getting started
+If you are just modding someone else's model into your game, you can skip ahead to (Putting your car in the game)[#putting_your_car_in_the_game]  
+
+## Getting started with modding
 The code is written for Blender, and so will only work with Blender.
 If you do not like blender or use another tool then feel free to make it in whatever, and just import it into blender.  
 
@@ -39,12 +41,12 @@ And to make your first one easier, stick to replacing the main body Part only, u
 The first thing needed is a car or model that you wish to place into the game. As cars are probably most people's aim I will be covering them, but the same applies all objects in the game.
 For a car I would recommend it being in the following structure, these can be multiple different meshes/collections whatever in blender:
 - The main body of the car itself, with all bits except wheels and spoilers
-- A copy of the headlights and taillights (used as nighttime driving lights, and flashes when NPCs talk)
+- A copy of the headlights and taillights (used as night-time driving lights, and flashes when NPCs talk)
 - A mesh slightly larger than the brake lights, to allow for the transparent mesh to spill out naturally (used for when you brake) 
 - All meshes having the same texture (an atlus if needed)
 - The bottom right quarter of the texture (0.5, 0.5 to 1.0, 1.0) defined as the shadow for the car (see the exported/dumped textures as an example)
 
-If you want to make you car behave the same as the original cars you will also need
+If you want to make your car behave the same as the original cars you will also need
 - A spoiler (which placed in the correct location, but is a separate mesh, no gaps in the car body)
 - A secondary spoiler (same as above) for when you select the other wing set
 - A linking mesh to connect your car, to the existing jets of the car you wish to replace 
@@ -108,7 +110,7 @@ Then press on Open in the middle (blue arrow) and browse to the blender script (
 
 Once loaded, you will need to press run script, again in the middle.
 
-![Screenshot showing the script script loaded in Blender](images/blender-script-loaded.jpg)
+![Screenshot showing the script loaded in Blender](images/blender-script-loaded.jpg)
 
 After this has executed, check that there are no errors in the bottom left, and that there is a message saying "bpy.ops.text.run_script()"
 If you do encounter any errors at this point, there is an error with your blender setup, or the script, and you may not be able to use the script.
@@ -192,7 +194,7 @@ There are currently 3 special properties:
     - 255.0 used on underside body panels, such as the front splitter of some cars (dark blue in the image below)
     - 51.0 used for the other body faces, same as 280.5 but for the faces that do not face upwards (red in image below)
     - 1.0 used for the headlights and brake light meshes (unsure why but it works, white in the image below)
-    - 0.0 used for the other panels, which are matte afaik, such as body panel gaps, and the window trim (black in the image below)
+    - 0.0 used for the other panels, which are matte as far as I can tell, such as body panel gaps, and the window trim (black in the image below)
 
 ObjectIndex demonstration car:
 I have moved the lights/brake lights to make this easier to see, you should have yours positioned as you want them to show up in the game
@@ -230,46 +232,60 @@ These settings configure how the data is saved, the main things to know for cars
   - Mesh 1 Normal
   - Mesh 2 Normal
 - Normal type (this is related to the Vertex normals of the exported model)
-  - Test with Normal and if it looks right great, if not reexport with Alternative
+  - Test with Normal and if it looks right great, if not re-export with Alternative
   - Alternative is usually for objects that have been imported in blender via the OBJ format (such as a different HG2 car)
   - If neither of these work you will have to edit the code, or contact me to find the setting for you.
-    - In the future I plan to allow you to choose all combinations but I wanted to get this published sooner
+    - In the future I plan to allow you to choose all combinations, but I wanted to get this published sooner
 
-### Putting you car in the game
+If you plan to make multiple parts, such as a car with a body and spoiler the following is recommended:
+- When exporting each part (body + lights + brake lights; spoiler; spoiler2; jets etc.) save each one to a different file
+- Name these files appropriately, such as part0_something.BIN for the car body, or part1_something_low_poly.BIN, or part2_something_spoiler.BIN, or part3_something_wing.BIN
+These choices will make replacement easier when you are using the UI, or if you need to refer back to which parts are which.
+
+### Putting your car in the game
 #### GUI method:
 
-By using the Modding UI (see releases) you can now open the HG2 ISO and select any car Qxx right click it and replace any of the car parts. 
+By using the Modding UI (see releases) you can now open the HG2 ISO and select any car Qxx right click it and replace any of the car parts.
+Currently only ISO is supported, it is possible to convert BIN/CUE to ISO, there are multiple methods, I have used the 7Zip plugin "iso7z" but do your own research.
+
 The UI will check that the given part will fit, and will handle putting all the data into the game. 
 It should be possible to replace any game part, but for now all the car parts are supported, and TIRE/WHEEL/PARTS should also work.
 
+You can use the GUI without any parts made to see what sizes you have available for each car.
+You can check this by clicking "Replace Part" on the car you wish to work on, and looking at the sizes listed in the dropdown menu, these are the maximum size for each part.
 
-#### Hex editor method (HxD recommended)
-If you wish to edit a different part of the game from a car, you will need to use a hex editor. 
-The steps to take this are as follows, but are simplified as you will need to get comfortable doing this without my guide.
+The usual steps of using the UI are:
+- Open the Modding UI program
+- Selecting Open ISO
+- Browsing to the HG2 ISO you wish to modify
+- Expanding the car folder, of the car you wish to edit (CAR0 for Q00-Q29) 
+  - Making sure to remember Q00 is Q01 in game
+- Right-clicking on the Qxx.BIN you wish to edit, and making your choice of action
+  - In this case "Replace Part"
 
-I realise that at this point the HxD method shown below is very much lacking.
+Once you have selected "Replace Part":
+- You need to click browse, to select the exported blender BIN for the part you want to mod into the game
+- Then you need to choose which part you wish to replace with yours, there is a dropdown menu explaining the different parts that the chosen car/object has
+- Once you have done this you will see a message telling you if the given Part (BIN) can fit in the car, if not then you will need to reduce the complexity of your model
+  - Do not change the select part in the menu to make it fit, each slot is dedicated to that part, and the game will not behave as expected if you do
+- If you are happy to replace this objects part with yours, and it will fit all that is left is for you to select Replace.
+- Hopefully there are no errors
+- You can now close the UI and test the object in game.
+  - To test cars, if you load a game state you will have to move the body selection menu and select a different car, to force the reload
 
-__You should never change the size of the file (ISO) this will break it__
+Example of how to place your parts into the car of your choice.
+This demo shows how you can set the Main body, Spoiler, and secondary spoiler (Wing), requiring 3 exported parts.
+![Opening the blender spreadsheet window](images/ui-replace-part.gif)
 
-0. Make a copy of your ISO (bin/cue will need converting _sorry_, 7Zip has a plugin you can use (no guide here))
-1. Find the Sector number for the file you wish to edit
-2. Open the ISO in HxD using the Open Disk Image (Ctrl+Shift+I)
-3. Enter the sector number at the top of HxD (little text box in menu bar)
-4. You should look at the offset table shown, this wil be multiple 4 byte numbers (readable using View->Toolbars->Data inspector)
-5. The second number should be less than the size of your car part (the data you will copy in a sec) This can be viewed with windows right click properties "Size" not "Size on Disk" e.g 57,653 bytes the second UInt32 should be less than 57,653 - 48 if the first offset is 30 00 00 00
-5. Using the Data inspector highlight the first 4 bytes and see the UInt32 value, this is how much further down you need to move (from your current position)
-4. Open your exported Part.BIN and copy all content (the warning is fine, if you get one)
-5. Back in the ISO's tab, find which offset you need to replace, and navigate to it
-6. This offset for cars is usually shown in the first 4 bytes of the sector 30 00 00 00, which means 3 * 16 bytes further down (3 rows if 16 bytes wide)
-7. Move your cursor to this offset and Ctrl+B to paste write, not Paste insert
-8. That is the model written
-9. Save the ISO (as a copy if you like), but after saving there is no way to undo
-10. Test it on PS2 or emulator
+##### Note for some people with past manual modding:
+If you have done some changes as suggested by me via hex editing, you may find that part0 (body) is 0 in size, but the LP body is very large, in this case you should place your body into the LP ("Part [1]") slot, and this will be used for both.
+Your other option is to open a clean copy of the game.
+
 
 ### Troubleshooting and debugging
 
 Blender has a very handy window for inspecting the different values set on a mesh, this is called Spreadsheet.
-To open this you click the upper left hand icon on any panel and choose Spreadsheet, I recommend opening a new window (Window -> New Window) and setting this to be your speadsheet.
+To open this you click the upper left hand icon on any panel and choose Spreadsheet, I recommend opening a new window (Window -> New Window) and setting this to be your spreadsheet.
 
 In here you can see the different attributes of the mesh you have selected, and under the different domains, usually you will want to have face selected on the left.
 The spreadsheet will show values for the current object you have selected (only 1 object)

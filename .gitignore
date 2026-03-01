@@ -3,3 +3,7 @@ tests/
 analysis/
 *.carlist
 create_unity_list.py
+
+# pixi environments
+.pixi/*
+!.pixi/config.toml

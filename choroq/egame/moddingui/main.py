@@ -31,7 +31,7 @@ class IsoTools:
 class MessageBox(customtkinter.CTkToplevel):
 
     def __init__(self, master, buttons, message, title, callback=None, warn=False):
-        super().__init__()
+        super().__init__(master)
         self.wm_transient(master)
         self.wm_title(title)
 
@@ -68,9 +68,11 @@ class MessageBox(customtkinter.CTkToplevel):
 class CarPartReplaceMenu(customtkinter.CTkToplevel):
 
     def __init__(self, root, iso: pycdlib.PyCdlib, entry: GameEntry):
-        super().__init__()
+        super().__init__(root)
         self.wm_transient(root)
         self.root = root
+
+        self.title("Car/Part replacement UI")
 
         self.iso = iso
         self.entry = entry
@@ -83,40 +85,43 @@ class CarPartReplaceMenu(customtkinter.CTkToplevel):
         self.offsets = []
         self.load_offsets()
 
-        self.columnconfigure(0, weight=15)
-        self.columnconfigure(1, weight=10)
+        self.columnconfigure(0, weight=20)
+        self.columnconfigure(1, weight=20)
+        self.columnconfigure(2, weight=20)
+        self.columnconfigure(3, weight=20)
         self.rowconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
         self.rowconfigure(2, weight=1)
         self.rowconfigure(3, weight=1)
         self.rowconfigure(4, weight=1)
-        self.rowconfigure(5, weight=20)
+        self.rowconfigure(5, weight=1)
         self.rowconfigure(6, weight=1)
         self.rowconfigure(7, weight=1)
 
         self.part_label = customtkinter.CTkLabel(self, text="Part path", fg_color="gray30", corner_radius=6)
-        self.part_label.grid(row=0, column=0, padx=5, pady=(2, 0), sticky="ew", columnspan=2)
+        self.part_label.grid(row=0, column=0, padx=5, pady=5, sticky="nesw", columnspan=4)
+
         self.part_path = customtkinter.StringVar()
         self.part_path_entry = customtkinter.CTkEntry(self, textvariable=self.part_path)
-        self.part_path_entry.grid(row=1, column=0, sticky="ew")
+        self.part_path_entry.grid(row=1, column=0, sticky="nesw", columnspan=3)
 
         self.browse_part_button = customtkinter.CTkButton(self, text="Browse", command=self.browse_part_cb)
-        self.browse_part_button.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+        self.browse_part_button.grid(row=1, column=3, padx=5, pady=5, sticky="nesw")
 
         self.offsets_list = customtkinter.StringVar()
-        self.offsets_list.set(f"Offset table: {str(self.offsets)}")
+        self.offsets_list.set(f"Offset table: \n {str(self.offsets)}")
         self.offsets_list_label = customtkinter.CTkLabel(self, textvariable=self.offsets_list, fg_color="gray30", corner_radius=6)
-        self.offsets_list_label.grid(row=2, column=0, padx=5, pady=(2, 0), sticky="ew", columnspan=2)
+        self.offsets_list_label.grid(row=2, column=0, padx=5, pady=5, sticky="nesw", columnspan=4)
 
         self.output_var = customtkinter.StringVar()
         self.output_var.set(f"")
         self.output_label = customtkinter.CTkLabel(self, textvariable=self.output_var, fg_color="gray30", corner_radius=6)
-        self.output_label.grid(row=3, column=0, padx=5, pady=(2, 0), sticky="ew", columnspan=2)
+        self.output_label.grid(row=3, column=0, padx=5, pady=5, sticky="nesw", columnspan=4)
 
         self.valid_var = customtkinter.StringVar()
         self.valid_var.set(f"")
         self.valid_label = customtkinter.CTkLabel(self, textvariable=self.valid_var, fg_color="gray30", corner_radius=6)
-        self.valid_label.grid(row=4, column=0, padx=5, pady=(2, 0), sticky="ew", columnspan=2)
+        self.valid_label.grid(row=4, column=0, padx=5, pady=5, sticky="nesw", columnspan=4)
 
         parts_string = [
             "[0] Body & [1] Lights & [2] Brake-light",
@@ -171,8 +176,11 @@ class CarPartReplaceMenu(customtkinter.CTkToplevel):
                     "[0] Propeller special part unknown",
                 ]
 
+        if entry.filename == "WHEEL.BIN":
+            car_part_count = len(self.offsets) - 1  # -1 for eof, no texture
+        else:
+            car_part_count = len(self.offsets) - 2  # -2 one for texture, and one for eof
 
-        car_part_count = len(self.offsets) - 2  # -2 one for texture, and one for eof
         print(F"Car part count {car_part_count} vs {len(parts_string)}")
         self.part_options = []
         self.part_sizes = []
@@ -194,9 +202,9 @@ class CarPartReplaceMenu(customtkinter.CTkToplevel):
 
         # Dropdown menu
         self.drop_down_label = customtkinter.CTkLabel(self, text="Part to replace:", fg_color="gray30", corner_radius=6)
-        self.drop_down_label.grid(row=5, column=0, padx=5, pady=(2, 0), sticky="ew")
+        self.drop_down_label.grid(row=5, column=0, padx=5, pady=5, sticky="nesw")
         self.part_drop_down = customtkinter.CTkOptionMenu(self, variable=self.part_chosen, values=self.part_options)
-        self.part_drop_down.grid(row=5, column=1, sticky="ew")
+        self.part_drop_down.grid(row=5, column=1, padx=5, pady=5, columnspan=3, sticky="nesw")
 
         # Add callback for on change event, for the part chooser
         self.part_chosen.trace_add(['read', 'write', 'unset'], self.on_part_choice_change)
@@ -205,10 +213,10 @@ class CarPartReplaceMenu(customtkinter.CTkToplevel):
 
         # TODO: have checkbox to allow overwriting LP body, only do this on replace (and check and lock if o[0] == 0[1])
 
-        self.replace_btn = customtkinter.CTkButton(self, text="Replace", command=self.replace, state="disabled")
-        self.cancel_btn = customtkinter.CTkButton(self, text="Cancel", command=self.cancel)
-        self.replace_btn.grid(row=6, column=0, sticky="nesw")
-        self.cancel_btn.grid(row=6, column=1, sticky="nesw")
+        self.replace_btn = customtkinter.CTkButton(self, text="Replace", command=self.replace, state="disabled", fg_color="Red")
+        self.close_btn = customtkinter.CTkButton(self, text="Close", command=self.close_cb)
+        self.replace_btn.grid(row=6, column=0, columnspan=2, sticky="nesw")
+        self.close_btn.grid(row=6, column=3, columnspan=2, sticky="nesw")
 
         self.columnconfigure(0, weight=1)
 
@@ -222,11 +230,15 @@ class CarPartReplaceMenu(customtkinter.CTkToplevel):
             #print(f"Does it ({self.replacement_part_size}) fit for part: {value}")
             # Disable unless it fits
             self.replace_btn.configure(state="disabled")
+            # Colour button red
+            self.replace_btn.configure(fg_color="Red")
             if self.replacement_part_size != 0:
                 # TODO handle check for when we allow replacing/merging low poly
                 if self.replacement_part_size <= self.part_sizes[index]:
                     # Enable replace button, as it fits
                     self.replace_btn.configure(state="enabled")
+                    self.replace_btn.configure(fg_color="Blue")
+                    self.replace_btn.after(1, self.update())
                     self.valid_var.set("Replacement part will fit")
                 else:
                     self.valid_var.set("Replacement part too big!")
@@ -352,7 +364,7 @@ class CarPartReplaceMenu(customtkinter.CTkToplevel):
                        "Problem during replacement",
                        warn=True)
 
-    def cancel(self):
+    def close_cb(self):
         self.destroy()
 
 
@@ -385,12 +397,12 @@ class ModdingUi(customtkinter.CTk):
         self.button_frame = CTkFrame(self)
         self.button_frame.rowconfigure(0, weight=1)
         self.button_frame.columnconfigure(0, weight=1)
-        self.button_frame.grid(row=0, column=0, sticky="new")
+        self.button_frame.grid(row=0, column=0, padx=5, pady=5, sticky="new")
         button = customtkinter.CTkButton(self.button_frame, text="Open ISO", command=self.open_iso_cb)
-        button.grid(row=0, column=0, sticky="nw")
+        button.grid(row=0, column=0, padx=5, pady=5, sticky="nw")
 
         self.data_frame = CTkFrame(self)
-        self.data_frame.grid(row=1, column=0, sticky="nesw")
+        self.data_frame.grid(row=1, column=0, padx=5, pady=5, sticky="nesw")
         self.data_frame.rowconfigure(0, weight=1)
         self.data_frame.columnconfigure(0, weight=20)
         self.data_frame.columnconfigure(1, weight=80)
@@ -635,6 +647,7 @@ class FileInfoFrame(CTkFrame):
         self.columnconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
         self.rowconfigure(2, weight=100)
+        # self.rowconfigure(3, weight=1)
 
         self.top_label = customtkinter.CTkLabel(self, text="File Info", corner_radius=6)
         self.top_label.grid(row=0, column=0, sticky="new")
@@ -647,7 +660,12 @@ class FileInfoFrame(CTkFrame):
 
         self.main_text = customtkinter.CTkTextbox(self, corner_radius=6)
         # self.main_text.configure(state="disabled")
-        self.main_text.grid(row=2, column=0, sticky="nesw")
+        self.main_text.grid(row=2, column=0, padx=5, pady=5, sticky="nesw")
+
+        # self.action_row = CTkFrame(self)
+        #self.action_row.rowconfigure(3, weight=1)
+        #self.action_row.columnconfigure(0, weight=1)
+        # self.action_row.grid(row=3, column=0, padx=5, pady=5, sticky="sew")
 
     def set_file(self, selected):
         print(selected)
@@ -743,7 +761,7 @@ class FileEntryTree(CTkFrame):
 class EntryMenu(Menu):
 
     def __init__(self, root):
-        super().__init__()
+        super().__init__(root)
         self.root = root
 
     def show(self, x, y, iso, entry):
@@ -763,7 +781,7 @@ class EntryMenu(Menu):
                                  command=functools.partial(self.import_replacement, iso, entry))
             if entry.game_version == GameVersion.CHOROQ_HG_2:
                 self.add_command(label=f"Replace part",
-                                 command=functools.partial(self.import_hg2_part, iso, entry))
+                                 command=functools.partial(self.import_hg2_part, self.root, iso, entry))
 
         self.post(x, y)
 
@@ -808,7 +826,7 @@ class EntryMenu(Menu):
                    callback=functools.partial(self.import_replacement_confirmed, iso, entry),
                    warn=True)
 
-    def import_hg2_part(self, iso: pycdlib.PyCdlib, entry: GameEntry):
+    def import_hg2_part(self, root, iso: pycdlib.PyCdlib, entry: GameEntry):
         # Warn user
         if self.root.iso_writable:
             return self.import_part_hg2_confirmed(iso, entry, 0, 0)
@@ -818,7 +836,7 @@ class EntryMenu(Menu):
                    "such as replacements, as this cannot be undone using this tool\n"
                    "The first thing it will do is reopen the iso, as writable if allowed",
                    "Warning",
-                   callback=functools.partial(self.import_part_hg2_confirmed, iso, entry),
+                   callback=functools.partial(self.import_part_hg2_confirmed, root, iso, entry),
                    warn=True)
 
     def import_replacement_confirmed(self, iso: pycdlib.PyCdlib, entry: GameEntry, button_index, button_name):
@@ -926,8 +944,8 @@ class EntryMenu(Menu):
                        "Problem during replacement",
                        warn=True)
 
-    def import_part_hg2_confirmed(self, iso: pycdlib.PyCdlib, entry: GameEntry, button_index, button_name):
-        CarPartReplaceMenu(self.root, iso, entry)
+    def import_part_hg2_confirmed(self, root, iso: pycdlib.PyCdlib, entry: GameEntry, button_index, button_name):
+        CarPartReplaceMenu(root, iso, entry)
 
     @staticmethod
     def find_offsets(stream):
