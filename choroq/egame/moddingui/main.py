@@ -272,32 +272,31 @@ class CarPartReplaceMenu(customtkinter.CTkToplevel):
 
     def browse_part_cb(self):
         print("Asking for replacement part file path")
-        self.part_path.set(filedialog.askopenfilename(defaultextension='.BIN'))
+        self.part_path.set(filedialog.askopenfilename(defaultextension='.BIN', initialdir=self.root.config.get_last_part_path()))
 
     def replace(self):
         # TODO: check if adding a new file works?
         print("Replacing file, checking everything")
 
         # Reopen the iso as read and write
-        if not self.root.iso_writable:
-            try:
-                self.root.iso.close()
-                self.root.iso.open(self.root.iso_path, 'r+b')
-                self.root.iso_open = True
-                self.root.iso_writable = True
-            except Exception as e:
-                print("failed to open iso")
-                print(e)
-                MessageBox(self.root, ["Close"],
-                           "Failed reopen the ISO for writing\n" + str(e),
-                           "Problem during replacement", warn=True)
-                return False
+        try:
+            write_test = open(self.entry.record.data_fp.name, "r+b")
+            write_test.close()
+        except Exception as e:
+            print("failed to write to iso (test)")
+            print(e)
+            MessageBox(self.root, ["Close"],
+                       "Failed to reopen the ISO for writing\n" + str(e),
+                       "Problem during replacement", warn=True)
+            return False
 
         path = self.part_path.get()
         try:
             # write the replacement mesh at the correct location into the iso
             with open(path, "rb") as replacement_in:
                 print("Replacing file, checking validity of given Part")
+                self.root.config.update_part_path(path)
+
                 offset1 = U.readLong(replacement_in)
                 offset2 = U.readLong(replacement_in)
                 size1 = U.readLong(replacement_in)
@@ -382,13 +381,16 @@ class ModdingUi(customtkinter.CTk):
         self.iso_path_var = customtkinter.StringVar()
         self.iso_path = None  # Path
         self.iso_open = False
-        self.iso_writable = False  # Set to true if opened with r+b or wb
         self.iso = None  # CDlib iso
 
         self.entries = []
 
         self.game_version = None
         self.game_variant = None
+
+        # Setup/read config
+        self.config = UiConfig('config.txt')
+        self.config.parse_config()
 
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
@@ -400,6 +402,9 @@ class ModdingUi(customtkinter.CTk):
         self.button_frame.grid(row=0, column=0, padx=5, pady=5, sticky="new")
         button = customtkinter.CTkButton(self.button_frame, text="Open ISO", command=self.open_iso_cb)
         button.grid(row=0, column=0, padx=5, pady=5, sticky="nw")
+
+        button = customtkinter.CTkButton(self.button_frame, text="Reopen Last ISO", command=self.open_last_iso_cb)
+        button.grid(row=0, column=1, padx=5, pady=5, sticky="nw")
 
         self.data_frame = CTkFrame(self)
         self.data_frame.grid(row=1, column=0, padx=5, pady=5, sticky="nesw")
@@ -462,15 +467,37 @@ class ModdingUi(customtkinter.CTk):
                        warn=True)
             return
 
-        # Warn user
-        MessageBox(self, ["Understood"],
-                   "Opening an iso is safe from modification, unless you press replace!",
-                   "Warning", callback=self.ask_iso_path)
+        if self.config.has_warnings():
+            # Warn user
+            MessageBox(self, ["Understood"],
+                       "Opening an iso is safe from modification, unless you press replace!",
+                       "Warning", callback=self.ask_iso_path)
+        else:
+            self.ask_iso_path(0, '')
+
+    def open_last_iso_cb(self):
+        # Check if we already have an iso open, if os skip as not allowed for now
+        if self.iso_open:
+            return
+
+        last_iso_path = self.config.get_last_iso_path()
+        if last_iso_path is None:
+            return
+        self.iso_path_var.set(last_iso_path)
+        if self.config.has_warnings():
+            # Warn user
+            MessageBox(self, ["Understood"],
+                       "Opening an iso is safe from modification, unless you press replace!",
+                       "Warning", callback=self.open_iso_from_path_var)
+        else:
+            self.open_iso_from_path_var()
 
     def ask_iso_path(self, button_index, button_name):
         print("Asking for game iso path")
-        self.iso_path_var.set(filedialog.askopenfilename(defaultextension="iso"))
+        self.iso_path_var.set(filedialog.askopenfilename(defaultextension="iso", initialfile=self.config.get_last_iso_path()))
+        self.open_iso_from_path_var()
 
+    def open_iso_from_path_var(self, button_index=0, button_name=''):
         if self.iso_path_var.get() is None:
             MessageBox(self, ["Close"],
                        "The path supplied is either invalid or inaccessible",
@@ -499,8 +526,8 @@ class ModdingUi(customtkinter.CTk):
         try:
             self.iso.open(self.iso_path, 'rb')
             self.iso_open = True
-            # read only, as we do not want to edit unless the user says so
-            self.iso_writable = False
+
+            self.config.update_iso_path(self.iso_path)
         except Exception as e:
             print("failed to open iso")
             print(e)
@@ -627,6 +654,7 @@ class ModdingUi(customtkinter.CTk):
                 self.entries[dirname] = folder_entries
 
     def on_close(self):
+        self.config.save_config()
         if self.iso_open:
             if messagebox.askokcancel("Quit", "Do you want to quit?"):
                 try:
@@ -776,7 +804,7 @@ class EntryMenu(Menu):
             with_str = "HG3"
             if entry.game_version == GameVersion.CHOROQ_HG_3:
                 with_str = "HG2"
-            if type(entry) is HG2CarEntry:
+            if isinstance(entry, HG2CarEntry) or isinstance(entry, HG3CarEntry):
                 self.add_command(label=f"Replace with {with_str}",
                                  command=functools.partial(self.import_replacement, iso, entry))
             if entry.game_version == GameVersion.CHOROQ_HG_2:
@@ -788,12 +816,15 @@ class EntryMenu(Menu):
     def dump_cb(self, iso: pycdlib.PyCdlib, entry: GameEntry):
         # Open save file dialog
         print("Asking for destination file, to save dump to")
-        path = filedialog.asksaveasfilename(defaultextension=entry.extension, initialfile=entry.basename)
+        path = filedialog.asksaveasfilename(defaultextension=entry.extension, initialfile=entry.basename, initialdir=self.root.config.get_last_dump_path())
+        if path == '':
+            return
         try:
             with open(path, "wb") as fout:
                 iso.get_file_from_iso_fp(fout, iso_path=entry.path)
 
                 MessageBox(self.root, ["Close"], "Dump complete", "Completed")
+            self.root.config.update_dump_path(path)
         except Exception as e:
             MessageBox(self.root, ["Close"],
                        "Failed to dump the file from the ISO\n" + str(e),
@@ -802,9 +833,12 @@ class EntryMenu(Menu):
     def extract_cb(self, iso: pycdlib.PyCdlib, entry: GameEntry):
         # Open save file dialog
         print("Asking for destination folder, to save extracted data to")
-        path = filedialog.askdirectory(title="Select the output folder")
+        path = filedialog.askdirectory(title="Select the output folder", initialdir=self.root.config.get_last_extract_path())
+        if path == '':
+            return
         try:
             if entry.extract(iso, [], path):
+                self.root.config.update_extract_path(path)
                 MessageBox(self.root, ["Close"], "Extraction complete", "Completed")
             else:
                 MessageBox(self.root, ["Close"], "Extraction failed", "Failed to extract", warn=True)
@@ -815,45 +849,44 @@ class EntryMenu(Menu):
 
     def import_replacement(self, iso: pycdlib.PyCdlib, entry: GameEntry):
         # Warn user
-        if self.root.iso_writable:
+        if self.root.config.has_warnings():
+            MessageBox(self.root, ["Understood"],
+                       "This method will attempt to edit your game iso, IN PLACE,\n"
+                       "I recommend you make a clean copy before performing any modifications\n"
+                       "such as replacements, as this cannot be undone using this tool\n"
+                       "The first thing it will do is check the if iso can be written to",
+                       "Warning",
+                       callback=functools.partial(self.import_replacement_confirmed, iso, entry),
+                       warn=True)
+        else:
             return self.import_replacement_confirmed(iso, entry, 0, 0)
-        MessageBox(self.root, ["Understood"],
-                   "This method will attempt to edit your game iso, IN PLACE,\n"
-                   "I recommend you make a clean copy before performing any modifications\n"
-                   "such as replacements, as this cannot be undone using this tool\n"
-                   "The first thing it will do is reopen the iso, as writable if allowed",
-                   "Warning",
-                   callback=functools.partial(self.import_replacement_confirmed, iso, entry),
-                   warn=True)
 
     def import_hg2_part(self, root, iso: pycdlib.PyCdlib, entry: GameEntry):
         # Warn user
-        if self.root.iso_writable:
-            return self.import_part_hg2_confirmed(iso, entry, 0, 0)
-        MessageBox(self.root, ["Understood"],
-                   "This method will attempt to edit your game iso, IN PLACE,\n"
-                   "I recommend you make a clean copy before performing any modifications\n"
-                   "such as replacements, as this cannot be undone using this tool\n"
-                   "The first thing it will do is reopen the iso, as writable if allowed",
-                   "Warning",
-                   callback=functools.partial(self.import_part_hg2_confirmed, root, iso, entry),
-                   warn=True)
+        if self.root.config.has_warnings():
+            MessageBox(self.root, ["Understood"],
+                       "This method will attempt to edit your game iso, IN PLACE,\n"
+                       "I recommend you make a clean copy before performing any modifications\n"
+                       "such as replacements, as this cannot be undone using this tool\n"
+                       "The first thing it will do is check the if iso can be written to",
+                       "Warning",
+                       callback=functools.partial(self.import_replacement_confirmed, iso, entry),
+                       warn=True)
+        else:
+            return self.import_part_hg2_confirmed(root, iso, entry, 0, '')
 
     def import_replacement_confirmed(self, iso: pycdlib.PyCdlib, entry: GameEntry, button_index, button_name):
         # Reopen the iso as read and write
-        if not self.root.iso_writable:
-            try:
-                self.root.iso.close()
-                self.root.iso.open(self.root.iso_path, 'r+b')
-                self.root.iso_open = True
-                self.root.iso_writable = True
-            except Exception as e:
-                print("failed to open iso")
-                print(e)
-                MessageBox(self.root, ["Close"],
-                           "Failed reopen the ISO for writing\n" + str(e),
-                           "Problem during replacement", warn=True)
-                return False
+        try:
+            write_test = open(entry.record.data_fp.name, "r+b")
+            write_test.close()
+        except Exception as e:
+            print("failed to write to iso (test)")
+            print(e)
+            MessageBox(self.root, ["Close"],
+                       "Failed to reopen the ISO for writing\n" + str(e),
+                       "Problem during replacement", warn=True)
+            return False
 
         # TODO handle this in the entry class?
         # Open a bin file, extracted from HG2 or HG3, which ever is not the same
@@ -862,9 +895,12 @@ class EntryMenu(Menu):
         # If it will fit, copy out the texture transfer bytes (ensures addressing issues)
         # If not, tell user to try a different mesh
         print("Asking for replacement HG[2/3] BIN")
-        path = filedialog.askopenfilename(defaultextension='.BIN')
+        path = filedialog.askopenfilename(defaultextension='.BIN', initialdir=self.root.config.get_last_replacement_path(entry.game_version))
+        if path == '':
+            return
         try:
             with open(path, "rb") as replacement_in:
+                self.root.config.update_replacement_path(path, entry.game_version)
                 replacement_bytes = BytesIO()
                 if entry.game_version == GameVersion.CHOROQ_HG_2:
                     EGameConverter.convert_hg3_to_hg2_stream(replacement_in, replacement_bytes)
@@ -923,6 +959,10 @@ class EntryMenu(Menu):
                     with open(entry.record.data_fp.name, "r+b") as edited_out:
                         edited_out.seek(entry.record.fp_offset)
                         edited_out.write(replacement_bytes.getbuffer().tobytes())
+
+                    # Force closure, so other programs can use
+                    fp = open(entry.record.data_fp.name, "r")
+                    fp.close()
 
                     # Do not use this function, it changes LBA and file positions
                     # This is here to remind me to not do this

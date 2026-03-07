@@ -1,6 +1,9 @@
 from enum import Enum
 from io import BytesIO
 
+import configparser
+from pathlib import Path
+
 
 class GameVersion(Enum):
     UNSET = 0,
@@ -58,3 +61,141 @@ class PS2Cnf:
 
     def get_vmode(self) -> str:
         return self.video_mode
+
+
+class UiConfig:
+    # Paths section
+    SECTION_PATHS = 'Paths'
+    KEY_ISO_PATH = 'LastIsoPath'
+    KEY_PART_PATH = 'LastPartPath'
+    KEY_DUMP_PATH = 'LastDumpPath'
+    KEY_EXTRACT_PATH = 'LastExtractPath'
+    KEY_REPLACEMENT_HG2_PATH = 'LastHG2ReplacementPath'
+    KEY_REPLACEMENT_HG3_PATH = 'LastHG3ReplacementPath'
+
+    # Warning section
+    SECTION_WARNINGS = 'Warnings'
+    KEY_WARNINGS_DISABLED = 'WarningsDisabled'
+
+    def __init__(self, config_name):
+        if config_name == '' or config_name is None:
+            config_name = 'config.txt'
+        self.config_name = config_name
+        self.config = configparser.ConfigParser()
+
+    def parse_config(self):
+        # Setup defaults
+        self.config[UiConfig.SECTION_PATHS] = {
+            UiConfig.KEY_ISO_PATH: 'None',
+            UiConfig.KEY_PART_PATH: 'None',
+            UiConfig.KEY_DUMP_PATH: 'None',
+            UiConfig.KEY_EXTRACT_PATH: 'None',
+            UiConfig.KEY_REPLACEMENT_HG2_PATH: 'None',
+            UiConfig.KEY_REPLACEMENT_HG3_PATH: 'None',
+        }
+
+        self.config[UiConfig.SECTION_WARNINGS] = {
+            UiConfig.KEY_WARNINGS_DISABLED: 'False',
+        }
+
+        self.config.read(self.config_name)
+        print(self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_ISO_PATH])
+        print(self.config[UiConfig.SECTION_WARNINGS][UiConfig.KEY_WARNINGS_DISABLED])
+
+    def save_config(self):
+        with open('config.txt', 'w') as configfile:
+            self.config.write(configfile)
+        print("Saved ui config")
+
+    def get_last_iso_path(self):
+        if self.config is None:
+            return None
+        if UiConfig.SECTION_PATHS not in self.config:
+            return None
+        path = self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_ISO_PATH]
+        if path == 'None':
+            return None
+        return path
+
+    def get_last_part_path(self):
+        if self.config is None:
+            return None
+        if UiConfig.SECTION_PATHS not in self.config:
+            return None
+        path = self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_PART_PATH]
+        if path == 'None':
+            return None
+        return path
+
+    def get_last_dump_path(self):
+        if self.config is None:
+            return None
+        if UiConfig.SECTION_PATHS not in self.config:
+            return None
+        path = self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_DUMP_PATH]
+        if path == 'None':
+            return None
+        return path
+
+    def get_last_extract_path(self):
+        if self.config is None:
+            return None
+        if UiConfig.SECTION_PATHS not in self.config:
+            return None
+        path = self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_EXTRACT_PATH]
+        if path == 'None':
+            return None
+        return path
+
+    def get_last_replacement_path(self, game_version: GameVersion):
+        if self.config is None:
+            return None
+        if UiConfig.SECTION_PATHS not in self.config:
+            return None
+        path = None
+        if game_version == GameVersion.CHOROQ_HG_2:
+            path = self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_REPLACEMENT_HG2_PATH]
+        elif game_version == GameVersion.CHOROQ_HG_3:
+            path = self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_REPLACEMENT_HG3_PATH]
+
+        if path == 'None':
+            return None
+        return path
+
+    def update_iso_path(self, path):
+        # Get the path to the file, as we will reopen this
+        self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_ISO_PATH] = str(path)
+
+    def update_part_path(self, path):
+        # Get the path to the folder, to make open file dialog faster
+        folder_path = str(Path(path).parent)
+        self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_PART_PATH] = str(folder_path)
+
+    def update_dump_path(self, path):
+        # Get the path to the folder, to make open file dialog faster
+        folder_path = str(Path(path).parent)
+        self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_DUMP_PATH] = str(folder_path)
+
+    def update_extract_path(self, path):
+        # Get the path to the folder, to make open file dialog faster
+        self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_EXTRACT_PATH] = str(path)
+
+    def update_replacement_path(self, path, game_version: GameVersion):
+        # Get the path to the folder, to make open file dialog faster
+        folder_path = str(Path(path).parent)
+        if game_version == GameVersion.CHOROQ_HG_2:
+            self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_REPLACEMENT_HG2_PATH] = str(folder_path)
+        elif game_version == GameVersion.CHOROQ_HG_3:
+            self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_REPLACEMENT_HG3_PATH] = str(folder_path)
+
+    def has_warnings(self):
+        if self.config is None:
+            return True
+        if UiConfig.SECTION_WARNINGS not in self.config:
+            return True
+
+        warnings_disabled = self.config[UiConfig.SECTION_WARNINGS][UiConfig.KEY_WARNINGS_DISABLED]
+        if warnings_disabled == 'True':
+            return False
+        return True
+
