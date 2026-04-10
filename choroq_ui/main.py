@@ -1,23 +1,19 @@
 print("Requires raylib")
 
 from raylib import *
-from pyray import Rectangle, Texture, Image, Color
+from pyray import Rectangle, Image
 
-import io
 import os
 from pathlib import Path
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 import tkinter as tk
 from tkinter import filedialog
 import weakref
 
-from choroq.egame.texture import Texture as QTexture
 from choroq.egame.car import CarModel as QCar
 #from choroq.egame.car_hg3 import HG3CarModel as QHG3Car
 
 from choroq.egame.course import CourseModel as QCourse
-
-import choroq.egame.read_utils as U
 
 from enum import Enum
 

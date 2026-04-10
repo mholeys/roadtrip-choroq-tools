@@ -3,12 +3,8 @@
 # Textures are 256x128 with a white border, 800 bytes of padding after the palette (usually 16x16 1024 byte palette)
 # The images do not contain the car, as this is drawn on top for the current player config
 
-import io
 import os
-import math
 from choroq.egame.texture import Texture
-from choroq.egame.car import CarMesh
-import choroq.egame.read_utils as U
 
 
 class QuickPic:

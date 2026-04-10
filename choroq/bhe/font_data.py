@@ -1,9 +1,8 @@
 import os
 from pathlib import Path
 
-from PIL import Image, ImagePalette, ImageOps
-import choroq.egame.read_utils as U
-from choroq.egame.texture import Texture
+from PIL import Image
+import choroq.read_utils as U
 
 
 class FontData:

@@ -4,12 +4,10 @@
 # - - Textures have spaces afterwards, void of real data, before next texture starts
 
 
-import io
 import os
-from choroq.egame.amesh import AMesh
 from choroq.egame.texture import Texture
-import choroq.egame.ps2_utils as PS2
-import choroq.egame.read_utils as U
+import choroq.ps2_utils as PS2
+import choroq.read_utils as U
 
 
 class Shop():

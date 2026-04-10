@@ -1,9 +1,7 @@
 # This is for path data in the game, such as roaming npc paths, or paths to follow when driving
 
-import io
 import os
-import math
-import choroq.egame.read_utils as U
+import choroq.read_utils as U
 from elftools.elf.elffile import ELFFile
 
 
@@ -188,20 +186,44 @@ class PathPoint:
 elf_path = "I:\\Console\\PS2\\RoadTripAdventure_Data\\RoadTripAdventure\\SLES_513.56"
 out_folder = "I:\\Console\\PS2\\RoadTripAdventure_Data\\Tools\\MyTools\\Python\\RoadTrip-Tools\out\\hg2\\paths"
 with open(elf_path, "rb") as file:
-    positions = [
-        0x002bf5f0, 0x002bf5f0+8, 0x002bf5f0+8*2, 0x002bf5f0+8*3, 0x002bf5f0+8*4, 0x002bf5f0+8*5,
-        0x002bf620, 0x002bf620+8, 0x002bf620+8*2, 0x002bf620+8*3, 0x002bf620+8*4, 0x002bf620+8*5, 0x002bf620+8*6, 0x002bf620+8*7, 0x002bf620+8*7,
-        0x002bf620+8*8, 0x002bf620+8*9, 0x002bf620+8*10, 0x002bf620+8*11, 0x002bf620+8*13, 0x002bf620+8*14,
-        0x002bf620+8*16, 0x002bf620+8*22, 0x002bf620+8*31, 0x002bf620+8*32,
+    # positions = [
+    #     0x002bf5f0, 0x002bf5f0+8, 0x002bf5f0+8*2, 0x002bf5f0+8*3, 0x002bf5f0+8*4, 0x002bf5f0+8*5,
+    #     0x002bf620, 0x002bf620+8, 0x002bf620+8*2, 0x002bf620+8*3, 0x002bf620+8*4, 0x002bf620+8*5, 0x002bf620+8*6, 0x002bf620+8*7, 0x002bf620+8*7,
+    #     0x002bf620+8*8, 0x002bf620+8*9, 0x002bf620+8*10, 0x002bf620+8*11, 0x002bf620+8*13, 0x002bf620+8*14,
+    #     0x002bf620+8*16, 0x002bf620+8*22, 0x002bf620+8*31, 0x002bf620+8*32,
+    #
+    # ]
+    # for position in positions:
+    #     try:
+    #         path = AiPath.read_from_file(file, position)
+    #         with open(f"{out_folder}\\path-{position}.obj", "w") as fout:
+    #             i = 1
+    #             faces = []
+    #             for v in path.corrected_positions:
+    #                 if v.lx == 0 and v.lz == 0 and v.rx == 0 and v.rz == 0:
+    #                     continue
+    #                 fout.write(f"v {v.lx} 0 {v.lz}\n")
+    #                 fout.write(f"v {v.rx} 0 {v.rz}\n")
+    #                 faces.append(f"f {i} {i + 2} {i + 1} \n")
+    #                 faces.append(f"f {i + 1} {i + 2} {i + 3} \n")
+    #                 i += 2
+    #             # Close the path
+    #             faces.append(f"f 1 {i - 2} {i - 1}\n")
+    #             faces.append(f"f {i - 1} 1 2\n")
+    #             for face in faces:
+    #                 fout.write(face)
+    #     except Exception as e:
+    #         print(e)
+    #         raise e
 
-    ]
-    for position in positions:
+    for pi in range(0, 39):
+        position = 0x002bf5f0 + 8 * pi
         try:
             path = AiPath.read_from_file(file, position)
-            with open(f"{out_folder}\\path-{position}.obj", "w") as fout:
+            with open(f"{out_folder}\\path-{position:x}.obj", "w") as fout:
                 i = 1
                 faces = []
-                for v in path.corrected_positions:
+                for v in path.positions:
                     if v.lx == 0 and v.lz == 0 and v.rx == 0 and v.rz == 0:
                         continue
                     fout.write(f"v {v.lx} 0 {v.lz}\n")
@@ -216,4 +238,4 @@ with open(elf_path, "rb") as file:
                     fout.write(face)
         except Exception as e:
             print(e)
-            raise e
+            #raise e

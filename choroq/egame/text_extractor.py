@@ -14,10 +14,8 @@
 
 from PrettyPrint import PrettyPrintTree
 
-import io
 import os
-import math
-import choroq.egame.read_utils as U
+import choroq.read_utils as U
 from elftools.elf.elffile import ELFFile
 
 class DialogueReader:

@@ -12,15 +12,12 @@
 # - - This could be the method used to replace the flooring with a new palette/style?
 
 
-import io
 import os
 import math
-import sys
 
-from choroq.egame.amesh import AMesh
 from choroq.egame.texture import Texture
-from choroq.egame.car import CarModel, CarMesh
-import choroq.egame.read_utils as U
+from choroq.egame.car import CarMesh
+import choroq.read_utils as U
 
 
 class GarageModel:

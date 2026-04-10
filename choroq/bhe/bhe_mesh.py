@@ -1,7 +1,7 @@
 import os
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from choroq.egame.amesh import AMesh
-import choroq.egame.read_utils as U
+import choroq.read_utils as U
 
 
 class BHEMesh(AMesh):

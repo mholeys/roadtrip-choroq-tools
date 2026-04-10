@@ -1,5 +1,5 @@
 import os
-import choroq.egame.read_utils as U
+import choroq.read_utils as U
 import pathlib
 
 

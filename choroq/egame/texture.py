@@ -1,7 +1,6 @@
-import io
 import os
-import choroq.egame.read_utils as U
-import choroq.egame.ps2_utils as PS2
+import choroq.read_utils as U
+import choroq.ps2_utils as PS2
 from PIL import Image, ImagePalette, ImageOps
 
 

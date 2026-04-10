@@ -1,8 +1,8 @@
 import os
 import struct
 
-import choroq.egame.read_utils as U
-import choroq.egame.ps2_utils as PS2
+import choroq.read_utils as U
+import choroq.ps2_utils as PS2
 
 # Basic parser for cars, so will handle with quick optimisations, which will skip VIf expansion and other,
 # slower calculations
