@@ -11,27 +11,27 @@ class HG2ShopEntry(GameEntry):
 
     def convert_name(self) -> str:
         town_map_eur = {
-            "T00": "",
-            "T01": "",
-            "T02": "",
-            "T03": "",
-            "T04": "",
-            "T05": "",
-            "T06": "",
-            "T07": "",
-            "T08": "",
-            "T09": "",
-            "T10": "",
-            "T11": "",
-            "T12": "",
-            "T13": "",
-            "T14": "",
-            "T15": "",
-            "T16": "",
-            "T17": "",
-            "T18": "",
-            "T19": "",
-            "T20": ""
+            "T00": "Peach Town",
+            "T01": "Fuji City",
+            "T02": "Sandpolis",
+            "T03": "Chestnut Canyon",
+            "T04": "Mushroom Road",
+            "T05": "White Mountain",
+            "T06": "Papaya Island",
+            "T07": "Cloud Hill",
+            "T08": "My City",
+            "T09": "Windmills",
+            "T10": "Bridge",
+            "T11": "UFO",
+            "T12": "Ruins",
+            "T13": "Lighthouse",
+            "T14": "022",
+            "T15": "110",
+            "T16": "120",
+            "T17": "202",
+            "T18": "212",
+            "T19": "221",
+            "T20": "232"
         }
         if self.game_variant == "EUR":
             return town_map_eur.get(self.basename, self.basename)

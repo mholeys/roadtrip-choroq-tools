@@ -142,6 +142,14 @@ class GameEntry(object):
         """
         return None
 
+    def get_options(self) -> [(str,)]:
+        """
+        Used to get all the right click options available for this object
+        returns list if tuples, label->function
+        @return: the options available
+        """
+        return None
+
 
 class UnknownGameEntry(GameEntry):
 
