@@ -48,13 +48,13 @@ class Helper:
 
         # Move to start of the clut
         texture_size = int(textures[0][1].width * textures[0][1].height * textures[0][1].bpp / 8)
-        stream.seek(texture_size, os.SEEK_CUR)
+        texture_data = stream.read(texture_size)
         # Read/copy in the tag bytes
         clut_header = stream.read(112)  # 112 is texture header for hg2
 
         # Move to end of the clut
         clut_size = int(textures[1][1].width * textures[1][1].height * textures[1][1].bpp / 8)
-        stream.seek(clut_size, os.SEEK_CUR)
+        clut_data = stream.read(clut_size)
 
         # Read/copy in the end bytes
         # 48 is texture/clut tail for hg2
@@ -63,5 +63,5 @@ class Helper:
         if stream.tell() != eof_offset:
             raise Exception("end of texture != EOF, invalid original car file, cannot reuse data")
 
-        return texture_header, texture_size, clut_header, clut_size, clut_tail
+        return texture_header, texture_data, texture_size, clut_header, clut_data, clut_size, clut_tail
 

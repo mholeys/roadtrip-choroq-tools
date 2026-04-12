@@ -72,6 +72,7 @@ class FullCarReplaceMenu(customtkinter.CTkToplevel):
 
         for part_i, part in enumerate(self.parts_ui):
             part_size = part.replacement_part_size
+
             self.replacement_part_sizes[part_i] = part_size
             self.replacement_total_size += part_size
         self.check_size_valid()
@@ -127,7 +128,7 @@ class FullCarReplaceMenu(customtkinter.CTkToplevel):
 
             self.rowconfigure(title_size+self.part_count, weight=1)
             self.replacement_part_sizes.append(0)
-            ui_part = TextureSection(self, (128, 128), "Texture", self.on_part_change_cb, False)
+            ui_part = TextureSection(self, (128, 128), "Texture", self.on_part_change_cb, True)
             ui_part.grid(row=title_size+self.part_count, column=0, columnspan=4, padx=5, pady=5, sticky="nesw")
             self.parts_ui.append(ui_part)
 
@@ -242,16 +243,13 @@ class FullCarReplaceMenu(customtkinter.CTkToplevel):
         else:
             print(f"Got texture tags,\n"
                   f"Thead: {len(self.texture_tag_data[0])}\n"
-                  f"Tsize: {self.texture_tag_data[1]}\n"
-                  f"Chead: {len(self.texture_tag_data[2])}\n"
-                  f"Csize: {self.texture_tag_data[3]}\n"
-                  f"Ctail: {len(self.texture_tag_data[4])}\n")
+                  f"Tsize: {self.texture_tag_data[2]}\n"
+                  f"Chead: {len(self.texture_tag_data[3])}\n"
+                  f"Csize: {self.texture_tag_data[5]}\n"
+                  f"Ctail: {len(self.texture_tag_data[6])}\n")
 
 
     def replace(self):
-        # Todo: have texture selection on ui (with option to leave as is)
-        # TODO: refine size calculation, with texture size too
-
         # Reopen the iso as read and write
         try:
             write_test = open(self.entry.record.data_fp.name, "r+b")
@@ -309,12 +307,18 @@ class FullCarReplaceMenu(customtkinter.CTkToplevel):
         # Once all parts have been written, write out the texture
         offset_table.append(replacement_bytes.tell())
 
-        # Load, and convert texture
-        texture_path_in = self.parts_ui[-1].part_path.get()
-        selected_image = Image.open(texture_path_in)
-        texture_bytes, clut_bytes = TextureUtil.split_image(selected_image)
+        texture_header, texture_data, texture_size, clut_header, clut_data, clut_size, clut_tail = self.texture_tag_data
 
-        texture_header, texture_size, clut_header, clut_size, clut_tail = self.texture_tag_data
+        # Load, and convert texture
+        if self.parts_ui[-1].valid_path:
+            texture_path_in = self.parts_ui[-1].part_path.get()
+            selected_image = Image.open(texture_path_in)
+            texture_bytes, clut_bytes = TextureUtil.split_image(selected_image)
+        else:
+            # Reuse current car texture (unlikely but nice to have)
+            texture_bytes = texture_data
+            clut_bytes = clut_data
+
         if len(texture_bytes) != texture_size:
             print(f"Texture size mismatch: {texture_size} != {len(texture_bytes)}")
             raise Exception("Texture not valid, or unsupported")
@@ -349,7 +353,7 @@ class FullCarReplaceMenu(customtkinter.CTkToplevel):
 
                 amount_written = edited_out.write(replacement_bytes.read())
                 if amount_written < self.replacement_total_size:
-                    raise Exception(f"Failed to replace, did not write full size")
+                    raise Exception(f"Failed to replace, did not write full size {amount_written} != {self.replacement_total_size}")
 
             # Do not use this function, it changes LBA and file positions
             # This is here to remind me to not do this
@@ -435,7 +439,7 @@ class CarPartSection(customtkinter.CTkFrame):
 
 class TextureSection(CarPartSection):
 
-    def __init__(self, parent, required_size=(128, 128), part_name="", on_change_cb=None, optional=False):
+    def __init__(self, parent, required_size=(128, 128), part_name="", on_change_cb=None, optional=True):
         super().__init__(parent, part_name, on_change_cb, optional)
         self.required_size = required_size
 
@@ -444,6 +448,12 @@ class TextureSection(CarPartSection):
         value = self.part_path.get()
         try:
             selected_image = Image.open(value)
+
+            # Get the "part" size
+            with open(value, "rb") as file:
+                file.seek(0, os.SEEK_END)
+                self.replacement_part_size = file.tell()
+
             if selected_image.size != self.required_size:
                 self.valid_path = False
                 self.output_var.set(f"Image size is incorrect must be {self.required_size}")
