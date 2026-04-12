@@ -91,7 +91,7 @@ class FullCarReplaceMenu(customtkinter.CTkToplevel):
         header_desc = customtkinter.CTkLabel(self,
                                              text="Select/browse for each part you wish to use (.BIN from blender). "
                                                   "The texture option supports multiple formats, as long as it is 128x128 "
-                                                  "with RGB or RGBA e.g PNG. For cars you may skip the low poly part, and leave it"
+                                                  "with RGB or RGBA e.g PNG. For cars you may skip the low poly part, and leave it "
                                                   "blank, this will save space, and cause the full model to be drawn for both in game.\n\n"
                                                   "I have provided an \"Empty\" part, which can be used for any parts do draw nothing."
                                              , fg_color="gray30", corner_radius=6, wraplength=500)

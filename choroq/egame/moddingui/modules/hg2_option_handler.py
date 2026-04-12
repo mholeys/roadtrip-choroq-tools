@@ -54,7 +54,7 @@ class HG2CarOptionHandler:
                        "such as replacements, as this cannot be undone using this tool\n"
                        "The first thing it will do is check the if iso can be written to",
                        "Warning",
-                       callback=functools.partial(HG2CarOptionHandler.import_replacement_confirmed, root, iso, entry),
+                       callback=functools.partial(HG2CarOptionHandler.import_replacement_confirmed, entrymenu, root, iso, entry),
                        warn=True)
         else:
             return HG2CarOptionHandler.import_replacement_confirmed(entrymenu, root, iso, entry, 0, 0)
@@ -69,7 +69,7 @@ class HG2CarOptionHandler:
                        "such as replacements, as this cannot be undone using this tool\n"
                        "The first thing it will do is check the if iso can be written to",
                        "Warning",
-                       callback=functools.partial(entrymenu.import_part_hg2_confirmed, iso, entry),
+                       callback=functools.partial(HG2CarOptionHandler.import_part_hg2_confirmed, entrymenu, root, iso, entry),
                        warn=True)
         else:
             return HG2CarOptionHandler.import_part_hg2_confirmed(entrymenu, root, iso, entry, 0, '')
@@ -84,7 +84,7 @@ class HG2CarOptionHandler:
                        "such as replacements, as this cannot be undone using this tool\n"
                        "The first thing it will do is check the if iso can be written to",
                        "Warning",
-                       callback=functools.partial(entrymenu.import_full_hg2_confirmed, iso, entry),
+                       callback=functools.partial(HG2CarOptionHandler.import_full_hg2_confirmed, entrymenu, root, iso, entry),
                        warn=True)
         else:
             return HG2CarOptionHandler.import_full_hg2_confirmed(entrymenu, root, iso, entry, 0, '')
