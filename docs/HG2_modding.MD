@@ -29,7 +29,7 @@ This means we can create 7 parts for each car, and fully populate/replace a Qxx.
 
 See [Car model format](https://github.com/mholeys/roadtrip-choroq-tools/blob/master/docs/HG2_HG3.MD#car-model-file-format) to understand a which part of the car is used for which bit.
 
-If you are just modding someone else's model into your game, you can skip ahead to (Putting your car in the game)[#putting_your_car_in_the_game]  
+If you are just modding someone else's model into your game, you can skip ahead to [Putting your car in the game](/docs/HG2_modding.MD#putting-your-car-in-the-game)
 
 ## Getting started with modding
 The code is written for Blender, and so will only work with Blender.
