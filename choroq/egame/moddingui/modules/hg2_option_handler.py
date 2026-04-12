@@ -13,6 +13,7 @@ from customtkinter import CTkFrame
 
 from choroq.egame.moddingui.modules.helper import Helper
 from choroq.egame.moddingui.modules.hg2_car_replacement_ui import CarPartReplaceMenu
+from choroq.egame.moddingui.modules.hg2_full_car_replacement_ui import FullCarReplaceMenu
 from choroq.egame.moddingui.modules.message_box import MessageBox
 
 from choroq.egame.moddingui.common import *
@@ -68,10 +69,25 @@ class HG2CarOptionHandler:
                        "such as replacements, as this cannot be undone using this tool\n"
                        "The first thing it will do is check the if iso can be written to",
                        "Warning",
-                       callback=functools.partial(entrymenu.import_replacement_confirmed, iso, entry),
+                       callback=functools.partial(entrymenu.import_part_hg2_confirmed, iso, entry),
                        warn=True)
         else:
             return HG2CarOptionHandler.import_part_hg2_confirmed(entrymenu, root, iso, entry, 0, '')
+
+    @staticmethod
+    def import_hg2_full(entrymenu, root, iso: pycdlib.PyCdlib, entry: GameEntry):
+        # Warn user
+        if root.config.has_warnings():
+            MessageBox(root, ["Understood"],
+                       "This method will attempt to edit your game iso, IN PLACE,\n"
+                       "I recommend you make a clean copy before performing any modifications\n"
+                       "such as replacements, as this cannot be undone using this tool\n"
+                       "The first thing it will do is check the if iso can be written to",
+                       "Warning",
+                       callback=functools.partial(entrymenu.import_full_hg2_confirmed, iso, entry),
+                       warn=True)
+        else:
+            return HG2CarOptionHandler.import_full_hg2_confirmed(entrymenu, root, iso, entry, 0, '')
 
 
     @staticmethod
@@ -189,3 +205,7 @@ class HG2CarOptionHandler:
     @staticmethod
     def import_part_hg2_confirmed(entrymenu, root, iso: pycdlib.PyCdlib, entry: GameEntry, button_index, button_name):
         CarPartReplaceMenu(root, iso, entry)
+
+    @staticmethod
+    def import_full_hg2_confirmed(entrymenu, root, iso: pycdlib.PyCdlib, entry: GameEntry, button_index, button_name):
+        FullCarReplaceMenu(root, iso, entry)

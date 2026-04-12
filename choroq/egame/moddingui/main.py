@@ -498,7 +498,7 @@ class OptionsProvider:
                 ("Replace With HG3", HG2CarOptionHandler.import_replacement),
                 ("Replace part", HG2CarOptionHandler.import_hg2_part),
                 # UI for all parts at once needed
-                # ("Replace completely", HG2CarOptionHandler.import_hg2_all),
+                ("Replace all parts", HG2CarOptionHandler.import_hg2_full),
             ]
         if type(object) == HG3CarEntry:
             return [
