@@ -197,6 +197,7 @@ class CarPartReplaceMenu(customtkinter.CTkToplevel):
         else:
             self.valid_var.set("Invalid part choice")
             print(f"Invalid part choice {value}")
+        self.replace_btn.after(1, self.update())
 
     def on_replacement_file_selected(self, variable, other, trace_mode):
         print(f"File: {variable} | {other} | {trace_mode}")
@@ -291,7 +292,7 @@ class CarPartReplaceMenu(customtkinter.CTkToplevel):
 
                         amount_written = edited_out.write(replacement_in.read())
                         if amount_written < self.replacement_part_size:
-                            print(f"Failed to replace, did not write full size")
+                            raise Exception(f"Failed to replace, did not write full size")
 
                     # Do not use this function, it changes LBA and file positions
                     # This is here to remind me to not do this

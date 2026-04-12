@@ -6,6 +6,7 @@ import pycdlib
 import customtkinter
 from tkinter import filedialog, messagebox, Menu
 from tkinter import ttk
+from PIL import Image
 
 from choroq.egame.moddingui.entries.hg2_car_entry import HG2CarEntry
 from choroq.egame.moddingui.modules.message_box import MessageBox
@@ -16,12 +17,19 @@ from choroq.egame.moddingui.entries.hg2_object_entry import HG2ObjectEntry
 
 import choroq.read_utils as U
 from choroq.egame.moddingui.modules.helper import Helper
+from choroq.texture_utils import TextureUtil
 
 
 class FullCarReplaceMenu(customtkinter.CTkToplevel):
 
     def __init__(self, root, iso: pycdlib.PyCdlib, entry: GameEntry):
         super().__init__(root)
+        self.output_var = None
+        self.output_label = None
+        self.valid_var = None
+        self.valid_label = None
+        self.close_btn = None
+        self.replace_btn = None
         self.wm_transient(root)
         self.root = root
 
@@ -48,7 +56,6 @@ class FullCarReplaceMenu(customtkinter.CTkToplevel):
         self.replacement_total_size = 0 # size in bytes of all parts together + offset table
         self.replacement_part_sizes = []  # size in bytes of each parts
 
-        self.part_count = 0
         self.build_ui()
 
     def on_part_change_cb(self):
@@ -71,17 +78,36 @@ class FullCarReplaceMenu(customtkinter.CTkToplevel):
 
     def build_ui(self):
         # build a table of part selection settings based on the max allowed for this obj type
+        # For title/head
+        self.rowconfigure(0, weight=1)
+        self.rowconfigure(1, weight=1)
+        self.rowconfigure(2, weight=1)
+        title_size = 3
+
+        header_label = customtkinter.CTkLabel(self, text="Select parts", fg_color="gray30", corner_radius=6)
+        header_label.grid(row=0, column=0, padx=5, pady=5, sticky="nesw", columnspan=4)
+
+        header_desc = customtkinter.CTkLabel(self,
+                                             text="Select/browse for each part you wish to use (.BIN from blender). "
+                                                  "The texture option supports multiple formats, as long as it is 128x128 "
+                                                  "with RGB or RGBA e.g PNG. For cars you may skip the low poly part, and leave it"
+                                                  "blank, this will save space, and cause the full model to be drawn for both in game.\n\n"
+                                                  "I have provided an \"Empty\" part, which can be used for any parts do draw nothing."
+                                             , fg_color="gray30", corner_radius=6, wraplength=500)
+        header_desc.grid(row=1, column=0, padx=5, pady=5, ipady=10, sticky="nesw", columnspan=4, rowspan=2)
 
         if type(self.entry) == HG2CarEntry:
-            self.part_count = 7
+            self.part_count = 6
 
             self.columnconfigure(0, weight=20)
             self.columnconfigure(1, weight=20)
             self.columnconfigure(2, weight=20)
             self.columnconfigure(3, weight=20)
 
+
+
             for row in range(self.part_count):
-                self.rowconfigure(row, weight=1)
+                self.rowconfigure(title_size+row, weight=1)
                 self.replacement_part_sizes.append(0)
 
             part_configs = [
@@ -94,10 +120,17 @@ class FullCarReplaceMenu(customtkinter.CTkToplevel):
             ]
 
             for part_i, part_config in enumerate(part_configs):
-                self.rowconfigure(part_i, weight=1)
+                self.rowconfigure(title_size+part_i, weight=1)
                 ui_part = CarPartSection(self, part_config[0], self.on_part_change_cb, part_config[1])
-                ui_part.grid(row=part_i, column=0, columnspan=4, padx=5, pady=5, sticky="nesw")
+                ui_part.grid(row=title_size+part_i, column=0, columnspan=4, padx=5, pady=5, sticky="nesw")
                 self.parts_ui.append(ui_part)
+
+            self.rowconfigure(title_size+self.part_count, weight=1)
+            self.replacement_part_sizes.append(0)
+            ui_part = TextureSection(self, (128, 128), "Texture", self.on_part_change_cb, False)
+            ui_part.grid(row=title_size+self.part_count, column=0, columnspan=4, padx=5, pady=5, sticky="nesw")
+            self.parts_ui.append(ui_part)
+
 
         elif type(self.entry) == HG2ObjectEntry:
             if self.entry.filename == "TIRE.BIN":
@@ -151,17 +184,17 @@ class FullCarReplaceMenu(customtkinter.CTkToplevel):
         self.output_var = customtkinter.StringVar()
         self.output_var.set(f"")
         self.output_label = customtkinter.CTkLabel(self, textvariable=self.output_var, fg_color="gray30", corner_radius=6)
-        self.output_label.grid(row=self.part_count+1, column=0, padx=5, pady=5, sticky="nesw", columnspan=4)
+        self.output_label.grid(row=title_size+self.part_count+1, column=0, padx=5, pady=5, sticky="nesw", columnspan=4)
 
         self.valid_var = customtkinter.StringVar()
         self.valid_var.set(f"")
         self.valid_label = customtkinter.CTkLabel(self, textvariable=self.valid_var, fg_color="gray30", corner_radius=6)
-        self.valid_label.grid(row=self.part_count+2, column=0, padx=5, pady=5, sticky="nesw", columnspan=4)
+        self.valid_label.grid(row=title_size+self.part_count+2, column=0, padx=5, pady=5, sticky="nesw", columnspan=4)
 
         self.replace_btn = customtkinter.CTkButton(self, text="Replace", command=self.replace, state="disabled", fg_color="Red")
         self.close_btn = customtkinter.CTkButton(self, text="Close", command=self.close_cb)
-        self.replace_btn.grid(row=self.part_count+3, column=0, columnspan=2, sticky="nesw")
-        self.close_btn.grid(row=self.part_count+3, column=3, columnspan=2, sticky="nesw")
+        self.replace_btn.grid(row=title_size+self.part_count+3, column=0, columnspan=2, sticky="nesw")
+        self.close_btn.grid(row=title_size+self.part_count+3, column=3, columnspan=2, sticky="nesw")
 
         self.columnconfigure(0, weight=1)
 
@@ -176,6 +209,7 @@ class FullCarReplaceMenu(customtkinter.CTkToplevel):
         for i, part_ui in enumerate(self.parts_ui):
             if not part_ui.part_valid():
                 has_all_parts = False
+                print(f"Part invalid: {i}")
                 break
 
         if not has_all_parts:
@@ -185,15 +219,16 @@ class FullCarReplaceMenu(customtkinter.CTkToplevel):
         self.replace_btn.configure(state="disabled")
         # Colour button red
         self.replace_btn.configure(fg_color="Red")
-        if self.replacement_total_size != 0:
-            if self.replacement_total_size <= self.offsets[-1]:
+
+        if has_all_parts and self.replacement_total_size != 0:
+            if self.replacement_total_size <= self.entry.get_size():
                 # Enable replace button, as it fits
                 self.replace_btn.configure(state="enabled")
                 self.replace_btn.configure(fg_color="Blue")
-                self.replace_btn.after(1, self.update())
                 self.valid_var.set(f"Replacement will fit. {all_valid_str}")
             else:
                 self.valid_var.set(f"Replacement too big! {all_valid_str}")
+        self.replace_btn.after(1, self.update())
         self.valid_var.set(all_valid_str)
 
     def load_offsets(self):
@@ -214,16 +249,8 @@ class FullCarReplaceMenu(customtkinter.CTkToplevel):
 
 
     def replace(self):
-        # TODO: allow skipping of lp body, by making offsets the same as body when invalid aprt
-        # TODO: write total replacement
-        # TODO: write texture loading/selection (do I take this opportunity to do texture conversion from png too)
-        # TODO: write out texture/clut header and tag bits, with replacement texture as well
         # Todo: have texture selection on ui (with option to leave as is)
         # TODO: refine size calculation, with texture size too
-        # TODO: build new offset table from parts
-
-        # TODO: check if adding a new file works?
-        print("Replacing file, checking everything")
 
         # Reopen the iso as read and write
         try:
@@ -237,71 +264,103 @@ class FullCarReplaceMenu(customtkinter.CTkToplevel):
                        "Problem during replacement", warn=True)
             return False
 
-        path = self.part_path.get()
+        # Build replacement car/object in memory
+        replacement_bytes = BytesIO()
+
+        # Slip past position of offset table, and build this at the end
+        offset_table = []
+        # TODO: handle other objects, with different offset table size
+        replacement_bytes.seek(48, os.SEEK_SET)
+
+        # Go through all parts, loading their data, and writing into memory buffer
+        for part_index in range(self.part_count):
+            is_skipped_lp_body = (
+                    part_index == 1
+                    and self.parts_ui[part_index].optional
+                    and not self.parts_ui[part_index].valid_path)
+
+            # Handle skipping LP, as just draw full
+            if is_skipped_lp_body:
+                offset_table.append(offset_table[0])
+            else:
+                # Add this part's offset to the table
+                offset_table.append(replacement_bytes.tell())
+
+                path = self.parts_ui[part_index].part_path.get()
+                try:
+                    with open(path, "rb") as part_in:
+                        replacement_bytes.write(part_in.read())
+
+                    # Get the position after writing, and pad to be 16 byte aligned for the next section
+                    next_position = replacement_bytes.tell()
+                    if next_position % 16 != 0:
+                        next_position += 16 - (next_position % 16)
+
+                    replacement_bytes.seek(next_position, os.SEEK_SET)
+
+                except Exception as e:
+                    MessageBox(self.root, ["Close"],
+                               "Failed to replace data\n"
+                               "There was an issue with reading data from the supplied parts\n"
+                               f"[{part_index}/{path}]:\n{str(e)}",
+                               "Problem during replacement",
+                               warn=True)
+
+        # Once all parts have been written, write out the texture
+        offset_table.append(replacement_bytes.tell())
+
+        # Load, and convert texture
+        texture_path_in = self.parts_ui[-1].part_path.get()
+        selected_image = Image.open(texture_path_in)
+        texture_bytes, clut_bytes = TextureUtil.split_image(selected_image)
+
+        texture_header, texture_size, clut_header, clut_size, clut_tail = self.texture_tag_data
+        if len(texture_bytes) != texture_size:
+            print(f"Texture size mismatch: {texture_size} != {len(texture_bytes)}")
+            raise Exception("Texture not valid, or unsupported")
+        if len(clut_bytes) != clut_size:
+            print(f"Clut size mismatch {clut_size} != {len(clut_bytes)}")
+            raise Exception("Texture not valid, or unsupported")
+
+        replacement_bytes.write(texture_header)
+        replacement_bytes.write(texture_bytes)
+
+        replacement_bytes.write(clut_header)
+        replacement_bytes.write(clut_bytes)
+        replacement_bytes.write(clut_tail)
+
+        # Once all parts, and texture have been written, write out offset table
+        eof = replacement_bytes.tell()
+        offset_table.append(eof)
+        replacement_bytes.seek(0, os.SEEK_SET)
+        for offset in offset_table:
+            replacement_bytes.write(offset.to_bytes(4, byteorder="little"))
+
+        replacement_bytes.seek(0, os.SEEK_SET)
+
         try:
-            # write the replacement mesh at the correct location into the iso
-            with open(path, "rb") as replacement_in:
-                print("Replacing file, checking validity of given Part")
-                self.root.config.update_part_path(path)
 
-                offset1 = U.readLong(replacement_in)
-                offset2 = U.readLong(replacement_in)
-                size1 = U.readLong(replacement_in)
-                size2 = U.readLong(replacement_in)
+            # Dirty, open file again then write where it should be,
+            # without doing this the data positions change
+            print(f"Replacing all parts of car {self.entry.basename}")
+            with open(self.entry.record.data_fp.name, "r+b") as edited_out:
+                # Move to the iso's file position, and move to the start of the part
+                edited_out.seek(self.entry.record.fp_offset, os.SEEK_SET)
 
-                # Sanity check the given data
-                invalid_data = False
-                if offset1 > self.replacement_part_size:
-                    invalid_data = True
-                if offset2 > self.replacement_part_size:
-                    invalid_data = True
-                if size1 > 65535:
-                    invalid_data = True
-                if size2 > 65535:
-                    invalid_data = True
+                amount_written = edited_out.write(replacement_bytes.read())
+                if amount_written < self.replacement_total_size:
+                    raise Exception(f"Failed to replace, did not write full size")
 
-                if invalid_data:
-                    MessageBox(self.root, ["Close"], f"Issue with the given replacement part", "Problem", warn=True)
-                    return
-                else:
-                    print("Replacing file, replacement seems valid")
-
-                # Move back to the start after sanity check
-                replacement_in.seek(0, os.SEEK_SET)
-
-                # Find which offset we are replacing, and move to it
-                part_value = self.part_chosen.get()
-                if part_value in self.part_options:
-                    index = self.part_options.index(part_value)
-
-                    part_offset = self.offsets[index]
-
-                    # Dirty, open file again then write where it should be,
-                    # without doing this the data positions change
-                    print(f"Replacing file, replacing {part_value}")
-                    with open(self.entry.record.data_fp.name, "r+b") as edited_out:
-                        # Move to the iso's file position, and move to the start of the part
-                        part_offset = self.entry.record.fp_offset + part_offset
-                        edited_out.seek(part_offset, os.SEEK_SET)
-
-                        amount_written = edited_out.write(replacement_in.read())
-                        if amount_written < self.replacement_part_size:
-                            print(f"Failed to replace, did not write full size")
-
-                    # Do not use this function, it changes LBA and file positions
-                    # This is here to remind me to not do this
-                    # # Pad data until replacement is the same size, as required
-                    # replacement_bytes.seek(0, os.SEEK_END)
-                    # replacement_bytes.write(b'\x00' * (entry.get_size() - converted_size))
-                    # converted_size = replacement_bytes.tell()
-                    # replacement_bytes.seek(0, os.SEEK_SET)
-                    # iso.modify_file_in_place(replacement_bytes, converted_size, entry.path)
-                    MessageBox(self.root, ["Close"],
-                               f"Replacement successful","Completed")
-                else:
-                    MessageBox(self.root, ["Close"],
-                               f"Issue with destination part, probably a bug", "Problem", warn=True)
-                    return
+            # Do not use this function, it changes LBA and file positions
+            # This is here to remind me to not do this
+            # # Pad data until replacement is the same size, as required
+            # replacement_bytes.seek(0, os.SEEK_END)
+            # replacement_bytes.write(b'\x00' * (entry.get_size() - converted_size))
+            # converted_size = replacement_bytes.tell()
+            # replacement_bytes.seek(0, os.SEEK_SET)
+            # iso.modify_file_in_place(replacement_bytes, converted_size, entry.path)
+            MessageBox(self.root, ["Close"],
+                       f"Replacement successful","Completed")
         except Exception as e:
             MessageBox(self.root, ["Close"],
                        "Failed to replace bytes in the ISO\n"
@@ -364,6 +423,35 @@ class CarPartSection(customtkinter.CTkFrame):
                 self.valid_path = self.replacement_part_size > 16
         except Exception as e:
             self.output_var.set(f"Failed to read replacement part, check path\n {e}")
+            self.valid_path = False
+            print(e)
+        self.on_change_cb()
+
+    def part_valid(self):
+        if self.optional and not self.valid_path:
+            return True
+
+        return self.valid_path
+
+class TextureSection(CarPartSection):
+
+    def __init__(self, parent, required_size=(128, 128), part_name="", on_change_cb=None, optional=False):
+        super().__init__(parent, part_name, on_change_cb, optional)
+        self.required_size = required_size
+
+    def browse_part_cb(self):
+        self.part_path.set(filedialog.askopenfilename(defaultextension='.PNG', initialdir=self.root.config.get_last_part_path()))
+        value = self.part_path.get()
+        try:
+            selected_image = Image.open(value)
+            if selected_image.size != self.required_size:
+                self.valid_path = False
+                self.output_var.set(f"Image size is incorrect must be {self.required_size}")
+            else:
+                self.valid_path = True
+                self.output_var.set(f"Loaded texture, size {selected_image.size}\n")
+        except Exception as e:
+            self.output_var.set(f"Failed to read texture, check path\n {e}")
             self.valid_path = False
             print(e)
         self.on_change_cb()
