@@ -1,4 +1,5 @@
 import os
+from math import ceil
 
 import choroq.read_utils as U
 from choroq.bhe.aptexture import APTexture
@@ -9,7 +10,7 @@ from choroq.bhe.mpc_model import MPCModel
 from choroq.bhe.toc_0318 import Toc0318
 
 
-# import lzstring
+from lzsslib.decompress import LzssDecompressor
 
 
 
@@ -39,17 +40,17 @@ class CPK:
 
         # Need to handle LZS compression
         # Then read as another type
-        # if self.subfile_types[i] == b'LZS\x00':
-        #     file.seek(position)
-        #     U.readLong(file)
-        #     size_maybe = U.readLong(file)
-        #     string_in = file.read(8618)
-        #     # LZS compression
-        #     result = lzstring._decompress(len(string_in), 255, lambda index: string_in[index])
-        #     # result = lzstring.decompressFromUint8Array(string_in)
-        #     if PRINT_LOADING_INFORMATION:
-        #         print(result)
-        #         print(result[0:5])
+        if self.subfile_types[i] == b'LZS\x00':
+            file.seek(position)
+            U.readLong(file)
+            size_maybe = U.readLong(file)
+            sec_count = int(size_maybe / 2048)
+            string_in = file.read(sec_count * 2048)
+            # LZS decompression
+            #result = lzstring._decompress(len(string_in), 255, lambda index: string_in[index])
+            result = lzstring.decompressFromUint8Array(string_in)
+            print(result)
+            print(result[0:5])
 
         if self.subfile_types[i] == b'PBL\x00':
             # Model format
@@ -154,6 +155,21 @@ class CPK:
             if file_magic == b'':
                 print(f"Bad position @ {pos}")
             subfile_types.append(file_magic)
+
+            if file_magic == b'LZS\x00':
+                # try and decode to get type
+                file.seek(pos)
+                U.readLong(file)
+                size_maybe = U.readLong(file)
+                sec_count = ceil(size_maybe / 2048)
+                unknown_lzs0 = U.readByte(file) # Probably part of the compression
+                actual_type = file.read(4)
+                file.seek(pos+4)
+                string_in = file.read(sec_count * 2048)
+
+                # LZS decompression
+                # TODO:
+
             try:
                 name = file_magic.decode('ascii').rstrip("\x00")
                 if CPK.PRINT_DEBUG:

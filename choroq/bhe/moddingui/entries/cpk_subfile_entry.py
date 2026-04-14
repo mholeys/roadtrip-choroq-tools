@@ -6,11 +6,12 @@ from choroq.bhe.moddingui.entries.game_entry import GameEntry
 
 class CpkSubfileEntry(GameEntry):
 
-    def __init__(self, folder, path, game_version: GameVersion, game_variant: str, record: DirectoryRecord, subtype: bytes, subfile_index, entry_position):
+    def __init__(self, folder, path, game_version: GameVersion, game_variant: str, record: DirectoryRecord, subtype: bytes, subfile_index, entry_position, entry_size):
         super().__init__(folder, path, game_version, game_variant, record)
         self.subtype = subtype
         self.subfile_index = subfile_index
         self.entry_position = entry_position
+        self.entry_size = entry_size
 
     def get_type_string(self) -> str:
         if self.subtype == b"TOC\0" or self.subtype == b"\x03\x18\x00\x00":
@@ -43,6 +44,9 @@ class CpkSubfileEntry(GameEntry):
 
     def get_offset(self) -> int:
         return self.get_sector() * 2048 + self.get_position_in_parent()
+
+    def get_size(self) -> int:
+        return self.entry_size
 
     def get_editable(self) -> bool:
         return False

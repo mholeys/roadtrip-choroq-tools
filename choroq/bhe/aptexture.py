@@ -138,6 +138,54 @@ class APTexture:
         image = Image.frombytes('RGBA', (4, int(self.palette_size / 4)), bytes(colour_list), 'raw', 'RGBA')
         image.save(path, "PNG")
 
+    def get_image(self, use_palette=True):
+        if self.data == [] or self.data is None:
+            print("Texture has no data")
+            return None
+        colour_list = []
+        image = None
+
+        if self.palette_size == 0:
+            try:
+                if APTexture.PRINT_DEBUG:
+                    print("Not using a palette, no palette")
+                if self.colour_format == 32 or self.colour_format == 16:
+                    image = Image.frombytes('RGBA', (self.width, self.height), self.data, 'raw')
+                elif self.colour_format == 24:
+                    image = Image.frombytes('RGB', (self.width, self.height), self.data, 'raw')
+                    return image.convert("RGBA")
+                elif self.colour_format == 4 or self.colour_format == 8:
+                    image = Image.frombytes('L', (self.width, self.height), self.data, 'raw')
+                    return image.convert("RGBA")
+                else:
+                    print(f"BAD BPP value {self.colour_format}")
+                    exit()
+            except Exception as e:
+                print(e)
+                return None
+        else:
+            if APTexture.PRINT_DEBUG:
+                print("Using palette from texture")
+            # Convert (R,G,B,A) TO [..., R,G,B,A,...]
+            for colour in self.palette:
+                colour_list.append(colour[0])
+                colour_list.append(colour[1])
+                colour_list.append(colour[2])
+                colour_list.append(colour[3])
+            if use_palette:
+                image = Image.frombytes('P', (self.width, self.height), self.data, 'raw', 'P')
+                palette = ImagePalette.raw("RGBA", bytes(colour_list))
+                palette.mode = "RGBA"
+                image.palette = palette
+            else:
+                image = Image.frombytes('L', (self.width, self.height), self.data, 'raw')
+        if APTexture.PRINT_DEBUG:
+            print("Doing conversion")
+        if use_palette:
+            rgbd = image.convert("RGBA")
+            return rgbd
+        else:
+            return image
 
 
     @staticmethod

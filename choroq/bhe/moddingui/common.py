@@ -100,7 +100,7 @@ class UiConfig:
         print(self.config[UiConfig.SECTION_WARNINGS][UiConfig.KEY_WARNINGS_DISABLED])
 
     def save_config(self):
-        with open('config.txt', 'w') as configfile:
+        with open(self.config_name, 'w') as configfile:
             self.config.write(configfile)
         print("Saved ui config")
 

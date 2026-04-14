@@ -18,6 +18,7 @@ from choroq.bhe.bhe_cpk import CPK
 from choroq.bhe.moddingui.common import UiConfig, GameVersion, PS2Cnf
 from choroq.bhe.moddingui.entries.apt_entry import AptEntry
 from choroq.bhe.moddingui.entries.cpk_subfile_entry import CpkSubfileEntry
+from choroq.bhe.moddingui.modules.preview_handler import APTPreviewFrame
 
 from modules.message_box import MessageBox
 
@@ -44,7 +45,7 @@ class ModdingUi(customtkinter.CTk):
         self.game_variant = None
 
         # Setup/read config
-        self.config = UiConfig('config.txt')
+        self.config = UiConfig('bheconfig.txt')
         self.config.parse_config()
 
         self.rowconfigure(0, weight=1)
@@ -282,6 +283,18 @@ class ModdingUi(customtkinter.CTk):
             matches = [
                 re.compile("/DATA/[A-Z_]{4,10}\\.CPK"),
             ]
+        if self.game_version == GameVersion.CHOROQ_HG_1:
+            matches = [
+                re.compile("/DATA/[A-Z_]{4,10}\\.CPK"),
+            ]
+        if self.game_version == GameVersion.CHOROQ_HG_4:
+            matches = [
+                re.compile("/DATA/[A-Z_]{4,10}\\.CPK"),
+            ]
+        if self.game_version == GameVersion.SHIN_COMBAT_Q:
+            matches = [
+                re.compile("/DATA/[A-Z_]{4,10}\\.CPK"),
+            ]
         cpk_files_in_iso = {}
         for dirname, dirlist, filelist in self.iso.walk(iso_path='/'):
             for matcher in matches:
@@ -305,7 +318,11 @@ class ModdingUi(customtkinter.CTk):
             for index, sub_type in enumerate(cpk.subfile_types):
                 print(sub_type)
                 entry_position = cpk.entry_positions[index]
-                subfile = CpkSubfileEntry(dirname, path, self.game_version, self.game_variant, record, sub_type, index, entry_position)
+                if index == len(cpk.subfile_types) - 1:
+                    entry_size = cpk.entry_positions[index] - entry_position
+                else:
+                    entry_size = len(cpk_data.read()) - entry_position
+                subfile = CpkSubfileEntry(dirname, path, self.game_version, self.game_variant, record, sub_type, index, entry_position, entry_size)
 
                 if sub_type == b"APT\0":
                     # Has multiple textures
@@ -317,9 +334,15 @@ class ModdingUi(customtkinter.CTk):
                         texture_entries.append(AptEntry(texture, dirname, path, self.game_version, self.game_variant, record, sub_type, texture_index, entry_position))
                     subfile.children = texture_entries
 
+                # TODO: proper filter, and refresh?
+                if sub_type not in [b"APT\0", b"LZS\0"]:
+                    continue
+
                 subfiles.append(subfile)
 
-            self.entries[cpk_filename] = subfiles
+            # Skip any cpks that we do not have any files that match the filter
+            if len(subfiles) > 0:
+                self.entries[cpk_filename] = subfiles
 
 
     def on_close(self):
@@ -359,6 +382,8 @@ class FileInfoFrame(CTkFrame):
         # self.main_text.configure(state="disabled")
         self.main_text.grid(row=2, column=0, padx=5, pady=5, sticky="nesw")
 
+        self.preview = None
+
         # self.action_row = CTkFrame(self)
         #self.action_row.rowconfigure(3, weight=1)
         #self.action_row.columnconfigure(0, weight=1)
@@ -388,6 +413,18 @@ class FileInfoFrame(CTkFrame):
         # Put info on what is understood
         self.main_text.insert("end", f"File type: {entry.get_type_string()}\n")
         self.main_text.insert("end", entry.descriptor() + "\n")
+
+        if type(entry) == AptEntry:
+            self.preview = APTPreviewFrame(self)
+            self.preview.grid(row=3, column=0, padx=5, pady=5, sticky="nesw")
+            self.preview.set_image(entry.ap_texture)
+        else:
+            # remove preview
+            if self.preview is not None:
+                self.preview.grid_forget()
+                self.preview.destroy()
+                self.preview = None
+
 
 
 class FileEntryTree(CTkFrame):
@@ -434,23 +471,26 @@ class FileEntryTree(CTkFrame):
 
         for cpkname in entries:
             cpk_entries = entries[cpkname]
+            cpk_sector = cpk_entries[0].get_sector()
+            cpk_size = cpk_entries[0].get_size()
+            cpk_offset = cpk_entries[0].get_offset()
             # Add root for this dir
             self.treeview.insert('', 'end', cpkname, text=cpkname,
-                                 values=("", cpk_entries[0].get_sector(), cpk_entries[0].get_size(), cpk_entries[0].get_offset()))
+                                 values=("", cpk_sector, cpk_size, cpk_offset))
 
-            self.add_subentry(cpk_entries, cpkname, cpk_entries[0].get_sector())
+            self.add_subentry(cpk_entries, cpkname, cpk_sector, cpk_offset)
 
-    def add_subentry(self, sub_entries, parent_name, parent_sector_pos):
+    def add_subentry(self, sub_entries, parent_name, parent_sector_pos, parent_position):
         for subfile_entry in sub_entries:
             filename = subfile_entry.get_file_name()
             id_str = f"{parent_name}//{filename}"
             id = self.treeview.insert(parent_name, 'end', id_str,
                                       text=subfile_entry.get_file_name(),
-                                      values=(subfile_entry.get_position_in_parent(), parent_sector_pos + int(subfile_entry.get_position_in_parent() / 2048), subfile_entry.get_size(), subfile_entry.get_offset()))
+                                      values=(subfile_entry.get_position_in_parent(), parent_sector_pos + int(subfile_entry.get_position_in_parent() / 2048), subfile_entry.get_size(), parent_position + subfile_entry.get_position_in_parent()))
             self.bound[id] = (parent_name, subfile_entry)
 
             if subfile_entry.has_children():
-                self.add_subentry(subfile_entry.get_children(), id_str, parent_sector_pos)
+                self.add_subentry(subfile_entry.get_children(), id_str, parent_sector_pos + int(subfile_entry.get_position_in_parent() / 2048), parent_position + subfile_entry.get_position_in_parent())
 
         # self.treeview.bind('<<TreeviewSelect>>', item_clicked)
         # self.treeview.bind('<<TreeviewOpen>>', item_opened)
