@@ -12,7 +12,9 @@ from choroq.bhe.toc_0318 import Toc0318
 # import lzstring
 
 
+
 class CPK:
+    PRINT_DEBUG = False
 
     def __init__(self, entry_count, entry_positions, eof_position, subfile_types):
         self.entry_count = entry_count
@@ -31,7 +33,8 @@ class CPK:
     def read_subfile(self, file, index):
         position = self.entry_positions[index]
         i = index
-        print(f"Reading subfile @ {position}, type should be {self.subfile_types[i]} ")
+        if self.PRINT_DEBUG:
+            print(f"Reading subfile @ {position}, type should be {self.subfile_types[i]} ")
         read_from = file
 
         # Need to handle LZS compression
@@ -44,8 +47,9 @@ class CPK:
         #     # LZS compression
         #     result = lzstring._decompress(len(string_in), 255, lambda index: string_in[index])
         #     # result = lzstring.decompressFromUint8Array(string_in)
-        #     print(result)
-        #     print(result[0:5])
+        #     if PRINT_LOADING_INFORMATION:
+        #         print(result)
+        #         print(result[0:5])
 
         if self.subfile_types[i] == b'PBL\x00':
             # Model format
@@ -112,7 +116,8 @@ class CPK:
             exit(1)
 
         entry_count = U.readLong(file)
-        print(f"CPK has {entry_count} entries")
+        if CPK.PRINT_DEBUG:
+            print(f"CPK has {entry_count} entries")
         entry_positions = [U.readShort(file) * 2048]  # Seed for checks
         seen_large = False
         has_larger = False
@@ -151,7 +156,8 @@ class CPK:
             subfile_types.append(file_magic)
             try:
                 name = file_magic.decode('ascii').rstrip("\x00")
-                print(f"{name} @ {pos}")
+                if CPK.PRINT_DEBUG:
+                    print(f"{name} @ {pos}")
             except:
                 #print(f"Possible bad position @ {pos} {file_magic}")
                 # exit()

@@ -62,8 +62,8 @@ class HPDModel(BHEMesh):
 
         hpd_unit = 1 << (hpd_shift & 0x1F)
         hpd_offset = 0x40 - hpd_base
-
-        print(f"Reading {face_count} faces from @ {file.tell()}")
+        if HPDModel.PRINT_DEBUG:
+            print(f"Reading {face_count} faces from @ {file.tell()}")
         # Read faces
         tri_strips = []
         for f in range(face_count):
@@ -81,21 +81,23 @@ class HPDModel(BHEMesh):
         # for i in range(int(face_count / 3)):
         #     face_list.append((tri_strips[i * 3], tri_strips[i * 3 + 1], tri_strips[i * 3 + 2], 0))
 
-
-        print(f"Finished reading {face_count} faces up to @ {file.tell()}")
+        if HPDModel.PRINT_DEBUG:
+            print(f"Finished reading {face_count} faces up to @ {file.tell()}")
 
         # Read xyzw data
         file.seek(offset + uvs_offset, os.SEEK_SET)
-        print(f"Reading {uvs_size} unknown? from @ {file.tell()}")
+        if HPDModel.PRINT_DEBUG:
+            print(f"Reading {uvs_size} unknown? from @ {file.tell()}")
         unknowns = []
         for i in range(uvs_size):
             unknowns.append((U.readLong(file), U.readLong(file), U.readLong(file), U.readLong(file)))
-
-        print(f"Finished reading {uvs_size} uvs up to @ {file.tell()}")
+        if HPDModel.PRINT_DEBUG:
+            print(f"Finished reading {uvs_size} uvs up to @ {file.tell()}")
 
         # Read xyzw data
         file.seek(offset + floats_offset, os.SEEK_SET)
-        print(f"Reading {verts_size} verts? from @ {file.tell()}")
+        if HPDModel.PRINT_DEBUG:
+            print(f"Reading {verts_size} verts? from @ {file.tell()}")
         verts = []
         for i in range(verts_size):
             x, y, z, w = U.readXYZW(file)
@@ -103,12 +105,14 @@ class HPDModel(BHEMesh):
 
         # Read normals (nx,ny,nz,nw)
         file.seek(offset + normals_offset, os.SEEK_SET)
-        print(f"Reading {normals_size} normals? from @ {file.tell()}")
+        if HPDModel.PRINT_DEBUG:
+            print(f"Reading {normals_size} normals? from @ {file.tell()}")
         normals = []
         for i in range(normals_size):
             nx, ny, nz, nw = U.readXYZW(file)
             normals.append((nx, -ny, nz, nw))
-        print(f"Done @ {file.tell()} end {offset + hpd_size}")
+        if HPDModel.PRINT_DEBUG:
+            print(f"Done @ {file.tell()} end {offset + hpd_size}")
 
         return HPDModel([], verts_size, verts, normals_size, normals, 0, [], [[], face_list])
 

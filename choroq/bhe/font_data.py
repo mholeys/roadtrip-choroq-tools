@@ -7,6 +7,7 @@ import choroq.read_utils as U
 
 class FontData:
     STOP_ON_NEW = False
+    PRINT_DEBUG = False
 
     def __init__(self, char_width, char_height, characters, character_data, character_images):
         self.char_width = char_width
@@ -36,14 +37,15 @@ class FontData:
             char = U.readShort(file)  # Character code/value I think
             if char != 0xFFFF:
                 characters.append(char)
-
-        print(f"FONT| End of char table at {file.tell()}")
+        if FontData.PRINT_DEBUG:
+            print(f"FONT| End of char table at {file.tell()}")
         # Padding
         file.seek((characters_size+8) % 16, os.SEEK_CUR)
 
         file.seek(offset + font_ref_start_pos, os.SEEK_SET)
         font_characters = {}
-        print(f"FONT| Start of char values? at {file.tell()}")
+        if FontData.PRINT_DEBUG:
+            print(f"FONT| Start of char values? at {file.tell()}")
         for i in range(int(font_ref_size/8)):
         # while file.tell() < offset + header_size:
             character = U.readShort(file)
@@ -53,7 +55,8 @@ class FontData:
             font_characters[character] = (character, val1, val2, ffffs)
 
         file.seek(offset + header_size, os.SEEK_SET)
-        print(f"FONT| Start of char texture at {file.tell()}")
+        if FontData.PRINT_DEBUG:
+            print(f"FONT| Start of char texture at {file.tell()}")
         font_textures = {}
         for ci, char in enumerate(characters):
             data = bytes()
@@ -65,8 +68,8 @@ class FontData:
                 data += nibble_l
                 data += nibble_u
             font_textures[ci] = data
-
-        print(f"FONT| Finished char texture at {file.tell()}")
+        if FontData.PRINT_DEBUG:
+            print(f"FONT| Finished char texture at {file.tell()}")
 
         return FontData(char_width, char_height, characters, font_characters, font_textures)
 

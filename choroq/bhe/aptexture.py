@@ -6,7 +6,7 @@ from choroq.egame.texture import Texture
 
 class APTexture:
     STOP_ON_NEW = True
-    PRINT_DEBUG = True
+    PRINT_DEBUG = False
 
     def __init__(self, name, val_a, val_b, total_size, offset):
         self.offset = offset

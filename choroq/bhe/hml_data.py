@@ -3,6 +3,7 @@ import choroq.read_utils as U
 from choroq.bhe.bhe_mesh import BHEMesh
 
 class HML(BHEMesh):
+    PRINT_DEBUG = False
 
     def __init__(self):
         pass
