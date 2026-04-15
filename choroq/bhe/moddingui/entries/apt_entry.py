@@ -1,4 +1,5 @@
 from pycdlib.dr import DirectoryRecord
+import pycdlib
 
 from choroq.bhe.aptexture import APTexture
 from choroq.bhe.moddingui.common import GameVersion
@@ -35,13 +36,21 @@ class AptEntry(GameEntry):
     def get_position(self) -> int:
         return self.ap_texture.offset
 
+    def get_position_in_parent(self) -> int:
+        return self.entry_position
+
     def get_size(self) -> int:
         return self.ap_texture.total_size
 
     def get_offset(self) -> int:
-        return self.ap_texture.offset
+        return self.record.orig_extent_loc * 2048 + self.ap_texture.data_offset
 
     def is_supported(self):
         # Returns true if the code can handle this format properly (no artifacts)
         #return self.ap_texture.colour_format
         return False
+
+    def extract(self, iso, options, destination) -> bool:
+        self.ap_texture.write_texture_to_png(f"{destination}/{self.ap_texture.name}.png")
+        return True
+

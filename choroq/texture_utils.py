@@ -1,3 +1,4 @@
+import math
 from enum import Enum
 
 from PIL import Image
@@ -23,7 +24,9 @@ class TextureUtil:
     @staticmethod
     def unswizzle(palette, size):
         colours = []
-        numParts = (int)(size / 32)
+        numParts = int(size / 32)
+        if numParts == 0:
+            return palette # in = out
         numBlocks = 2
         numStripes = 2
         numColours = 8
@@ -39,8 +42,11 @@ class TextureUtil:
         return colours
 
     @staticmethod
-    def split_image(image):
-        indexed_texture = image.convert('P', dither=Image.Dither.NONE, palette=Image.Palette.ADAPTIVE, colors=256)
+    def split_image(image, target_bpp=8, target_palette_size=256, target_palette_bpp=32):
+        if target_palette_bpp != 32:
+            return None, None
+
+        indexed_texture = image.convert('P', dither=Image.Dither.NONE, palette=Image.Palette.ADAPTIVE, colors=target_palette_size)
         palette_image = indexed_texture.getpalette('RGBA')
 
         # Convert any alpha values into the required system
@@ -69,7 +75,7 @@ class TextureUtil:
             palette.append((r, g, b, alpha))
 
         # convert palette to bytes
-        swizzled = TextureUtil.unswizzle(palette, 256)
+        swizzled = TextureUtil.unswizzle(palette, target_palette_size)
         palette_bytes = bytes()
         for i in range(0, len(palette_image) >> 2):
             palette_bytes += swizzled[i][0].to_bytes(1, 'little', signed=False)
@@ -77,10 +83,25 @@ class TextureUtil:
             palette_bytes += swizzled[i][2].to_bytes(1, 'little', signed=False)
             palette_bytes += swizzled[i][3].to_bytes(1, 'little', signed=False)
 
-        # Save image
+        # split from palette
         texture = indexed_texture.convert('L')
+
         print(indexed_texture.getpixel((0, 0)))
         print(texture.getpixel((0, 0)))
-        #texture.save(test_image_out, "PNG")
+        # texture.save(test_image_out, "PNG")
 
-        return indexed_texture.tobytes(), palette_bytes
+        # convert image into target bpp
+        texture_bytes = indexed_texture.tobytes()
+        if target_bpp != 8:
+            if target_bpp == 4:
+                texture_4bit = bytes()
+                for i in range(0, len(texture_bytes), 2):
+                    a = texture_bytes[i]
+                    b = texture_bytes[i+1]
+                    if a > 0xF or b > 0xF:
+                        raise Exception("Cannot convert texture to requested bpp (4) as it references value > 0xF")
+                    texture_4bit += (a & 0xF | (b & 0xF) << 4).to_bytes(1, 'little', signed=False)
+
+                texture_bytes = texture_4bit
+
+        return texture_bytes, palette_bytes

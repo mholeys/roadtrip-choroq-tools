@@ -9,6 +9,7 @@ class APTexture:
     PRINT_DEBUG = False
 
     def __init__(self, name, val_a, val_b, total_size, offset):
+        # Position of the definition (header under APT)
         self.offset = offset
         self.name = name
         self.val_a = val_a
@@ -22,6 +23,9 @@ class APTexture:
 
         self.palette_size = 0
         self.palette = None
+
+        # Position where texture data starts
+        self.data_offset = 0
 
     def set_palette(self, data, palette_size=-1):
         if palette_size != -1:
@@ -329,6 +333,7 @@ class APTexture:
 
             textures[i].set_data(width, height, texture_data, colour_format)
             textures[i].set_palette(palette, palette_size)
+            textures[i].data_offset = texture_start
 
         return textures
 

@@ -10,7 +10,8 @@ class APTPreviewFrame(CTkFrame):
 
     def __init__(self, master):
         CTkFrame.__init__(self, master)
-
+        self.rowconfigure(0, weight=1)
+        self.columnconfigure(0, weight=1)
         self.canvas = CTkCanvas(self, bg="black")
         self.canvas.grid(row=0, column=0, sticky="nsew")
         self.texture = None

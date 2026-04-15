@@ -72,6 +72,12 @@ class UiConfig:
     KEY_ISO_PATH = 'LastIsoPath'
     KEY_DUMP_PATH = 'LastDumpPath'
     KEY_EXTRACT_PATH = 'LastExtractPath'
+    KEY_REPLACEMENT_COMBAT_PATH = 'LastCombatReplacementPath'
+    KEY_REPLACEMENT_HG1_PATH = 'LastHG1ReplacementPath'
+    KEY_REPLACEMENT_HG4_PATH = 'LastHG4ReplacementPath'
+    KEY_REPLACEMENT_WORKS_PATH = 'LastWorksReplacementPath'
+    KEY_REPLACEMENT_SHIN_COMBAT_PATH = 'LastShinCombatReplacementPath'
+
 
     # Warning section
     SECTION_WARNINGS = 'Warnings'
@@ -89,6 +95,11 @@ class UiConfig:
             UiConfig.KEY_ISO_PATH: 'None',
             UiConfig.KEY_DUMP_PATH: 'None',
             UiConfig.KEY_EXTRACT_PATH: 'None',
+            UiConfig.KEY_REPLACEMENT_COMBAT_PATH: 'None',
+            UiConfig.KEY_REPLACEMENT_HG1_PATH: 'None',
+            UiConfig.KEY_REPLACEMENT_HG4_PATH: 'None',
+            UiConfig.KEY_REPLACEMENT_WORKS_PATH: 'None',
+            UiConfig.KEY_REPLACEMENT_SHIN_COMBAT_PATH: 'None',
         }
 
         self.config[UiConfig.SECTION_WARNINGS] = {
@@ -134,6 +145,27 @@ class UiConfig:
             return None
         return path
 
+    def get_last_replacement_path(self, game_version: GameVersion):
+        if self.config is None:
+            return None
+        if UiConfig.SECTION_PATHS not in self.config:
+            return None
+        path = None
+        if game_version == GameVersion.CHOROQ_HG_1:
+            path = self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_REPLACEMENT_HG1_PATH]
+        elif game_version == GameVersion.CHOROQ_HG_4:
+            path = self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_REPLACEMENT_HG4_PATH]
+        elif game_version == GameVersion.CHOROQ_WORKS:
+            path = self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_REPLACEMENT_WORKS_PATH]
+        elif game_version == GameVersion.SHIN_COMBAT_Q:
+            path = self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_REPLACEMENT_SHIN_COMBAT_PATH]
+        elif game_version == GameVersion.COMBAT_Q:
+            path = self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_REPLACEMENT_COMBAT_PATH]
+
+        if path == 'None':
+            return None
+        return path
+
     def update_iso_path(self, path):
         # Get the path to the file, as we will reopen this
         self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_ISO_PATH] = str(path)
@@ -146,6 +178,20 @@ class UiConfig:
     def update_extract_path(self, path):
         # Get the path to the folder, to make open file dialog faster
         self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_EXTRACT_PATH] = str(path)
+
+    def update_replacement_path(self, path, game_version: GameVersion):
+        # Get the path to the folder, to make open file dialog faster
+        folder_path = str(Path(path).parent)
+        if game_version == GameVersion.CHOROQ_HG_1:
+            self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_REPLACEMENT_HG1_PATH] = str(folder_path)
+        elif game_version == GameVersion.CHOROQ_HG_4:
+            self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_REPLACEMENT_HG4_PATH] = str(folder_path)
+        elif game_version == GameVersion.CHOROQ_WORKS:
+            self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_REPLACEMENT_WORKS_PATH] = str(folder_path)
+        elif game_version == GameVersion.SHIN_COMBAT_Q:
+            self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_REPLACEMENT_SHIN_COMBAT_PATH] = str(folder_path)
+        elif game_version == GameVersion.COMBAT_Q:
+            self.config[UiConfig.SECTION_PATHS][UiConfig.KEY_REPLACEMENT_COMBAT_PATH] = str(folder_path)
 
     def has_warnings(self):
         if self.config is None:

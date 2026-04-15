@@ -18,6 +18,8 @@ from choroq.bhe.bhe_cpk import CPK
 from choroq.bhe.moddingui.common import UiConfig, GameVersion, PS2Cnf
 from choroq.bhe.moddingui.entries.apt_entry import AptEntry
 from choroq.bhe.moddingui.entries.cpk_subfile_entry import CpkSubfileEntry
+from choroq.bhe.moddingui.entries.game_entry import GameEntry
+from choroq.bhe.moddingui.modules.apt_option_handler import AptOptionHandler
 from choroq.bhe.moddingui.modules.preview_handler import APTPreviewFrame
 
 from modules.message_box import MessageBox
@@ -83,7 +85,7 @@ class ModdingUi(customtkinter.CTk):
 
         self.bind('<<TreeviewSelect>>', on_file_item_clicked)
 
-        #self.entry_action_contextmenu = EntryMenu(self)
+        self.entry_action_contextmenu = EntryMenu(self)
 
         def on_entry_file_right_clicked(event):
             file_id = self.file_tree.treeview.identify_row(event.y)
@@ -126,7 +128,7 @@ class ModdingUi(customtkinter.CTk):
         if self.config.has_warnings():
             # Warn user
             MessageBox(self, ["Understood"],
-                       "Opening an iso is safe from modification, unless you press replace!",
+                       "Opening an iso is safe from modification, unless you press replace!\nThere will be a delay!",
                        "Warning", callback=self.ask_iso_path)
         else:
             self.ask_iso_path(0, '')
@@ -143,7 +145,7 @@ class ModdingUi(customtkinter.CTk):
         if self.config.has_warnings():
             # Warn user
             MessageBox(self, ["Understood"],
-                       "Opening an iso is safe from modification, unless you press replace!",
+                       "Opening an iso is safe from modification, unless you press replace!\nThere will be a delay!",
                        "Warning", callback=self.open_iso_from_path_var)
         else:
             self.open_iso_from_path_var()
@@ -281,19 +283,19 @@ class ModdingUi(customtkinter.CTk):
         # el
         if self.game_version == GameVersion.CHOROQ_WORKS:
             matches = [
-                re.compile("/DATA/[A-Z_]{4,10}\\.CPK"),
+                re.compile("/DATA/[A-Z_0-9]{0,10}\\.CPK"),
             ]
         if self.game_version == GameVersion.CHOROQ_HG_1:
             matches = [
-                re.compile("/DATA/[A-Z_]{4,10}\\.CPK"),
+                re.compile("/DATA/[A-Z_0-9]{0,10}\\.CPK"),
             ]
         if self.game_version == GameVersion.CHOROQ_HG_4:
             matches = [
-                re.compile("/DATA/[A-Z_]{4,10}\\.CPK"),
+                re.compile("/DATA/[A-Z_0-9]{0,10}\\.CPK"),
             ]
         if self.game_version == GameVersion.SHIN_COMBAT_Q:
             matches = [
-                re.compile("/DATA/[A-Z_]{4,10}\\.CPK"),
+                re.compile("/DATA/[A-Z_0-9]{0,10}\\.CPK"),
             ]
         cpk_files_in_iso = {}
         for dirname, dirlist, filelist in self.iso.walk(iso_path='/'):
@@ -309,6 +311,7 @@ class ModdingUi(customtkinter.CTk):
         for cpk_filename in cpk_files_in_iso:
             dirname, path, record = cpk_files_in_iso[cpk_filename]
             # Read each cpk, and build entries from their subfiles
+            cpk_sector = record.orig_extent_loc
             cpk_data = BytesIO()
             self.iso.get_file_from_iso_fp(cpk_data, iso_path=path)
             cpk = CPK.read_cpk(cpk_data, 0)
@@ -318,9 +321,10 @@ class ModdingUi(customtkinter.CTk):
             for index, sub_type in enumerate(cpk.subfile_types):
                 print(sub_type)
                 entry_position = cpk.entry_positions[index]
-                if index == len(cpk.subfile_types) - 1:
-                    entry_size = cpk.entry_positions[index] - entry_position
+                if index < len(cpk.subfile_types) - 1:
+                    entry_size = cpk.entry_positions[index+1] - entry_position
                 else:
+                    # "Guess" at the distance from start of this to end
                     entry_size = len(cpk_data.read()) - entry_position
                 subfile = CpkSubfileEntry(dirname, path, self.game_version, self.game_variant, record, sub_type, index, entry_position, entry_size)
 
@@ -331,7 +335,7 @@ class ModdingUi(customtkinter.CTk):
                     textures = cpk.subfiles[index][1]
                     texture_entries = []
                     for texture_index, texture in enumerate(textures):
-                        texture_entries.append(AptEntry(texture, dirname, path, self.game_version, self.game_variant, record, sub_type, texture_index, entry_position))
+                        texture_entries.append(AptEntry(texture, dirname, path, self.game_version, self.game_variant, record, sub_type, texture_index, texture.data_offset))
                     subfile.children = texture_entries
 
                 # TODO: proper filter, and refresh?
@@ -342,7 +346,7 @@ class ModdingUi(customtkinter.CTk):
 
             # Skip any cpks that we do not have any files that match the filter
             if len(subfiles) > 0:
-                self.entries[cpk_filename] = subfiles
+                self.entries[(cpk_filename, cpk_sector)] = subfiles
 
 
     def on_close(self):
@@ -367,7 +371,7 @@ class FileInfoFrame(CTkFrame):
         self.columnconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
         self.rowconfigure(2, weight=100)
-        # self.rowconfigure(3, weight=1)
+        self.rowconfigure(3, weight=100)
 
         self.top_label = customtkinter.CTkLabel(self, text="File Info", corner_radius=6)
         self.top_label.grid(row=0, column=0, sticky="new")
@@ -469,28 +473,28 @@ class FileEntryTree(CTkFrame):
             if id in self.bound:
                 print(self.bound[self.treeview.focus()])
 
-        for cpkname in entries:
-            cpk_entries = entries[cpkname]
-            cpk_sector = cpk_entries[0].get_sector()
-            cpk_size = cpk_entries[0].get_size()
-            cpk_offset = cpk_entries[0].get_offset()
+        for cpk_key in entries:
+            cpkname, cpk_sector = cpk_key
+            cpk_entries = entries[cpk_key]
+
+            cpk_offset = cpk_sector * 2048
             # Add root for this dir
             self.treeview.insert('', 'end', cpkname, text=cpkname,
-                                 values=("", cpk_sector, cpk_size, cpk_offset))
+                                 values=("", cpk_sector, "?", cpk_offset))
 
-            self.add_subentry(cpk_entries, cpkname, cpk_sector, cpk_offset)
+            self.add_subentry(cpk_entries, cpkname, cpk_sector, cpk_offset, cpk_offset)
 
-    def add_subentry(self, sub_entries, parent_name, parent_sector_pos, parent_position):
+    def add_subentry(self, sub_entries, parent_name, parent_sector_pos, parent_position, cpk_position):
         for subfile_entry in sub_entries:
             filename = subfile_entry.get_file_name()
             id_str = f"{parent_name}//{filename}"
             id = self.treeview.insert(parent_name, 'end', id_str,
                                       text=subfile_entry.get_file_name(),
-                                      values=(subfile_entry.get_position_in_parent(), parent_sector_pos + int(subfile_entry.get_position_in_parent() / 2048), subfile_entry.get_size(), parent_position + subfile_entry.get_position_in_parent()))
+                                      values=(subfile_entry.get_position_in_parent(), parent_sector_pos + int(subfile_entry.get_position_in_parent() / 2048), subfile_entry.get_size(), cpk_position + subfile_entry.get_position_in_parent()))
             self.bound[id] = (parent_name, subfile_entry)
 
             if subfile_entry.has_children():
-                self.add_subentry(subfile_entry.get_children(), id_str, parent_sector_pos + int(subfile_entry.get_position_in_parent() / 2048), parent_position + subfile_entry.get_position_in_parent())
+                self.add_subentry(subfile_entry.get_children(), id_str, parent_sector_pos + int(subfile_entry.get_position_in_parent() / 2048), cpk_position + subfile_entry.get_position_in_parent(), cpk_position)
 
         # self.treeview.bind('<<TreeviewSelect>>', item_clicked)
         # self.treeview.bind('<<TreeviewOpen>>', item_opened)
@@ -506,80 +510,53 @@ class FileEntryTree(CTkFrame):
         # self.treeview.move('i3', 'i1', 'end')
 
 
-# class EntryMenu(Menu):
-#
-#     def __init__(self, root):
-#         super().__init__(root)
-#         self.root = root
-#
-#     def show(self, x, y, iso, entry):
-#         self.delete(0, "end")  # remove old options
-#
-#         dirname, filename, entry = entry
-#         # All entries can be dumped
-#         self.add_command(label="Dump", command=functools.partial(self.dump_cb, iso, entry))
-#
-#         options = OptionsProvider.get_options(entry)
-#         for option, func in options:
-#             self.add_command(label=option, command=functools.partial(func, self, self.root, iso, entry))
-#
-#         self.post(x, y)
-#
-#     def dump_cb(self, iso: pycdlib.PyCdlib, entry: GameEntry):
-#         # Open save file dialog
-#         print("Asking for destination file, to save dump to")
-#         path = filedialog.asksaveasfilename(defaultextension=entry.extension, initialfile=entry.basename, initialdir=self.root.config.get_last_dump_path())
-#         if path == '':
-#             return
-#         try:
-#             with open(path, "wb") as fout:
-#                 iso.get_file_from_iso_fp(fout, iso_path=entry.path)
-#
-#                 MessageBox(self.root, ["Close"], "Dump complete", "Completed")
-#             self.root.config.update_dump_path(path)
-#         except Exception as e:
-#             MessageBox(self.root, ["Close"],
-#                        "Failed to dump the file from the ISO\n" + str(e),
-#                        "Problem dumping file", warn=True)
+class EntryMenu(Menu):
+
+    def __init__(self, root):
+        super().__init__(root)
+        self.root = root
+
+    def show(self, x, y, iso, entry):
+        self.delete(0, "end")  # remove old options
+
+        parent_name, subfile_entry = entry
+        # All entries can be dumped
+        #self.add_command(label="Dump", command=functools.partial(self.dump_cb, iso, entry))
+
+        options = OptionsProvider.get_options(subfile_entry)
+        for option, func in options:
+            self.add_command(label=option, command=functools.partial(func, self, self.root, iso, subfile_entry))
+
+        self.post(x, y)
+
+    # def dump_cb(self, iso: pycdlib.PyCdlib, entry: GameEntry):
+    #     # Open save file dialog
+    #     print("Asking for destination file, to save dump to")
+    #     path = filedialog.asksaveasfilename(defaultextension=entry.extension, initialfile=entry.basename, initialdir=self.root.config.get_last_dump_path())
+    #     if path == '':
+    #         return
+    #     try:
+    #         with open(path, "wb") as fout:
+    #             iso.get_file_from_iso_fp(fout, iso_path=entry.path)
+    #
+    #             MessageBox(self.root, ["Close"], "Dump complete", "Completed")
+    #         self.root.config.update_dump_path(path)
+    #     except Exception as e:
+    #         MessageBox(self.root, ["Close"],
+    #                    "Failed to dump the file from the ISO\n" + str(e),
+    #                    "Problem dumping file", warn=True)
 
 
-# class OptionsProvider:
-#
-#     @staticmethod
-#     def get_options(object):
-#         if type(object) == HG2CarEntry:
-#             return [
-#                 ("Extract", HG2CarOptionHandler.extract_cb),
-#                 ("Replace With HG3", HG2CarOptionHandler.import_replacement),
-#                 ("Replace part", HG2CarOptionHandler.import_hg2_part),
-#                 # UI for all parts at once needed
-#                 ("Replace all parts", HG2CarOptionHandler.import_hg2_full),
-#             ]
-#         if type(object) == HG3CarEntry:
-#             return [
-#                 ("Extract", HG3CarOptionHandler.extract_cb),
-#                 ("Replace With HG2", HG3CarOptionHandler.import_replacement),
-#                 # ("Replace part", HG3CarOptionHandler.import_hg3_part),  # Tools not written yet
-#                 # UI for all parts at once needed
-#                 # ("Replace completely", HG2CarOptionHandler.import_hg2_all),
-#             ]
-#         if type(object) == HG2CourseEntry:
-#             return [
-#                 #("Extract", HG2CourseOptionHandler.extract_cb),
-#             ]
-#         if type(object) == HG3CourseEntry:
-#             return [
-#                 #("Extract", HG3CourseOptionHandler.extract_cb),
-#             ]
-#         if type(object) == HG2ShopEntry:
-#             return [
-#                 #("Extract", HG2ShopOptionHandler.extract_cb),
-#             ]
-#         if type(object) == HG2FieldEntry:
-#             return [
-#                 #("Extract", HG2FieldOptionHandler.extract_cb),
-#             ]
-#         return []
+class OptionsProvider:
+
+    @staticmethod
+    def get_options(object):
+        if type(object) == AptEntry:
+            return [
+                ("Extract", AptOptionHandler.extract_cb),
+                ("Replace texture", AptOptionHandler.import_replacement),
+            ]
+        return []
 
 
 if __name__ == '__main__':
