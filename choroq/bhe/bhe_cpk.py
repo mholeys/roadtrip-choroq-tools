@@ -4,13 +4,11 @@ from math import ceil
 import choroq.read_utils as U
 from choroq.bhe.aptexture import APTexture
 from choroq.bhe.hpd_model import HPDModel
+from choroq.bhe.lzs_data import LZSContainer
 from choroq.bhe.mpd_model import MPDModel
 from choroq.bhe.pbl_model import PBLModel
 from choroq.bhe.mpc_model import MPCModel
 from choroq.bhe.toc_0318 import Toc0318
-
-
-from lzsslib.decompress import LzssDecompressor
 
 
 
@@ -41,18 +39,15 @@ class CPK:
         # Need to handle LZS compression
         # Then read as another type
         if self.subfile_types[i] == b'LZS\x00':
-            file.seek(position)
-            U.readLong(file)
-            size_maybe = U.readLong(file)
-            sec_count = int(size_maybe / 2048)
-            string_in = file.read(sec_count * 2048)
-            # LZS decompression
-            #result = lzstring._decompress(len(string_in), 255, lambda index: string_in[index])
-            result = lzstring.decompressFromUint8Array(string_in)
-            print(result)
-            print(result[0:5])
-
-        if self.subfile_types[i] == b'PBL\x00':
+            # Workout how much data we can read
+            if index < len(self.entry_positions) - 1:
+                length = self.entry_positions[index + 1] - position
+            else:
+                length = (self.eof_position * 2048) - position
+            # Read in the compressed format
+            lzs = LZSContainer.read_lzs(read_from, position, length)
+            self.subfiles[i] = ("LZS", lzs)
+        elif self.subfile_types[i] == b'PBL\x00':
             # Model format
             pbl_data = PBLModel.read_pbl(read_from, position)
             self.subfiles[i] = ("PBL", pbl_data)

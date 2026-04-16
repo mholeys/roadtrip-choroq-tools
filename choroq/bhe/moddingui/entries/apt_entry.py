@@ -16,6 +16,8 @@ class AptEntry(GameEntry):
         self.subfile_index = subfile_index
         self.entry_position = entry_position
 
+        self.can_write = False
+
     def descriptor(self) -> str:
         text = "AP texture\n"
         text += f"Format {self.ap_texture.colour_format}\n"
@@ -48,7 +50,7 @@ class AptEntry(GameEntry):
     def is_supported(self):
         # Returns true if the code can handle this format properly (no artifacts)
         #return self.ap_texture.colour_format
-        return False
+        return self.can_write
 
     def extract(self, iso, options, destination) -> bool:
         self.ap_texture.write_texture_to_png(f"{destination}/{self.ap_texture.name}.png")

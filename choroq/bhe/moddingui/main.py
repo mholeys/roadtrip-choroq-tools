@@ -307,6 +307,7 @@ class ModdingUi(customtkinter.CTk):
                         record = facade.get_record(path)
 
                         cpk_files_in_iso[filename] = (dirname, path, record)
+        image_count = 0
 
         for cpk_filename in cpk_files_in_iso:
             dirname, path, record = cpk_files_in_iso[cpk_filename]
@@ -335,7 +336,23 @@ class ModdingUi(customtkinter.CTk):
                     textures = cpk.subfiles[index][1]
                     texture_entries = []
                     for texture_index, texture in enumerate(textures):
+                        image_count += 1
+                        #if "kanban" in texture.name or "ban" in texture.name or "kan" in texture.name:
                         texture_entries.append(AptEntry(texture, dirname, path, self.game_version, self.game_variant, record, sub_type, texture_index, texture.data_offset))
+                    subfile.children = texture_entries
+
+                if sub_type == b"LZS\0":
+                    # Has a file within, which has been compressed
+                    # needs to be read/parsed first so do that
+                    cpk.read_subfile(cpk_data, index)
+                    lzs = cpk.subfiles[index][1]
+                    textures = lzs.contained_file
+                    texture_entries = []
+                    for texture_index, texture in enumerate(textures):
+                        entry = AptEntry(texture, dirname, path, self.game_version, self.game_variant, record, sub_type, texture_index, texture.data_offset)
+                        entry.can_write = False
+                        texture_entries.append(entry)
+                        image_count += 1
                     subfile.children = texture_entries
 
                 # TODO: proper filter, and refresh?
@@ -347,6 +364,7 @@ class ModdingUi(customtkinter.CTk):
             # Skip any cpks that we do not have any files that match the filter
             if len(subfiles) > 0:
                 self.entries[(cpk_filename, cpk_sector)] = subfiles
+        print(f"Total image count is {image_count}")
 
 
     def on_close(self):
@@ -552,10 +570,16 @@ class OptionsProvider:
     @staticmethod
     def get_options(object):
         if type(object) == AptEntry:
-            return [
-                ("Extract", AptOptionHandler.extract_cb),
-                ("Replace texture", AptOptionHandler.import_replacement),
-            ]
+            if object.is_supported():
+                return [
+                    ("Extract", AptOptionHandler.extract_cb),
+                    ("Replace texture", AptOptionHandler.import_replacement),
+                ]
+            else:
+                # Probably contained in LZS, so cannot replace for now
+                return [
+                    ("Extract", AptOptionHandler.extract_cb),
+                ]
         return []
 
 
