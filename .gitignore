@@ -3,6 +3,9 @@ tests/
 analysis/
 *.carlist
 create_unity_list.py
+.DS_Store
+.build/
+dist/
 
 # pixi environments
 .pixi/*
