@@ -1,9 +1,12 @@
 # Choro-Q BHE Swiftification Plan
 
-This document captures the first native macOS direction for the BHE tool. The
-goal is not to replace the Python reverse-engineering work. The goal is to put a
-Mac-native interface around it, make destructive operations safer, and give the
-asset workflow the structure users expect from a desktop utility.
+This document tracks the engineering direction for turning the BHE Python
+tooling into a native Mac app. The interaction design source of truth is now
+[MAC_APP_INTERACTION_DESIGN.md](MAC_APP_INTERACTION_DESIGN.md).
+
+The goal is not to replace the Python reverse-engineering work. The goal is to
+wrap it in a Mac-native interface that makes ISO browsing, texture export,
+validation, and patched-copy creation safer and easier to understand.
 
 ## Product Summary
 
@@ -20,7 +23,7 @@ The BHE workflow opens a PS2 ISO, identifies the game through `SYSTEM.CNF`,
 walks `DATA/*.CPK` containers, parses supported subfiles, previews APT textures,
 extracts textures as PNG, and replaces compatible texture entries.
 
-## Current Architecture
+## Existing Python Foundation
 
 The current implementation is Python-first:
 
@@ -38,7 +41,7 @@ warnings, file dialogs, metadata rendering, and replacement writes. This keeps
 the implementation compact, but it also makes UX improvements riskier because
 UI and mutation logic are tightly coupled.
 
-## Current GUI Pathway
+## Existing GUI Pathway
 
 If the current pre-release works as intended, the release path is:
 
@@ -48,9 +51,10 @@ If the current pre-release works as intended, the release path is:
 3. Package the Python GUI with PyInstaller / auto-py-to-exe.
 4. Ask users to navigate through a tree view and use context menus for actions.
 
-This is a valid pathway for a technical pre-release, but it hides important
-actions, gives little batch support, and makes in-place ISO mutation easy to do
-by accident.
+This remains valuable as a compact technical tool, but the native Mac app should
+not inherit its interaction model unchanged. The current GUI hides important
+actions in contextual menus, gives little batch support, and makes direct ISO
+mutation too easy to reach.
 
 ## Native macOS Direction
 
@@ -62,12 +66,29 @@ Recommended layers:
 
 1. SwiftUI app: windows, navigation, tables, preview, validation, commands, and
    user-facing state.
-2. Swift backend client: typed JSON interface and process execution.
-3. Python JSON bridge: command-line adapter that calls existing BHE parser code.
+2. Swift command client: typed JSON interface and process execution.
+3. Python JSON command adapter that calls existing BHE parser code.
 4. Existing Python parsers: CPK, APT, LZS, model, text, and replacement logic.
 
 This separation lets the Mac app iterate on UX without rewriting every binary
 format parser.
+
+## Product Interaction Direction
+
+The Mac app should be a Choro-Q archive/modding workbench:
+
+- Open ISO and identify the game/region.
+- Browse CPK containers in a native sidebar.
+- Inspect entries in a searchable `Table`.
+- Preview textures in an inspector with checkerboard/black/white backgrounds.
+- Export selected textures or container texture batches.
+- Validate replacement PNGs before any write.
+- Create patched ISO copies by default.
+- Keep an operation log with clear errors and recovery suggestions.
+
+For detailed toolbar, menu, context menu, error, progress, accessibility, visual
+theme, and JSON-contract decisions, see
+[MAC_APP_INTERACTION_DESIGN.md](MAC_APP_INTERACTION_DESIGN.md).
 
 ## MVP Scope
 
@@ -83,7 +104,8 @@ single-texture replacement:
 - Extract a selected texture to PNG.
 - Validate a replacement PNG before writing.
 - Write replacements to a patched ISO copy by default.
-- Keep context menus, but expose primary actions in the toolbar and detail pane.
+- Keep context menus, but expose primary actions in the toolbar, menu bar, and
+  inspector.
 
 Out of scope for the first SwiftUI pass:
 
@@ -94,15 +116,16 @@ Out of scope for the first SwiftUI pass:
 
 ## JSON Boundary
 
-The Swift app should call a Python bridge that returns structured JSON. The
-initial commands can be small:
+The Swift app should call a Python command entrypoint that returns structured
+JSON. Long-running commands should emit NDJSON progress events. The initial
+commands can be small:
 
 ```text
 bhe-json scan-iso <iso-path>
 bhe-json preview-texture <iso-path> <entry-id> --output <png-path>
 bhe-json extract-texture <iso-path> <entry-id> --output <folder>
 bhe-json validate-replacement <iso-path> <entry-id> <png-path>
-bhe-json replace-texture <iso-path> <entry-id> <png-path> --output-copy <iso-path>
+bhe-json replace-texture-copy <iso-path> <entry-id> <png-path> --output-copy <iso-path>
 ```
 
 Example scan response:
@@ -138,35 +161,22 @@ Example scan response:
 }
 ```
 
-The Swift app should treat this contract as stable even while the Python
-internals continue changing.
-
-## UX Principles
-
-Follow macOS conventions instead of styling the app like a custom game tool:
-
-- Use `NavigationSplitView` for container navigation and detail inspection.
-- Use `Table` for dense sortable asset metadata.
-- Use native `fileImporter` and save panels for ISO, PNG, and output selection.
-- Use toolbar buttons, menu commands, keyboard shortcuts, and context menus.
-- Use semantic colors and system materials so Light Mode, Dark Mode, and
-  increased contrast work automatically.
-- Use SF Symbols with text labels when the action is not universally obvious.
-- Do not communicate support state by color alone; pair status with symbols and
-  labels.
-- Do not require right-click for essential actions.
-- Do not mutate the original ISO by default.
+The Swift app should treat this contract as stable even while Python internals
+continue changing. Python output consumed by Swift must be structured JSON, not
+console logs.
 
 ## Roadmap
 
-### Phase 1: Native Shell
+### Phase 1: Native Shell And Design Cleanup
 
 - SwiftPM macOS app target.
-- Mock backend client.
-- Sidebar, table, detail pane, checkerboard preview, toolbar actions.
-- Written JSON contract for the Python bridge.
+- Sidebar, table, inspector, checkerboard preview surface, toolbar actions, and
+  command menus.
+- Empty Open ISO state.
+- No visible sample/mock behavior.
+- Written JSON contract for the Python command boundary.
 
-### Phase 2: Python Bridge
+### Phase 2: Python Command Boundary
 
 - Add `bhe-json` Python entrypoint.
 - Implement `scan-iso` from existing CPK/APT code.
@@ -186,7 +196,7 @@ Follow macOS conventions instead of styling the app like a custom game tool:
 - Search by texture name, format, dimensions, and CPK.
 - Duplicate-name warnings.
 - Compressed-entry visibility and diagnostics.
-- Model/text extraction surfaces when the backend is ready.
+- Model/text extraction surfaces when the command boundary is ready.
 
 ## Open Questions
 

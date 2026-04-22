@@ -6,6 +6,13 @@ create_unity_list.py
 .DS_Store
 .build/
 dist/
+__pycache__/
+*.pyc
+
+# Local disc images are development fixtures only. Do not commit game media.
+*.iso
+*.bin
+*.cue
 
 # pixi environments
 .pixi/*
