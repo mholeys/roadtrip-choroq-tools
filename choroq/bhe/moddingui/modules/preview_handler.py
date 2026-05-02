@@ -19,7 +19,7 @@ class APTPreviewFrame(CTkFrame):
         self.texture = None
         self.imageTk = None
 
-    def set_image(self, texture : APTexture):
+    def set_image(self, texture: APTexture):
         self.texture = texture
         if texture is not None:
             image = self.texture.get_image()

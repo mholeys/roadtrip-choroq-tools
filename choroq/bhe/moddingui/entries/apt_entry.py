@@ -8,7 +8,7 @@ from choroq.bhe.moddingui.entries.game_entry import GameEntry
 
 class AptEntry(GameEntry):
 
-    def __init__(self, ap_texture : APTexture, folder, path, game_version: GameVersion, game_variant: str, record: DirectoryRecord, subtype: bytes, subfile_index, entry_position):
+    def __init__(self, ap_texture: APTexture, folder, path, game_version: GameVersion, game_variant: str, record: DirectoryRecord, subtype: bytes, subfile_index, entry_position):
         super().__init__(folder, path, game_version, game_variant, record)
         self.ap_texture = ap_texture
 
@@ -16,7 +16,7 @@ class AptEntry(GameEntry):
         self.subfile_index = subfile_index
         self.entry_position = entry_position
 
-        self.can_write = False
+        self.can_write = True
 
     def descriptor(self) -> str:
         text = "AP texture\n"
@@ -24,9 +24,13 @@ class AptEntry(GameEntry):
         text += f"Dimensions (W x H) {self.ap_texture.width}x{self.ap_texture.height}\n"
         text += f"Size (bytes) {self.ap_texture.total_size}\n"
 
+        text += f"\nTexture started at {self.ap_texture.offset}\n"
+        text += f"Have {len(self.ap_texture.data)} bytes for data\n"
+
         has_palette = self.ap_texture.palette_size > 0
         text += f"Palette? {has_palette}\n"
         if has_palette:
+            text += f"Have {len(self.ap_texture.palette)} colours for clut\n"
             text += f"Palette size: {self.ap_texture.palette_size} colours\n"
 
         return text
@@ -49,7 +53,7 @@ class AptEntry(GameEntry):
 
     def is_supported(self):
         # Returns true if the code can handle this format properly (no artifacts)
-        #return self.ap_texture.colour_format
+        #return
         return self.can_write
 
     def extract(self, iso, options, destination) -> bool:

@@ -19,7 +19,9 @@ from choroq.bhe.moddingui.common import UiConfig, GameVersion, PS2Cnf
 from choroq.bhe.moddingui.entries.apt_entry import AptEntry
 from choroq.bhe.moddingui.entries.cpk_subfile_entry import CpkSubfileEntry
 from choroq.bhe.moddingui.entries.game_entry import GameEntry
+from choroq.bhe.moddingui.entries.pbl_entry import PblEntry
 from choroq.bhe.moddingui.modules.apt_option_handler import AptOptionHandler
+from choroq.bhe.moddingui.modules.pbl_option_handler import PblOptionHandler
 from choroq.bhe.moddingui.modules.preview_handler import APTPreviewFrame
 
 from modules.message_box import MessageBox
@@ -319,6 +321,7 @@ class ModdingUi(customtkinter.CTk):
             print(cpk.entry_count)
 
             subfiles = []
+
             for index, sub_type in enumerate(cpk.subfile_types):
                 print(sub_type)
                 entry_position = cpk.entry_positions[index]
@@ -341,6 +344,15 @@ class ModdingUi(customtkinter.CTk):
                         texture_entries.append(AptEntry(texture, dirname, path, self.game_version, self.game_variant, record, sub_type, texture_index, texture.data_offset))
                     subfile.children = texture_entries
 
+                if sub_type == b"PBL\0":
+                    # needs to be read/parsed first so do that
+                    cpk.read_subfile(cpk_data, index)
+                    pbls = cpk.subfiles[index][1]
+                    pbl_entries = []
+                    for pbl_index, pbl in enumerate(pbls):
+                        pbl_entries.append(PblEntry(pbl, dirname, path, self.game_version, self.game_variant, record, sub_type, pbl_index, pbl.offset))
+                    subfile.children = pbl_entries
+
                 if sub_type == b"LZS\0":
                     # Has a file within, which has been compressed
                     # needs to be read/parsed first so do that
@@ -356,7 +368,7 @@ class ModdingUi(customtkinter.CTk):
                     subfile.children = texture_entries
 
                 # TODO: proper filter, and refresh?
-                if sub_type not in [b"APT\0", b"LZS\0"]:
+                if sub_type not in [b"PBL\0", b"APT\0", b"LZS\0"]:
                     continue
 
                 subfiles.append(subfile)
@@ -437,7 +449,8 @@ class FileInfoFrame(CTkFrame):
         self.main_text.insert("end", entry.descriptor() + "\n")
 
         if type(entry) == AptEntry:
-            self.preview = APTPreviewFrame(self)
+            if self.preview is None:
+                self.preview = APTPreviewFrame(self)
             self.preview.grid(row=3, column=0, padx=5, pady=5, sticky="nesw")
             self.preview.set_image(entry.ap_texture)
         else:
@@ -580,6 +593,10 @@ class OptionsProvider:
                 return [
                     ("Extract", AptOptionHandler.extract_cb),
                 ]
+        if type(object) == PblEntry:
+            return [
+                ("Extract", PblOptionHandler.extract_cb),
+            ]
         return []
 
 

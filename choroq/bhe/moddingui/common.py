@@ -32,16 +32,19 @@ class PS2Cnf:
 
         lines = value.split('\r\n')
         for line in lines:
+            split = " = "
+            if split not in line:
+                split = "="
             if line.startswith("BOOT2") and self.elf_path is None:
-                self.elf_path = line[line.index(" = ")+3:-2]
+                self.elf_path = line[line.index(split)+len(split):-2]
                 self.elf_name = self.elf_path[self.elf_path.rfind("\\")+1:]
                 self.elf_folder = self.elf_path[0:self.elf_path.rfind("\\")+1]
                 found += 1
             elif line.startswith("VER") and self.version is None:
-                self.version = line[line.index(" = ")+3:]
+                self.version = line[line.index(split) + len(split):]
                 found += 1
             elif line.startswith("VMODE") and self.video_mode is None:
-                self.video_mode = line[line.index(" = ")+3:]
+                self.video_mode = line[line.index(split) + len(split):]
                 found += 1
 
         if found == 3:

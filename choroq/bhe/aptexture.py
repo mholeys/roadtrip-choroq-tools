@@ -27,6 +27,9 @@ class APTexture:
         # Position where texture data starts
         self.data_offset = 0
 
+        # this should probably be split into a subclass
+        self.rct = None
+
     def set_palette(self, data, palette_size=-1):
         if palette_size != -1:
             self.palette_size = palette_size
@@ -122,8 +125,6 @@ class APTexture:
                 # fout.write(a.to_bytes(1, 'little'))
                 fout.write(b'\x00')
 
-
-
     def write_palette_to_png(self, path):
         if self.palette == [] or self.palette is None:
             return
@@ -143,6 +144,8 @@ class APTexture:
         image.save(path, "PNG")
 
     def get_image(self, use_palette=True):
+        if self.rct is not None:
+            return self.rct
         if self.data == [] or self.data is None:
             print("Texture has no data")
             return None
@@ -233,12 +236,22 @@ class APTexture:
                 except Exception as e2:
                     print("Cannot parse name, other error occurred")
                     raise e2
+            if texture_name == "RCT":
+                # Decode? bits of RCT
+                file.seek(-12, os.SEEK_CUR)
+                rct_start_x = U.readShort(file)
+                rct_start_y = U.readShort(file)
+                rct_width = U.readShort(file)
+                rct_height = U.readShort(file)
+                rct_4 = U.readShort(file)
+                rct_5 = U.readShort(file)
+                print(f"RCT texture: start: {rct_start_x}, {rct_start_y}; size: {rct_width}, {rct_height}, unknown: 4:{rct_4} 6:{rct_5}")
             if "." in texture_name:
                 # Remove extension
                 print(f"Found APT with name extension: {texture_name}")
                 ext_start = texture_name.index(".")
                 ext = texture_name[ext_start:]
-                texture_name = texture_name[:ext_start]
+                #texture_name = texture_name[:ext_start]
 
             if APTexture.PRINT_DEBUG:
                 print(f"Texture header: {texture_name}, {val_a}, {val_b}, {size}, {zeros:x}")
@@ -247,93 +260,147 @@ class APTexture:
             #        print("Found non zero value in texture table data")
             #    if APTexture.STOP_ON_NEW:
             #        exit()
-            textures.append(APTexture(texture_name, val_a, val_b, size, texture_offset))
+            new_texture = APTexture(texture_name, val_a, val_b, size, texture_offset)
+
+            if texture_name == "RCT":
+                new_texture.rct_start_x = rct_start_x
+                new_texture.rct_start_y = rct_start_y
+                new_texture.rct_width = rct_width
+                new_texture.rct_height = rct_height
+                new_texture.rct_4 = rct_4  # seen 0, 9 and 8
+                new_texture.rct_5 = rct_5  # seen 0 and 17
+
+            textures.append(new_texture)
+
+        def create_rct(reference_image, index):
+            try:
+                image = reference_image.get_image()
+                rct = image.crop((
+                    textures[index].rct_start_x, textures[index].rct_start_y,
+                    textures[index].rct_start_x + textures[index].rct_width,
+                    textures[index].rct_start_y + textures[index].rct_height
+                ))
+                textures[index].rct = rct
+                sliced_data = rct.tobytes('raw')
+                textures[index].set_data(textures[index].rct_width, textures[index].rct_height, sliced_data, 32)
+                textures[index].set_palette(None, 0)
+                textures[index].can_write = False
+            except Exception as e:
+                print(f"FAILED to create rct {textures[index].name} from {reference_image.name}")
 
         # After the header table, the texture data starts
+        last_valid = None
+        rct_in_progress = []
         for i in range(texture_count):
             if APTexture.PRINT_DEBUG:
                 print(f"pos: {file.tell()} t: {i}")
             texture_start = file.tell()
             # Read texture descriptor
-            width = U.readLong(file)
-            height = U.readLong(file)
-            colour_format = U.readLong(file)  # Might just be bytes per pixel (of texture, not palette)
-            palette_size = U.readLong(file)  # Number of colours in palette
-
-            if APTexture.PRINT_DEBUG:
-                print(f"{width:x} {height:x} {colour_format:x} {palette_size:x}")
-
-            if width == 0 or height == 0 or width > 2048 or height > 2048:
-                print(f"Cannot decode texture at @{file.tell()} size is {width}, {height}?")
-                return textures
-
-            if palette_size > 2048:
-                print(f"Cannot decode texture at @{file.tell()} size is {width}, {height}, palette issues {palette_size}?")
-                return textures
-
             max_length = texture_start + textures[i].total_size
+            if textures[i].name == "RCT" and textures[i].total_size < 2128:  # based on 64x64 texture, might be save to have this at 0
+                # Theory
+                # ReCTangle (slice of texture)
+                # so reuse previous data but with some adjustments?
+                if last_valid is not None:
+                    create_rct(textures[last_valid], i)
+                else:
+                    print("Visited RCT with no known image! probably means other (unknown) values used")
+                    # Add this to a list, and when we hit a texture with data, process it
+                    rct_in_progress.append(i)
+                    continue
+            else:
+                width = U.readLong(file)
+                height = U.readLong(file)
+                colour_format = U.readLong(file)  # Might just be bytes per pixel (of texture, not palette)
+                palette_size = U.readLong(file)  # Number of colours in palette
 
-            # Read palette in
-            palette = []
-            for c in range(palette_size):
-                if file.tell() > max_length:
-                    break
-                r = U.readByte(file)
-                g = U.readByte(file)
-                b = U.readByte(file)
-                a = U.readByte(file)
-                if a == 0x80:
-                    a = 255
-                palette.append((r, g, b, a))
-            # palette = file.read(palette_size * 4)
-            if APTexture.PRINT_DEBUG:
-                print(f"pos: {file.tell()} t: {i}")
+                # Also checking if the max_length is reasonable, 1 bit per pixel min
+                if textures[i].total_size < int(width * height / 8) + palette_size * 4 + 16:
+                    print(f"FAILED: total_size must be wrong, as even at 1bit pp texture would be this size {textures[i].total_size} vs {int(width * height * (colour_format/8)) + palette_size * 4 + 16}")
+                    print(f"info: int({width} * {height} * ({colour_format}/8)) + {palette_size} * 4 + 16)")
+                    # as we know it's wrong, might as well calculate a value
+                    textures[i].total_size = int(width * height * (colour_format/8)) + palette_size * 4 + 16
 
-            # Check before reading, just in case
-            if file.tell() > max_length:
-                # Check if we are past the limit for this texture, seems to occur, which means
-                # the data given is not valid
-                # unsure why this happens, as the values I understand seem to still be right
-                file.seek(max_length, os.SEEK_SET)
-                continue
+                if APTexture.PRINT_DEBUG:
+                    print(f"{width:x} {height:x} {colour_format:x} {palette_size:x}")
 
-            texture_data = []
-            # Read texture in
-            for c in range(int(width * height * (colour_format/8))):
+                if width == 0 or height == 0 or width > 2048 or height > 2048:
+                    print(f"FAILED Cannot decode texture at @{file.tell()} size is {width}, {height}?")
+                    return textures
+
+                if palette_size > 2048:
+                    print(f"FAILED Cannot decode texture at @{file.tell()} size is {width}, {height}, palette issues {palette_size}?")
+                    return textures
+
+                max_length = texture_start + textures[i].total_size
+
+                # Read palette in
+                palette = []
+                for c in range(palette_size):
+                    if file.tell() > max_length:
+                        break
+                    r = U.readByte(file)
+                    g = U.readByte(file)
+                    b = U.readByte(file)
+                    a = U.readByte(file)
+                    if a == 0x80:
+                        a = 255
+                    palette.append((r, g, b, a))
+                # palette = file.read(palette_size * 4)
+                if APTexture.PRINT_DEBUG:
+                    print(f"pos: {file.tell()} t: {i}")
+
+                # Check before reading, just in case.
                 if file.tell() > max_length:
                     # Check if we are past the limit for this texture, seems to occur, which means
                     # the data given is not valid
                     # unsure why this happens, as the values I understand seem to still be right
                     file.seek(max_length, os.SEEK_SET)
-                    break
-                if colour_format == 4:
-                    val = U.readByte(file)
-                    i1 = val & 0xF
-                    i2 = (val >> 4) & 0xF
-                    texture_data.append(i1)
-                    texture_data.append(i2)
-                elif colour_format == 8:
-                    val = U.readByte(file)
-                    texture_data.append(val)
-                elif colour_format == 24:
-                    val = U.readByte(file)
-                    texture_data.append(val)
-                elif colour_format == 32:
-                    val = U.readByte(file)
-                    texture_data.append(val)
-                else:
-                    print(f"new colour format found @ {file.tell()} value is: {colour_format}")
-                    if APTexture.STOP_ON_NEW:
-                        exit()
-                    return
+                    continue
 
-            # Might need some checks, to test if we were past max_length
+                texture_data = []
+                # Read texture in
+                for c in range(int(width * height * (colour_format/8))):
+                    if file.tell() > max_length:
+                        # Check if we are past the limit for this texture, seems to occur, which means
+                        # the data given is not valid
+                        # unsure why this happens, as the values I understand seem to still be right
+                        file.seek(max_length, os.SEEK_SET)
+                        break
+                    if colour_format == 4:
+                        val = U.readByte(file)
+                        i1 = val & 0xF
+                        i2 = (val >> 4) & 0xF
+                        texture_data.append(i1)
+                        texture_data.append(i2)
+                    elif colour_format == 8:
+                        val = U.readByte(file)
+                        texture_data.append(val)
+                    elif colour_format == 24:
+                        val = U.readByte(file)
+                        texture_data.append(val)
+                    elif colour_format == 32:
+                        val = U.readByte(file)
+                        texture_data.append(val)
+                    else:
+                        print(f"new colour format found @ {file.tell()} value is: {colour_format}")
+                        if APTexture.STOP_ON_NEW:
+                            exit()
+                        return
 
-            texture_data = bytes(texture_data)
+                # Might need some checks, to test if we were past max_length
 
-            textures[i].set_data(width, height, texture_data, colour_format)
-            textures[i].set_palette(palette, palette_size)
-            textures[i].data_offset = texture_start
+                texture_data = bytes(texture_data)
+
+                textures[i].set_data(width, height, texture_data, colour_format)
+                textures[i].set_palette(palette, palette_size)
+                textures[i].data_offset = texture_start
+                last_valid = i
+
+                if len(rct_in_progress) > 0:
+                    for rct in rct_in_progress:
+                        create_rct(textures[i], rct)
+                    rct_in_progress = []
 
         return textures
 

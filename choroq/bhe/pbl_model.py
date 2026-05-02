@@ -8,7 +8,7 @@ class PBLModel(BHEMesh):
     STOP_ON_NEW = False
     PRINT_DEBUG = False
 
-    def __init__(self, texture_references, first_section, vert_count, vertices, normal_count, normals, uv_count, uvs, colour_count, colours, faces):
+    def __init__(self, texture_references, first_section, vert_count, vertices, normal_count, normals, uv_count, uvs, colour_count, colours, faces, offset, size):
         super().__init__()
         self.texture_references = texture_references
         self.first_section = first_section
@@ -26,6 +26,8 @@ class PBLModel(BHEMesh):
         self.max_normal = len(normals)
         self.max_uv = len(uvs)
         self.max_colour = len(colours)
+        self.offset = offset
+        self.size = size
 
     @staticmethod
     def read_pbl(file, offset):
@@ -126,7 +128,9 @@ class PBLModel(BHEMesh):
 
             faces, other_faces = BHEMesh.read_faces(file, texture_references)
 
-            pbls.append(PBLModel(texture_references, floats_first_section, sizes[1], verts, sizes[2], normals, sizes[3], uvs, sizes[4], colours, [faces, other_faces]))
+            size = file.tell() - 0
+
+            pbls.append(PBLModel(texture_references, floats_first_section, sizes[1], verts, sizes[2], normals, sizes[3], uvs, sizes[4], colours, [faces, other_faces], o, size))
 
         return pbls
 
