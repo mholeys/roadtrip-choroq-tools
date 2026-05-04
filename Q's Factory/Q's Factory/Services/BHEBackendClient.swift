@@ -12,6 +12,10 @@ protocol BHEBackendClient {
     func previewTexture(inDiscRoot rootURL: URL, entryID: BHEEntry.ID, outputURL: URL) async throws -> BHETexturePreviewResult
     func extractTexture(from isoURL: URL, entryID: BHEEntry.ID, outputURL: URL) async throws -> BHETextureExtractionResult
     func extractTexture(fromDiscRoot rootURL: URL, entryID: BHEEntry.ID, outputURL: URL) async throws -> BHETextureExtractionResult
+    func extractEGameCar(from sourceURL: URL, entryID: BHEEntry.ID, outputFolderURL: URL) async throws -> BHEExportManifest
+    func previewEGameCar(from sourceURL: URL, entryID: BHEEntry.ID, outputFolderURL: URL) async throws -> BHEExportManifest
+    func extractEGameShopTextures(from sourceURL: URL, entryID: BHEEntry.ID, outputFolderURL: URL) async throws -> BHEExportManifest
+    func reportMissingGUIAssets(from sourceURL: URL, representedEntryIDs: [BHEEntry.ID]) async throws -> BHEMissingGUIReport
 }
 
 enum BHEBackendError: LocalizedError {
@@ -56,10 +60,21 @@ struct BHEBackendHealth: Decodable, Hashable {
     let pythonExecutable: String
     let pythonVersion: String
     let dependencies: [BHEBackendDependency]
+    let bheReady: Bool?
+    let missingRequiredDependencyDetails: [BHEBackendDependency]?
     let bchunk: BHEBackendToolStatus
 
     var missingRequiredDependencies: [BHEBackendDependency] {
-        dependencies.filter { $0.requiredForBHE && !$0.available }
+        missingRequiredDependencyDetails ?? dependencies.filter { $0.requiredForBHE && !$0.available }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case pythonExecutable
+        case pythonVersion
+        case dependencies
+        case bheReady
+        case missingRequiredDependencyDetails = "missingRequiredDependencies"
+        case bchunk
     }
 }
 
@@ -238,6 +253,65 @@ struct ProcessBHEBackendClient: BHEBackendClient {
         }
     }
 
+    func extractEGameCar(from sourceURL: URL, entryID: BHEEntry.ID, outputFolderURL: URL) async throws -> BHEExportManifest {
+        let data = try await runPythonCommand([
+            "extract-egame-car",
+            sourceURL.path,
+            entryID,
+            "--output-folder",
+            outputFolderURL.path
+        ])
+        do {
+            return try decodeEnvelope(BHEExportManifest.self, from: data)
+        } catch {
+            throw mapDecodeError(error)
+        }
+    }
+
+    func previewEGameCar(from sourceURL: URL, entryID: BHEEntry.ID, outputFolderURL: URL) async throws -> BHEExportManifest {
+        let data = try await runPythonCommand([
+            "preview-egame-car",
+            sourceURL.path,
+            entryID,
+            "--output-folder",
+            outputFolderURL.path
+        ])
+        do {
+            return try decodeEnvelope(BHEExportManifest.self, from: data)
+        } catch {
+            throw mapDecodeError(error)
+        }
+    }
+
+    func extractEGameShopTextures(from sourceURL: URL, entryID: BHEEntry.ID, outputFolderURL: URL) async throws -> BHEExportManifest {
+        let data = try await runPythonCommand([
+            "extract-egame-shop-textures",
+            sourceURL.path,
+            entryID,
+            "--output-folder",
+            outputFolderURL.path
+        ])
+        do {
+            return try decodeEnvelope(BHEExportManifest.self, from: data)
+        } catch {
+            throw mapDecodeError(error)
+        }
+    }
+
+    func reportMissingGUIAssets(from sourceURL: URL, representedEntryIDs: [BHEEntry.ID]) async throws -> BHEMissingGUIReport {
+        let encodedIDs = (try? String(data: JSONEncoder().encode(representedEntryIDs), encoding: .utf8)) ?? "[]"
+        let data = try await runPythonCommand([
+            "report-missing-gui-assets",
+            sourceURL.path,
+            encodedIDs
+        ])
+        do {
+            return try decodeEnvelope(BHEMissingGUIReport.self, from: data)
+        } catch {
+            throw mapDecodeError(error)
+        }
+    }
+
     private func runPythonCommand(_ arguments: [String]) async throws -> Data {
         guard let entrypoint = resolvedEntrypoint else {
             throw BHEBackendError.commandUnavailable("Expected backend/choroq/bhe/bhe_json.py in the app bundle resources.")
@@ -248,12 +322,13 @@ struct ProcessBHEBackendClient: BHEBackendClient {
         let stderrPipe = Pipe()
         let stdoutBuffer = ProcessOutputBuffer()
         let stderrBuffer = ProcessOutputBuffer()
-        let resolvedPythonExecutable = resolvedPythonExecutable
+        let resolvedPythonExecutable = resolvedPythonExecutable(for: entrypoint)
         let useEnvironmentPython = resolvedPythonExecutable == nil
 
         process.executableURL = resolvedPythonExecutable ?? URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = (useEnvironmentPython ? ["python3"] : []) + [entrypoint.path] + arguments
         process.currentDirectoryURL = repositoryRoot(for: entrypoint)
+        process.environment = backendEnvironment(for: entrypoint)
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
 
@@ -321,9 +396,6 @@ struct ProcessBHEBackendClient: BHEBackendClient {
     private var resolvedEntrypoint: URL? {
         let bundledEntrypoint = Bundle.main.resourceURL?
             .appendingPathComponent("backend/choroq/bhe/bhe_json.py")
-        if let bundledEntrypoint, FileManager.default.fileExists(atPath: bundledEntrypoint.path) {
-            return bundledEntrypoint
-        }
 
         if let commandEntrypoint, FileManager.default.fileExists(atPath: commandEntrypoint.path) {
             return commandEntrypoint
@@ -337,8 +409,26 @@ struct ProcessBHEBackendClient: BHEBackendClient {
             }
         }
 
-        guard !isRunningFromAppBundle else {
-            return nil
+        let appBundleURL = Bundle.main.bundleURL
+        let appSupportBackend = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first?
+            .appendingPathComponent("Q's Factory/Backend/backend/choroq/bhe/bhe_json.py")
+        let siblingBackend = appBundleURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("backend/choroq/bhe/bhe_json.py")
+        let namedSiblingBackend = appBundleURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("Q's Factory Backend/backend/choroq/bhe/bhe_json.py")
+
+        let appCandidates = [
+            appSupportBackend,
+            siblingBackend,
+            namedSiblingBackend,
+            bundledEntrypoint
+        ].compactMap { $0 }
+
+        if isRunningFromAppBundle {
+            return appCandidates.first { FileManager.default.fileExists(atPath: $0.path) }
         }
 
         let currentDirectory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -348,12 +438,11 @@ struct ProcessBHEBackendClient: BHEBackendClient {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
 
-        let candidates = [
-            bundledEntrypoint,
+        let candidates = appCandidates + [
             currentDirectory.appendingPathComponent("choroq/bhe/bhe_json.py"),
             currentDirectory.deletingLastPathComponent().appendingPathComponent("choroq/bhe/bhe_json.py"),
             sourceCheckoutRoot.appendingPathComponent("choroq/bhe/bhe_json.py")
-        ].compactMap { $0 }
+        ]
 
         return candidates.first { FileManager.default.fileExists(atPath: $0.path) }
     }
@@ -362,13 +451,31 @@ struct ProcessBHEBackendClient: BHEBackendClient {
         Bundle.main.bundleURL.pathExtension == "app"
     }
 
-    private var resolvedPythonExecutable: URL? {
+    private func resolvedPythonExecutable(for entrypoint: URL) -> URL? {
         if let pythonExecutable {
             return pythonExecutable
         }
         guard let environmentPath = ProcessInfo.processInfo.environment["CHOROQ_BHE_PYTHON"],
               !environmentPath.isEmpty else {
-            return nil
+            let backendRoot = repositoryRoot(for: entrypoint)
+            let recordedPythonURL = backendRoot
+                .appendingPathComponent("vendor")
+                .appendingPathComponent(".python-executable")
+            if let recordedPython = try? String(contentsOf: recordedPythonURL, encoding: .utf8)
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+               !recordedPython.isEmpty,
+               FileManager.default.isExecutableFile(atPath: recordedPython) {
+                return URL(fileURLWithPath: recordedPython)
+            }
+
+            let candidates = [
+                "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3",
+                "/opt/homebrew/bin/python3",
+                "/usr/local/bin/python3"
+            ]
+            return candidates
+                .first { FileManager.default.isExecutableFile(atPath: $0) }
+                .map { URL(fileURLWithPath: $0) }
         }
         return URL(fileURLWithPath: environmentPath)
     }
@@ -378,6 +485,18 @@ struct ProcessBHEBackendClient: BHEBackendClient {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
+    }
+
+    private func backendEnvironment(for entrypoint: URL) -> [String: String] {
+        var environment = ProcessInfo.processInfo.environment
+        let backendRoot = repositoryRoot(for: entrypoint)
+        let vendorPath = backendRoot.appendingPathComponent("vendor").path
+        let existingPythonPath = environment["PYTHONPATH"].flatMap { $0.isEmpty ? nil : $0 }
+        environment["PYTHONPATH"] = [vendorPath, backendRoot.path, existingPythonPath]
+            .compactMap { $0 }
+            .joined(separator: ":")
+        environment["PYTHONDONTWRITEBYTECODE"] = "1"
+        return environment
     }
 
     private nonisolated func commandFailure(stdout: Data, stderr: Data) -> Error {

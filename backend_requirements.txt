@@ -1,0 +1,7 @@
+pillow==12.2.0
+pycdlib==1.14.0
+lzsslib==0.0.5
+lzstring==1.0.4
+pyelftools==0.32
+customtkinter==5.2.2
+colorama==0.4.6

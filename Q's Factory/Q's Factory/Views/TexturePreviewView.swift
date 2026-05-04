@@ -1,17 +1,23 @@
 import SwiftUI
 import AppKit
 
-struct TexturePreviewView: View {
+struct RasterPreviewView: View {
     let entry: BHEEntry
     let background: BHEPreviewBackground
     let previewURL: URL?
+    let previewState: AssetPreviewState
     let isLoading: Bool
     let failureMessage: String?
+    @State private var zoom: CGFloat = 1
+    @State private var pixelPerfect = true
 
     private var aspectRatio: CGFloat {
         guard let width = entry.width,
               let height = entry.height,
               height > 0 else {
+            if let previewImage, previewImage.size.height > 0 {
+                return previewImage.size.width / previewImage.size.height
+            }
             return 1
         }
         return CGFloat(width) / CGFloat(height)
@@ -19,7 +25,7 @@ struct TexturePreviewView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Inspection Preview", systemImage: "photo")
+            Label(previewTitle, systemImage: "photo")
                 .font(.headline)
                 .foregroundStyle(.primary)
 
@@ -29,8 +35,9 @@ struct TexturePreviewView: View {
                 if let previewImage {
                     Image(nsImage: previewImage)
                         .resizable()
-                        .interpolation(.none)
+                        .interpolation(pixelPerfect ? .none : .medium)
                         .scaledToFit()
+                        .scaleEffect(zoom)
                         .padding(10)
                 } else {
                     VStack(spacing: 10) {
@@ -60,7 +67,45 @@ struct TexturePreviewView: View {
                     .stroke(.separator, lineWidth: 1)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Texture preview for \(entry.name)")
+            .accessibilityLabel("\(previewTitle) for \(entry.name)")
+
+            HStack {
+                Button {
+                    zoom = max(0.5, zoom - 0.25)
+                } label: {
+                    Image(systemName: "minus.magnifyingglass")
+                }
+                Button {
+                    zoom = min(4, zoom + 0.25)
+                } label: {
+                    Image(systemName: "plus.magnifyingglass")
+                }
+                Button {
+                    zoom = 1
+                } label: {
+                    Image(systemName: "arrow.up.left.and.down.right.magnifyingglass")
+                }
+                Toggle(isOn: $pixelPerfect) {
+                    Label("Pixel", systemImage: "square.grid.3x3")
+                }
+                .toggleStyle(.button)
+                Spacer()
+                Text(metadataText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+        }
+    }
+
+    private var previewTitle: String {
+        switch entry.kind {
+        case .texture:
+            "Texture Preview"
+        case .graphics, .shop:
+            "Raster Preview"
+        default:
+            "Generated Preview"
         }
     }
 
@@ -85,7 +130,7 @@ struct TexturePreviewView: View {
 
     private var previewMessage: String {
         if isLoading {
-            return "Generating preview..."
+            return previewState.message ?? "Decoding graphics..."
         }
         if let failureMessage {
             return failureMessage
@@ -93,9 +138,35 @@ struct TexturePreviewView: View {
         switch entry.support {
         case .compressed:
             return "Compressed entry"
-        case .supported, .readOnly, .risky, .unknown:
-            return "Preview unavailable"
+        case .supported, .exportable, .scanOnly, .unsupported, .readOnly, .risky, .unknown:
+            return entry.kind == .texture ? "Texture preview unavailable" : "Generated preview unavailable"
         }
+    }
+
+    private var metadataText: String {
+        if let previewImage {
+            return "\(Int(previewImage.size.width)) x \(Int(previewImage.size.height))"
+        }
+        return entry.dimensionsText
+    }
+}
+
+struct TexturePreviewView: View {
+    let entry: BHEEntry
+    let background: BHEPreviewBackground
+    let previewURL: URL?
+    let isLoading: Bool
+    let failureMessage: String?
+
+    var body: some View {
+        RasterPreviewView(
+            entry: entry,
+            background: background,
+            previewURL: previewURL,
+            previewState: isLoading ? .preparing(stage: "Decoding graphics...") : (failureMessage == nil ? .ready : .failed(message: failureMessage ?? "")),
+            isLoading: isLoading,
+            failureMessage: failureMessage
+        )
     }
 }
 

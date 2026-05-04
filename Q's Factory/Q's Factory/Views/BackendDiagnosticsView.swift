@@ -14,6 +14,7 @@ struct BackendDiagnosticsView: View {
                     runtimeSection
                     dependencySection
                     helperSection
+                    packagingSection
                     capabilitySection
                 }
                 .padding(20)
@@ -129,8 +130,39 @@ struct BackendDiagnosticsView: View {
                 Text("BIN/CUE conversion remains an optional helper flow. Q's Factory does not modify the original BIN or CUE files.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
+                Text("Bundling bchunk requires GPL/license review before it can ship inside the app.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             } else {
                 Text("No helper tool status has been loaded yet.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var packagingSection: some View {
+        DiagnosticsSection(title: "Distribution Readiness", systemImage: "checkmark.seal") {
+            Text("This build bundles the Python source and pinned Python packages inside the app. It still uses the configured macOS Python runtime to launch the bridge.")
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("Distribution still needs a signed self-contained Python runtime or helper executable. Nested helper/runtime code must be signed and notarized with the app.")
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("Updated backend scripts can be tested from Application Support/Q's Factory/Backend/backend or a backend folder beside the app; the bundled backend remains the fallback.")
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack {
+                Button {
+                    store.openDependencyHelp()
+                } label: {
+                    Label("Open Dependency Help", systemImage: "questionmark.circle")
+                }
+
+                Text("Opens local docs only; it does not install packages, run sudo, or mutate the system.")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }

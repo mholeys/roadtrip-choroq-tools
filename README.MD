@@ -190,8 +190,8 @@ Old 3D rendered world map (has some extraction faults from early code) created i
 
 #### Information sources:
 
-- Most original mesh information was found on [Xenhax](https://forum.xentax.com/viewtopic.php?t=17567) (website closed)
-- More information about the textures from [Zenhax](https://zenhax.com/viewtopic.php?t=7405) (website closed)
+- Most original mesh information was found on [Xentax](https://forum.xentax.com/viewtopic.php?t=17567) (website closed)
+- More information about the textures from [ZenHAX](https://zenhax.com/viewtopic.php?t=7405) (website closed)
   - https://web.archive.org/web/20220309142950/https://zenhax.com/viewtopic.php?t=7405
 - Some code is based on the BMS/3DS Max script in the forum above (note: forum has been closed)
   - But a lot of the code has now been rewritten after I understood that the game uses raw Playstation 2 commands/tags
@@ -202,6 +202,7 @@ Old 3D rendered world map (has some extraction faults from early code) created i
 - [Choro Q Wiki (JP)](https://w.atwiki.jp/choroq_game/pages/474.html)
 
 #### Thanks:
+- Created by catsandsoup
 - killercracker (3DS max script)
 - Acewell (BMS script)
 - e-Game (JP) for making a very interesting game that I and many others have spent many hours playing

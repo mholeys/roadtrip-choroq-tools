@@ -51,6 +51,9 @@ class BHEJSONCLITests(unittest.TestCase):
         self.assertIn("scan-disc-root", payload["data"]["commands"])
         self.assertIn("scan-egame-disc-root", payload["data"]["commands"])
         self.assertIn("extract-texture", payload["data"]["commands"])
+        self.assertIn("extract-egame-car", payload["data"]["commands"])
+        self.assertIn("preview-egame-car", payload["data"]["commands"])
+        self.assertIn("extract-egame-shop-textures", payload["data"]["commands"])
 
     def test_health_check_reports_dependency_status_without_failing(self):
         result = self.run_cli("health-check")
@@ -59,6 +62,22 @@ class BHEJSONCLITests(unittest.TestCase):
         self.assertEqual(payload["status"], "ok")
         self.assertIn("dependencies", payload["data"])
         self.assertIn("bchunk", payload["data"])
+        self.assertIn("bheReady", payload["data"])
+        dependency_by_module = {
+            dependency["module"]: dependency
+            for dependency in payload["data"]["dependencies"]
+        }
+        self.assertTrue(dependency_by_module["pycdlib"]["requiredForBHE"])
+        self.assertTrue(dependency_by_module["PIL.Image"]["requiredForBHE"])
+        self.assertTrue(dependency_by_module["lzsslib"]["requiredForBHE"])
+        self.assertFalse(dependency_by_module["tkinter"]["requiredForBHE"])
+        missing_modules = {
+            dependency["module"]
+            for dependency in payload["data"]["missingRequiredDependencies"]
+        }
+        for module, dependency in dependency_by_module.items():
+            if dependency["requiredForBHE"] and not dependency["available"]:
+                self.assertIn(module, missing_modules)
 
     def test_supported_types_reports_read_only_write_state(self):
         result = self.run_cli("list-supported-types")
@@ -88,6 +107,31 @@ class BHEJSONCLITests(unittest.TestCase):
         error = self.assert_json_error(result)
         self.assertEqual(error["title"], "Extraction Arguments Required")
 
+    def test_extract_egame_car_argument_validation_returns_structured_error(self):
+        result = self.run_cli("extract-egame-car", "/tmp/source", "egame:/CAR0/Q00.BIN")
+        error = self.assert_json_error(result)
+        self.assertEqual(error["title"], "Car Export Arguments Required")
+
+    def test_preview_egame_car_argument_validation_returns_structured_error(self):
+        result = self.run_cli("preview-egame-car", "/tmp/source", "egame:/CAR0/Q00.BIN")
+        error = self.assert_json_error(result)
+        self.assertEqual(error["title"], "Car Preview Arguments Required")
+
+    def test_extract_egame_shop_textures_argument_validation_returns_structured_error(self):
+        result = self.run_cli("extract-egame-shop-textures", "/tmp/source", "egame:/SHOP/T04.BIN")
+        error = self.assert_json_error(result)
+        self.assertEqual(error["title"], "Shop Texture Export Arguments Required")
+
+    def test_extract_egame_car_rejects_non_car_entry_before_source_read(self):
+        result = self.run_cli("extract-egame-car", "/definitely/missing/disc-root", "egame:/COURSE/C00.BIN", "--output-folder", "/tmp/out")
+        error = self.assert_json_error(result)
+        self.assertEqual(error["title"], "Unsupported e-Game Entry")
+
+    def test_extract_egame_shop_textures_rejects_non_shop_entry_before_source_read(self):
+        result = self.run_cli("extract-egame-shop-textures", "/definitely/missing/disc-root", "egame:/COURSE/C00.BIN", "--output-folder", "/tmp/out")
+        error = self.assert_json_error(result)
+        self.assertEqual(error["title"], "Unsupported e-Game Shop Entry")
+
     def test_scan_disc_root_missing_folder_returns_structured_error(self):
         result = self.run_cli("scan-disc-root", "/definitely/missing/disc-root")
         error = self.assert_json_error(result)
@@ -116,6 +160,7 @@ class BHEJSONCLITests(unittest.TestCase):
             (root / "CAR0" / "Q00.BIN").write_bytes(b"car")
             (root / "COURSE" / "C00.BIN").write_bytes(b"course")
             (root / "ACTION" / "A07.BIN").write_bytes(b"action")
+            (root / "FLD" / "223.BIN").write_bytes(b"field")
             (root / "SHOP" / "T04.BIN").write_bytes(b"shop")
 
             result = self.run_cli("scan-egame-disc-root", str(root))
@@ -126,9 +171,30 @@ class BHEJSONCLITests(unittest.TestCase):
         self.assertEqual(payload["data"]["iso"]["sourceFamily"], "egame")
         self.assertEqual(payload["data"]["iso"]["gameTitle"], "Road Trip Adventure / Choro-Q HG2")
         self.assertGreaterEqual(len(payload["data"]["containers"]), 4)
-        self.assertTrue(all(entry["support"] == "read-only" for entry in payload["data"]["entries"]))
-        self.assertTrue(all(entry["canExtract"] is False for entry in payload["data"]["entries"]))
-        self.assertIn("Q01 Body", {entry["name"] for entry in payload["data"]["entries"]})
+        entries_by_id = {entry["id"]: entry for entry in payload["data"]["entries"]}
+        car_entry = entries_by_id["egame:/CAR0/Q00.BIN"]
+        self.assertEqual(car_entry["support"], "exportable")
+        self.assertTrue(car_entry["canExtract"])
+        self.assertIn("extract-egame-car", car_entry["supportedOperations"])
+        self.assertIsNone(car_entry["unsupportedReason"])
+        self.assertIn("body", car_entry["partSectionNames"])
+        self.assertIn("diffuse", {output["role"] for output in car_entry["expectedExportOutputs"]})
+        shop_entry = entries_by_id["egame:/SHOP/T04.BIN"]
+        self.assertEqual(shop_entry["support"], "exportable")
+        self.assertTrue(shop_entry["canExtract"])
+        self.assertIn("extract-egame-shop-textures", shop_entry["supportedOperations"])
+        self.assertIsNone(shop_entry["unsupportedReason"])
+        self.assertIn("shop texture", {output["role"] for output in shop_entry["expectedExportOutputs"]})
+        course_entry = entries_by_id["egame:/COURSE/C00.BIN"]
+        self.assertEqual(course_entry["support"], "scan-only")
+        self.assertFalse(course_entry["canExtract"])
+        self.assertIn("No safe JSON export command", course_entry["unsupportedReason"])
+        container_names = {container["displayName"] for container in payload["data"]["containers"]}
+        self.assertIn("Car Bay 1 (CAR0)", container_names)
+        field_names = {entry["name"] for entry in payload["data"]["entries"]}
+        self.assertIn("Peach Raceway", field_names)
+        self.assertIn("Peach Town (223)", field_names)
+        self.assertIn("Mushroom Road", field_names)
 
 
 if __name__ == "__main__":

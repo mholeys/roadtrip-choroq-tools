@@ -63,15 +63,18 @@ Returns backend metadata and command names.
   "readOnly": true,
   "commands": [
     "version",
-            "health-check",
-            "list-supported-types",
-            "scan-iso",
-            "scan-disc-root",
-            "scan-egame-disc-root",
-            "preview-texture",
-            "preview-texture-disc-root",
-            "extract-texture",
-            "extract-texture-disc-root"
+    "health-check",
+    "list-supported-types",
+    "scan-iso",
+    "scan-disc-root",
+    "scan-egame-disc-root",
+    "preview-texture",
+    "preview-texture-disc-root",
+    "extract-texture",
+    "extract-texture-disc-root",
+    "extract-egame-car",
+    "preview-egame-car",
+    "extract-egame-shop-textures"
   ]
 }
 ```
@@ -84,13 +87,20 @@ Returns Python executable/version, dependency availability, and whether `bchunk`
 
 Current dependencies checked:
 
-- `tkinter`
-- `customtkinter`
-- `PIL.Image` / Pillow
-- `colorama`
-- `lzstring`
-- `elftools` / pyelftools
-- `pycdlib`
+- Required for Swift backend readiness:
+  - `pycdlib`
+  - `PIL.Image` / Pillow
+  - `lzsslib`
+- Optional or legacy UI/helper paths:
+  - `tkinter`
+  - `customtkinter`
+  - `colorama`
+  - `lzstring`
+  - `elftools` / pyelftools
+
+The command returns JSON even when required modules are missing. `data.bheReady` is `false` and `data.missingRequiredDependencies` lists each unavailable required module.
+
+This check is intentionally truthful about the current app boundary: Q's Factory bundles the Python source bridge and pinned Python packages under `Contents/Resources/backend/vendor`, but it does not yet bundle the Python runtime itself.
 
 ### `list-supported-types`
 
@@ -129,7 +139,7 @@ For Barnhouse Effect sources, returns:
 
 The bridge opens the ISO with `pycdlib.open(..., "rb")`.
 
-For Road Trip / HG2 / HG3 sources, `scan-iso` returns the same read-only e-Game file listing as `scan-egame-disc-root`, using ISO records for sector and offset metadata where available. No preview, extraction, replacement validation, or write support is claimed for these entries.
+For Road Trip / HG2 / HG3 sources, `scan-iso` returns the same safe e-Game file listing as `scan-egame-disc-root`, using ISO records for sector and offset metadata where available. Export/preview is claimed only for supported car body rows; replacement validation and source writes are not supported.
 
 ### `preview-texture <iso-path> <entry-id> --output <png-path>`
 
@@ -158,7 +168,7 @@ For Road Trip / HG2 / HG3 sources, the command delegates to the read-only e-Game
 - `FLD`
 - `SHOP`
 
-e-Game entries are currently scan-only: `support` is `read-only`, `canExtract` is `false`, and `canReplace` is `false`.
+Supported e-Game car body rows report `support: "exportable"` and `canExtract: true`. Other e-Game rows report `support: "scan-only"` or `support: "unsupported"` with a truthful `unsupportedReason`.
 
 ### `scan-egame-disc-root <folder-path>`
 
@@ -171,7 +181,78 @@ This command does not import BHE CPK/APT parser internals and does not require `
 - field bins as `field`
 - shop bins as `shop`
 
-No model preview, model extraction, texture preview, replacement validation, or write support is claimed yet.
+Model export is claimed only for supported car body rows through `extract-egame-car`. Shop texture export is claimed only for supported HG2 `SHOP/Txx.BIN` rows through `extract-egame-shop-textures`. Other e-Game rows remain scan-only.
+
+Each e-Game entry may include optional metadata for Swift:
+
+- `descriptor`
+- `modelDescription`
+- `expectedExportOutputs`
+- `supportReason`
+- `unsupportedReason`
+- `sectionNames`
+- `partSectionNames`
+- `supportedOperations`
+
+### `extract-egame-car <disc-root-or-iso> <entry-id> --output-folder <folder>`
+
+Exports one Road Trip / HG2 / HG3 car body entry to a user-selected folder.
+
+Supported entry IDs:
+
+- `egame:/CAR0/Qxx.BIN` through `egame:/CAR4/Qxx.BIN`
+- `egame:/CARS/Qxx.BIN`
+
+The backend reads the selected mounted disc root or ISO read-only and writes only inside the requested output folder. It returns a typed manifest:
+
+```json
+{
+  "operationID": "extract-egame-car",
+  "sourceModified": false,
+  "patchedCopyWritten": false,
+  "entryIDs": ["egame:/CAR0/Q00.BIN"],
+  "outputRoot": "/path/out/Q01",
+  "primaryPreviewPath": "/path/out/Q01/Q00-0-0-body.obj",
+  "files": [
+    {"path": "/path/out/Q01/Q00.png", "kind": "texture", "role": "diffuse", "previewable": true},
+    {"path": "/path/out/Q01/Q00-0-0-body.obj", "kind": "model", "role": "body", "previewable": true}
+  ],
+  "overwrittenFiles": [],
+  "warnings": []
+}
+```
+
+`sourceModified` and `patchedCopyWritten` must stay `false` for this command.
+
+### `preview-egame-car <disc-root-or-iso> <entry-id> --output-folder <folder>`
+
+Writes the same safe OBJ/MTL/PNG preview assets as `extract-egame-car`, but marks `operationID` as `preview-egame-car`. The app may point this at a temporary preview cache. `sourceModified` and `patchedCopyWritten` must stay `false`.
+
+### `extract-egame-shop-textures <disc-root-or-iso> <entry-id> --output-folder <folder>`
+
+Exports decoded PNG textures from supported Road Trip / HG2 town shop entries.
+
+Supported entry IDs:
+
+- `egame:/SHOP/T00.BIN` through `egame:/SHOP/T20.BIN`
+
+Unsupported shop/game-data rows return structured errors or scan-only metadata. The backend reads the selected mounted disc root or ISO read-only and writes only inside the requested output folder. The manifest shape matches the other safe export commands:
+
+```json
+{
+  "operationID": "extract-egame-shop-textures",
+  "sourceModified": false,
+  "patchedCopyWritten": false,
+  "entryIDs": ["egame:/SHOP/T04.BIN"],
+  "outputRoot": "/path/out/Mushroom Road",
+  "primaryPreviewPath": "/path/out/Mushroom Road/T04-00.png",
+  "files": [
+    {"path": "/path/out/Mushroom Road/T04-00.png", "kind": "texture", "role": "texture-00", "previewable": true}
+  ],
+  "overwrittenFiles": [],
+  "warnings": []
+}
+```
 
 ### `preview-texture-disc-root <folder-path> <entry-id> --output <png-path>`
 
@@ -192,3 +273,31 @@ Stdout is reserved for machine-readable JSON. Parser diagnostics and incidental 
 - `validate-replacement <iso-path> <entry-id> <png-path>`.
 - `replace-texture-copy <iso-path> <entry-id> <png-path> --output-copy <iso-path>`.
 - NDJSON progress for long-running extraction and copy operations.
+
+## Packaging Prep
+
+Current builds bundle Python source under `Contents/Resources/backend` and pinned Python packages under `Contents/Resources/backend/vendor`. They do not bundle Python itself.
+
+Distribution needs a signed, notarized, self-contained helper/runtime. Preferred paths:
+
+- PyInstaller or equivalent frozen backend helper that keeps `bhe_json.py` as the Swift-facing command boundary.
+- Bundled Python framework or app-private virtual environment with pinned wheels for the required parser modules.
+
+Every nested helper, runtime framework, executable, dynamic library, and bundled Python extension must be signed as part of the app bundle, then verified under the hardened runtime and notarized distribution build.
+
+`bchunk` is not bundled in this phase. Bundling it requires license review because common `bchunk` distributions are GPL-licensed. Until that review is complete, Q's Factory should only detect installed/user-provided `bchunk` and show explicit conversion guidance.
+
+Any dependency help UI must be explicit and non-mutating:
+
+- no silent `sudo`
+- no shell-string execution
+- no hidden Homebrew/pip/system mutation
+- any future install helper must show exactly what it will run and use `Process` arguments rather than a single shell command string
+
+## Credits
+
+Created by catsandsoup.
+
+The current app wraps and preserves the existing Python parser work under `choroq/`. Keep source comments and attribution intact when moving code across the Swift/backend boundary.
+
+Existing e-Game mesh and texture research is credited in the parser comments and README, including Xentax/ZenHAX-derived notes, Acewell's BMS script notes, and killercracker's 3DS Max script work.

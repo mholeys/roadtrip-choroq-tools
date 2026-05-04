@@ -1,4 +1,5 @@
 import SwiftUI
+import QuickLookUI
 
 struct ContentView: View {
     @Bindable var store: BHEWorkspaceStore
@@ -43,10 +44,35 @@ struct ContentView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            StatusBar(store: store)
+            VStack(spacing: 0) {
+                if store.playbackState.isActive, let item = store.activeAudioItem {
+                    MiniPlayerView(item: item, playbackState: store.playbackState)
+                }
+                StatusBar(store: store)
+            }
         }
         .sheet(isPresented: $store.isBackendDiagnosticsPresented) {
             BackendDiagnosticsView(store: store)
+        }
+        .sheet(
+            isPresented: Binding(
+                get: { store.quickLookURL != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        store.quickLookURL = nil
+                    }
+                }
+            )
+        ) {
+            if let quickLookURL = store.quickLookURL {
+                QuickLookPreviewSheet(url: quickLookURL)
+            }
+        }
+        .sheet(item: $store.theatrePreviewItem) { item in
+            TheatrePreviewView(item: item, store: store)
+        }
+        .sheet(item: $store.verboseConsoleOperation) { operation in
+            VerboseConsoleView(operation: operation)
         }
         .dropDestination(for: URL.self) { urls, _ in
             guard let url = urls.first else {
@@ -79,29 +105,31 @@ struct ContentView: View {
         }
 
         ToolbarItemGroup {
-            Button {
-                store.performAction(.extractSelected)
-            } label: {
-                Label("Extract Part", systemImage: BHEWorkspaceAction.extractSelected.systemImage)
-            }
-            .disabled(!store.canPerform(.extractSelected))
-            .help(store.helpText(for: .extractSelected))
+            contextualExportButton
 
             Button {
-                store.performAction(.validateReplacement)
+                store.performAction(.generatePreview)
             } label: {
-                Label("Validate Replacement", systemImage: BHEWorkspaceAction.validateReplacement.systemImage)
+                Label("Preview", systemImage: BHEWorkspaceAction.generatePreview.systemImage)
             }
-            .disabled(!store.canPerform(.validateReplacement))
-            .help(store.helpText(for: .validateReplacement))
+            .disabled(!store.canPerform(.generatePreview))
+            .help(store.helpText(for: .generatePreview))
 
             Button {
-                store.performAction(.createPatchedCopy)
+                store.performAction(.openTheatre)
             } label: {
-                Label("Create Patched Copy", systemImage: BHEWorkspaceAction.createPatchedCopy.systemImage)
+                Label("Theatre", systemImage: BHEWorkspaceAction.openTheatre.systemImage)
             }
-            .disabled(!store.canPerform(.createPatchedCopy))
-            .help(store.helpText(for: .createPatchedCopy))
+            .disabled(!store.canPerform(.openTheatre))
+            .help(store.helpText(for: .openTheatre))
+
+            Button {
+                store.performAction(.quickLookPreview)
+            } label: {
+                Label("Quick Look", systemImage: BHEWorkspaceAction.quickLookPreview.systemImage)
+            }
+            .disabled(!store.canPerform(.quickLookPreview))
+            .help(store.helpText(for: .quickLookPreview))
         }
 
         ToolbarItemGroup(placement: .primaryAction) {
@@ -112,6 +140,62 @@ struct ContentView: View {
             }
             .help("Show or hide the preview and metadata inspector.")
         }
+    }
+
+    @ViewBuilder
+    private var contextualExportButton: some View {
+        if store.selectedEntry?.kind == .texture {
+            Button {
+                store.performAction(.extractSelected)
+            } label: {
+                Label("Export Texture", systemImage: BHEWorkspaceAction.extractSelected.systemImage)
+            }
+            .disabled(!store.canPerform(.extractSelected))
+            .help(textureExportHelpText)
+        } else if store.selectedEntry?.kind == .shop {
+            Button {
+                store.performAction(.exportShopTextures)
+            } label: {
+                Label("Export Shop Textures", systemImage: BHEWorkspaceAction.exportShopTextures.systemImage)
+            }
+            .disabled(!store.canPerform(.exportShopTextures))
+            .help(store.helpText(for: .exportShopTextures))
+        } else {
+            Button {
+                store.performAction(.export3DAsset)
+            } label: {
+                Label(export3DTitle, systemImage: BHEWorkspaceAction.export3DAsset.systemImage)
+            }
+            .disabled(!store.canPerform(.export3DAsset))
+            .help(store.helpText(for: .export3DAsset))
+        }
+    }
+
+    private var export3DTitle: String {
+        guard let entry = store.selectedEntry else {
+            return "Export Asset"
+        }
+        switch entry.kind {
+        case .model:
+            return "Export Car Model"
+        case .course, .field:
+            return "Export Scene Asset"
+        case .part:
+            return "Export Part Asset"
+        default:
+            return "Export 3D Asset"
+        }
+    }
+
+    private var replacementValidationTitle: String {
+        store.selectedEntry?.kind == .texture ? "Validate Texture Replacement" : "Validate Replacement"
+    }
+
+    private var textureExportHelpText: String {
+        if store.sourceKind?.isEGame == true {
+            return "Road Trip / HG2 / HG3 texture export is not connected for this row."
+        }
+        return store.helpText(for: .extractSelected)
     }
 
     private func errorMessage(for error: BHEUserFacingError) -> String {
@@ -216,6 +300,235 @@ private struct SupportedSourcesStrip: View {
                             .stroke(QFactoryTheme.panelStroke, lineWidth: 1)
                     }
             }
+        }
+    }
+}
+
+private struct MiniPlayerView: View {
+    let item: AssetAudioItem
+    let playbackState: PlaybackState
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: playbackStateIcon)
+                .foregroundStyle(QFactoryTheme.factoryBlue)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(.footnote.weight(.medium))
+                    .lineLimit(1)
+                Text(item.sourceFormat)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Text(durationText)
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(.regularMaterial)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(.separator)
+                .frame(height: 1)
+        }
+    }
+
+    private var playbackStateIcon: String {
+        switch playbackState {
+        case .playing:
+            "pause.circle"
+        case .paused:
+            "play.circle"
+        case .loading:
+            "clock"
+        case .failed:
+            "xmark.octagon"
+        case .stopped:
+            "stop.circle"
+        }
+    }
+
+    private var durationText: String {
+        guard let duration = item.duration else {
+            return "--:--"
+        }
+        let seconds = Int(duration.rounded())
+        return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
+private struct QuickLookPreviewSheet: View {
+    let url: URL
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Label(url.lastPathComponent, systemImage: "eye")
+                    .font(.headline)
+                    .lineLimit(1)
+                Spacer()
+            }
+            .padding()
+            .background(.bar)
+
+            QuickLookPreviewBridge(url: url)
+                .frame(minWidth: 720, minHeight: 520)
+        }
+    }
+}
+
+private struct QuickLookPreviewBridge: NSViewRepresentable {
+    let url: URL
+
+    func makeNSView(context: Context) -> QLPreviewView {
+        let view = QLPreviewView(frame: .zero, style: .normal)!
+        view.autostarts = true
+        view.previewItem = url as NSURL
+        return view
+    }
+
+    func updateNSView(_ view: QLPreviewView, context: Context) {
+        view.previewItem = url as NSURL
+    }
+}
+
+private struct TheatrePreviewView: View {
+    let item: TheatrePreviewItem
+    let store: BHEWorkspaceStore
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Label(item.title, systemImage: item.kind.systemImage)
+                    .font(.headline)
+                Spacer()
+                Button {
+                    store.quickLookCurrentPreview()
+                } label: {
+                    Label("Quick Look", systemImage: "eye")
+                }
+                .disabled(item.url == nil)
+            }
+            .padding()
+            .background(.bar)
+
+            Group {
+                switch item.kind {
+                case .modelScene:
+                    ScenePreviewView(
+                        entry: store.selectedEntry ?? placeholderEntry,
+                        modelURL: item.url,
+                        manifest: item.manifest,
+                        previewState: store.previewState,
+                        isLoading: false,
+                        failureMessage: nil,
+                        relinkReport: store.materialRelinkReport
+                    )
+                    .padding()
+                case .rasterImage:
+                    RasterPreviewView(
+                        entry: store.selectedEntry ?? placeholderEntry,
+                        background: store.previewBackground,
+                        previewURL: item.url,
+                        previewState: store.previewState,
+                        isLoading: false,
+                        failureMessage: nil
+                    )
+                    .padding()
+                default:
+                    ContentUnavailableView("Theatre View", systemImage: item.kind.systemImage, description: Text("This preview type is not available in theatre mode yet."))
+                }
+            }
+            .frame(minWidth: 760, minHeight: 520)
+        }
+    }
+
+    private var placeholderEntry: BHEEntry {
+        BHEEntry(
+            id: item.entryID,
+            containerID: "",
+            cpkName: "",
+            serviceBayName: nil,
+            name: item.title,
+            kind: .unknown,
+            format: "",
+            width: nil,
+            height: nil,
+            paletteSize: nil,
+            sizeBytes: 0,
+            offsetBytes: -1,
+            sector: -1,
+            support: .unknown,
+            canExtract: false,
+            canReplace: false,
+            compression: "",
+            meshCount: nil,
+            textureCount: nil,
+            descriptor: nil,
+            modelDescription: nil,
+            expectedExportOutputs: nil,
+            supportReason: nil,
+            unsupportedReason: nil,
+            sectionNames: nil,
+            partSectionNames: nil,
+            supportedOperations: nil
+        )
+    }
+}
+
+private struct VerboseConsoleView: View {
+    let operation: VerboseConsoleOperation
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Label(operation.title, systemImage: "terminal")
+                .font(.headline)
+                .padding()
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    consoleLine("Operation", operation.id)
+                    if let entryID = operation.entryID {
+                        consoleLine("Entry", entryID)
+                    }
+                    if let manifest = operation.manifest {
+                        consoleLine("Generated Files", "\(manifest.files.count)")
+                        consoleLine("Source Modified", "\(manifest.sourceModified)")
+                        consoleLine("Patched Copy Written", "\(manifest.patchedCopyWritten)")
+                    }
+                    ForEach(operation.diagnostics) { diagnostic in
+                        consoleLine(diagnostic.title, diagnostic.detail)
+                    }
+                    if let relinkReport = operation.relinkReport {
+                        consoleLine("Material Relink", relinkReport.summary)
+                    }
+                    if !operation.logEntries.isEmpty {
+                        Text("Operation Log")
+                            .font(.headline)
+                        ForEach(operation.logEntries) { log in
+                            Text("\(log.level.rawValue): \(log.title)")
+                                .font(.caption.monospaced())
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+                .padding()
+            }
+            .font(.system(.body, design: .monospaced))
+        }
+        .frame(minWidth: 680, minHeight: 520)
+    }
+
+    private func consoleLine(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .textSelection(.enabled)
         }
     }
 }

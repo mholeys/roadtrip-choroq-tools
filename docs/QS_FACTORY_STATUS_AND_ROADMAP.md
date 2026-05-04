@@ -1,6 +1,6 @@
 # Q's Factory Status And Roadmap
 
-Last updated: 2026-04-20.
+Last updated: 2026-04-25.
 
 ## Canonical Project
 
@@ -57,13 +57,17 @@ The old SwiftPM app path has been removed:
   - `preview-texture-disc-root`
   - `extract-texture`
   - `extract-texture-disc-root`
+  - `extract-egame-car`
+  - `extract-egame-shop-textures`
 - BHE APT texture workflow:
   - scan
   - preview to temporary PNG
   - export to user-selected PNG
 - Road Trip / HG2 / HG3 scan workflow:
   - ISO and mounted folder scans return read-only e-Game entries for recognized folders/files
-  - model/course/field/shop assets are visible but not extractable yet
+  - car body rows can export OBJ, MTL, and PNG files through `extract-egame-car`
+  - supported HG2 shop rows can export decoded PNG textures through `extract-egame-shop-textures`
+  - course/field/part and unsupported shop rows remain scan-only
 - BIN/CUE handling:
   - detects `.bin` and `.cue`
   - presents bchunk conversion guidance
@@ -74,7 +78,7 @@ The old SwiftPM app path has been removed:
 
 ## Partially Implemented
 
-- Python dependencies are checked but not bundled.
+- Python dependencies are checked truthfully but not bundled.
 - `bchunk` is detected by the Python health check but not invoked by the app.
 - Mounted folder scans are implemented, but UX should more clearly guide users toward mounted volumes after conversion.
 - Texture export works for individual supported APT textures; batch export is not wired.
@@ -90,8 +94,8 @@ The old SwiftPM app path has been removed:
 - Native BIN/CUE conversion sheet.
 - Automatic ISO mounting via `hdiutil`.
 - Security-scoped bookmarks for persistent file access.
-- e-Game model extraction.
-- Native 3D preview or Quick Look integration.
+- e-Game course/field extraction.
+- Quick Look integration.
 - Replacement validation.
 - Patched-copy ISO creation.
 - Public synthetic ISO fixtures.
@@ -99,16 +103,29 @@ The old SwiftPM app path has been removed:
 
 ## Runtime And Dependency Requirements
 
-Current Python modules observed across the project:
+Required modules for Swift backend readiness:
+
+- `PIL.Image` / Pillow
+- `lzsslib`
+- `pycdlib`
+
+Optional or legacy UI/helper modules:
 
 - `tkinter`
 - `customtkinter`
-- `PIL.Image` / Pillow
 - `colorama`
 - `lzstring`
-- `lzsslib`
 - `elftools` / pyelftools
-- `pycdlib`
+
+The app currently bundles Python source plus pinned Python packages under `Contents/Resources/backend/vendor`. Distribution still needs a signed, notarized, self-contained Python runtime/helper. `bchunk` is not bundled in this phase.
+
+The app does not currently bundle:
+
+- Python runtime
+- Python framework
+- virtual environment
+- pinned parser wheels
+- `bchunk`
 
 The known old failure:
 
@@ -140,9 +157,12 @@ Distribution target:
 
 - Bundle a self-contained Python runtime or freeze the backend bridge into a signed helper executable.
 - Install parser dependencies into that bundled runtime.
-- Sign nested helper code and the app with Developer ID for distribution outside the Mac App Store.
+- Sign every nested helper/runtime component, including helper executables, Python frameworks, dynamic libraries, and Python extension modules.
+- Sign the app with Developer ID for distribution outside the Mac App Store.
 - Notarize and staple the final app.
 - Keep App Sandbox enabled if possible, but add user-selected read/write entitlements before implementing exports/conversion workflows that write outside app containers.
+- Preferred implementation path is either a PyInstaller-style helper or a bundled Python framework/app-private venv with pinned dependencies.
+- Keep `bhe_json.py` as the Swift-facing contract even if the runtime is frozen.
 
 `bchunk`:
 
@@ -153,6 +173,21 @@ Distribution target:
   1. support installed/user-provided `bchunk`
   2. add native guided conversion
   3. consider bundling only after license and distribution obligations are settled
+
+Dependency help/install UX:
+
+- Current safe path is diagnostics/help only.
+- Do not run silent `sudo`, pip, Homebrew, or shell install commands.
+- Do not mutate system Python or user environments without an explicit visible user action.
+- Future install helpers must present exact commands/paths before execution and use `Process` with argument arrays, not shell strings.
+
+## Credits
+
+Created by catsandsoup.
+
+Q's Factory is a native Mac shell around the existing `roadtrip-choroq-tools` parser work. Preserve upstream/source comments and parser attribution when moving code.
+
+Existing parser notes credit Xentax/ZenHAX-derived research, Acewell's BMS script notes, and killercracker's 3DS Max script work. Keep those credits visible in source and docs.
 
 ## UX Recommendation
 
@@ -176,7 +211,7 @@ The app should continue using:
 
 ## Verification
 
-Passed in this pass:
+Use these checks for this phase:
 
 ```sh
 xcodebuild -project "Q's Factory/Q's Factory.xcodeproj" -scheme "Q's Factory" -configuration Debug -derivedDataPath /tmp/qfactory-xcode-canonical-clean build
@@ -185,7 +220,7 @@ python3 "/tmp/qfactory-xcode-canonical-clean/Build/Products/Debug/Q's Factory.ap
 python3 "/tmp/qfactory-xcode-canonical-clean/Build/Products/Debug/Q's Factory.app/Contents/Resources/backend/choroq/bhe/bhe_json.py" health-check
 ```
 
-The backend `version` and `health-check` commands returned valid protocol-versioned JSON from the built app bundle.
+The backend `version` and `health-check` commands should return valid protocol-versioned JSON from the built app bundle. `health-check` must report `pycdlib`, `PIL.Image`, and `lzsslib` as required parser dependencies and include the `bchunk` path when it is available on `PATH`.
 
 Note: macOS continues to attach `com.apple.provenance` extended attributes to copied backend files even after `xattr -cr`. Codesigning still succeeded. Treat this as a packaging validation item, not a current build blocker.
 

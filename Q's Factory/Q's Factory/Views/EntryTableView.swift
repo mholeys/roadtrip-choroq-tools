@@ -34,7 +34,7 @@ struct EntryTableView: View {
             }
 
             TableColumn("Service Bay") { entry in
-                Text(entry.cpkName)
+                Text(entry.serviceBayDisplayName)
                     .lineLimit(1)
             }
             .width(min: 96, ideal: 112)
@@ -63,9 +63,14 @@ struct EntryTableView: View {
             .width(min: 68, ideal: 78)
 
             TableColumn("Support") { entry in
-                Label(entry.support.displayName, systemImage: entry.support.systemImage)
+                let support = EntryTableSupportDisplay(
+                    entry: entry,
+                    canExport3D: store.canExportEGameCar(entry),
+                    isEGameSource: store.sourceKind?.isEGame == true
+                )
+                Label(support.title, systemImage: support.systemImage)
                     .labelStyle(.titleAndIcon)
-                    .foregroundStyle(QFactoryTheme.supportTint(for: entry.support))
+                    .foregroundStyle(support.tint)
             }
             .width(min: 116, ideal: 136)
 
@@ -82,40 +87,87 @@ struct EntryTableView: View {
             .width(min: 112, ideal: 128)
         }
         .contextMenu(forSelectionType: BHEEntry.ID.self) { selection in
-            Button(BHEWorkspaceAction.extractSelected.label, systemImage: BHEWorkspaceAction.extractSelected.systemImage) {
-                perform(.extractSelected, using: selection)
-            }
-            .disabled(!selectionCanExtract(selection))
+            if let entry = firstEntry(in: selection) {
+                Button("Generate Preview", systemImage: BHEWorkspaceAction.generatePreview.systemImage) {
+                    perform(.generatePreview, using: selection)
+                }
 
-            Button(BHEWorkspaceAction.validateReplacement.label, systemImage: BHEWorkspaceAction.validateReplacement.systemImage) {
-                perform(.validateReplacement, using: selection)
-            }
-            .disabled(!selectionCanReplace(selection))
+                Button("Open in Theatre View", systemImage: BHEWorkspaceAction.openTheatre.systemImage) {
+                    perform(.openTheatre, using: selection)
+                }
+                .disabled(!store.canPerform(.openTheatre))
 
-            Button(BHEWorkspaceAction.createPatchedCopy.label, systemImage: BHEWorkspaceAction.createPatchedCopy.systemImage) {
-                perform(.createPatchedCopy, using: selection)
-            }
-            .disabled(!selectionCanReplace(selection))
+                Button("Quick Look Generated File", systemImage: BHEWorkspaceAction.quickLookPreview.systemImage) {
+                    perform(.quickLookPreview, using: selection)
+                }
+                .disabled(!store.canPerform(.quickLookPreview))
 
-            Divider()
+                Divider()
 
-            Button("Copy Name", systemImage: "doc.on.doc") {
-                selectFirstEntry(in: selection)
-                store.copySelectedName()
-            }
-            .disabled(selection.isEmpty)
+                if entry.kind == .texture {
+                    Button("Export Texture...", systemImage: BHEWorkspaceAction.extractSelected.systemImage) {
+                        perform(.extractSelected, using: selection)
+                    }
+                    .disabled(!selectionCanExtract(selection))
+                }
 
-            Button("Copy Offset") {
-                selectFirstEntry(in: selection)
-                store.copySelectedOffset()
-            }
-            .disabled(selection.isEmpty)
+                if entry.kind == .model || entry.kind == .course || entry.kind == .field || entry.kind == .part {
+                    Button(contextual3DExportTitle(for: entry), systemImage: BHEWorkspaceAction.export3DAsset.systemImage) {
+                        perform(.export3DAsset, using: selection)
+                    }
+                    .disabled(!selectionCanExport3D(selection))
+                }
 
-            Button("Copy Identifier") {
-                selectFirstEntry(in: selection)
-                store.copySelectedIdentifier()
+                if entry.kind == .shop {
+                    Button("Export Shop Textures...", systemImage: BHEWorkspaceAction.exportShopTextures.systemImage) {
+                        perform(.exportShopTextures, using: selection)
+                    }
+                    .disabled(!selectionCanExportShopTextures(selection))
+                }
+
+                if entry.kind == .texture || entry.canReplace {
+                    Button(BHEWorkspaceAction.validateReplacement.label, systemImage: BHEWorkspaceAction.validateReplacement.systemImage) {
+                        perform(.validateReplacement, using: selection)
+                    }
+                    .disabled(!selectionCanReplace(selection))
+
+                    Button(BHEWorkspaceAction.createPatchedCopy.label, systemImage: BHEWorkspaceAction.createPatchedCopy.systemImage) {
+                        perform(.createPatchedCopy, using: selection)
+                    }
+                    .disabled(!selectionCanReplace(selection))
+                }
+
+                Divider()
+
+                Button("Copy Name", systemImage: "doc.on.doc") {
+                    selectFirstEntry(in: selection)
+                    store.copySelectedName()
+                }
+
+                Button("Copy Offset", systemImage: "location.viewfinder") {
+                    selectFirstEntry(in: selection)
+                    store.copySelectedOffset()
+                }
+
+                Button("Copy Identifier", systemImage: "number") {
+                    selectFirstEntry(in: selection)
+                    store.copySelectedIdentifier()
+                }
+
+                Button("Copy Technical Details", systemImage: "text.magnifyingglass") {
+                    selectFirstEntry(in: selection)
+                    store.copyTechnicalDetails()
+                }
+
+                Button("Copy Manifest JSON", systemImage: "curlybraces") {
+                    selectFirstEntry(in: selection)
+                    store.copyManifestJSON()
+                }
+                .disabled(store.selectedPreviewManifest == nil)
+            } else {
+                Button("Select a Part", systemImage: "cursorarrow.click") { }
+                    .disabled(true)
             }
-            .disabled(selection.isEmpty)
         }
     }
 
@@ -131,19 +183,93 @@ struct EntryTableView: View {
         store.selectedEntryID = id
     }
 
+    private func firstEntry(in selection: Set<BHEEntry.ID>) -> BHEEntry? {
+        guard let id = selection.first else {
+            return nil
+        }
+        return store.entries.first { $0.id == id }
+    }
+
+    private func contextual3DExportTitle(for entry: BHEEntry) -> String {
+        switch entry.kind {
+        case .model:
+            return "Export Car Model..."
+        case .course, .field:
+            return "Export Scene Asset..."
+        case .part:
+            return "Export Part Asset..."
+        default:
+            return BHEWorkspaceAction.export3DAsset.label
+        }
+    }
+
     private func selectionCanExtract(_ selection: Set<BHEEntry.ID>) -> Bool {
-        guard let id = selection.first,
-              let entry = store.entries.first(where: { $0.id == id }) else {
+        guard let entry = firstEntry(in: selection) else {
             return false
         }
-        return entry.canExtract
+        let isEGameSource = store.sourceKind?.isEGame == true
+        return entry.canExtract && !isEGameSource
+    }
+
+    private func selectionCanExport3D(_ selection: Set<BHEEntry.ID>) -> Bool {
+        guard let entry = firstEntry(in: selection) else {
+            return false
+        }
+        return store.canExportEGameCar(entry)
+    }
+
+    private func selectionCanExportShopTextures(_ selection: Set<BHEEntry.ID>) -> Bool {
+        guard let entry = firstEntry(in: selection) else {
+            return false
+        }
+        return store.canExportEGameShopTextures(entry)
     }
 
     private func selectionCanReplace(_ selection: Set<BHEEntry.ID>) -> Bool {
-        guard let id = selection.first,
-              let entry = store.entries.first(where: { $0.id == id }) else {
+        guard let entry = firstEntry(in: selection) else {
             return false
         }
         return entry.canReplace
+    }
+}
+
+private struct EntryTableSupportDisplay {
+    let title: String
+    let systemImage: String
+    let tint: Color
+
+    init(entry: BHEEntry, canExport3D: Bool, isEGameSource: Bool) {
+        if canExport3D {
+            title = "3D Export"
+            systemImage = BHEWorkspaceAction.export3DAsset.systemImage
+            tint = QFactoryTheme.serviceGreen
+        } else if entry.isExportableEGameShopTextures {
+            title = "PNG Export"
+            systemImage = BHEWorkspaceAction.exportShopTextures.systemImage
+            tint = QFactoryTheme.serviceGreen
+        } else if entry.canExtract && !isEGameSource {
+            title = "PNG Export"
+            systemImage = BHEWorkspaceAction.extractSelected.systemImage
+            tint = QFactoryTheme.serviceGreen
+        } else if entry.canReplace {
+            title = "Replaceable"
+            systemImage = BHEWorkspaceAction.validateReplacement.systemImage
+            tint = QFactoryTheme.serviceGreen
+        } else {
+            switch entry.support {
+            case .readOnly:
+                title = "Inspect"
+                systemImage = "eye"
+                tint = QFactoryTheme.supportTint(for: entry.support)
+            case .risky:
+                title = "Needs Review"
+                systemImage = entry.support.systemImage
+                tint = QFactoryTheme.supportTint(for: entry.support)
+            default:
+                title = entry.support.displayName
+                systemImage = entry.support.systemImage
+                tint = QFactoryTheme.supportTint(for: entry.support)
+            }
+        }
     }
 }

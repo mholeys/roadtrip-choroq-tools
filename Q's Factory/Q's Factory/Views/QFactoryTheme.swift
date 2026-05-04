@@ -24,6 +24,12 @@ enum QFactoryTheme {
         switch support {
         case .supported:
             serviceGreen
+        case .exportable:
+            serviceGreen
+        case .scanOnly:
+            factoryBlue
+        case .unsupported:
+            .secondary
         case .readOnly:
             factoryBlue
         case .compressed:
@@ -43,6 +49,10 @@ enum QFactoryTheme {
             factoryRed
         case .shop:
             serviceGreen
+        case .graphics:
+            factoryBlue
+        case .sound:
+            toolSteel
         case .lzs:
             hazardYellow
         case .text, .cpk:

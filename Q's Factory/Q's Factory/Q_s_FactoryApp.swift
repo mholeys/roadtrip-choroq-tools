@@ -18,6 +18,12 @@ struct Q_s_FactoryApp: App {
         }
         .defaultSize(width: 1180, height: 760)
         .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Q's Factory") {
+                    store.showAboutPanel()
+                }
+            }
+
             CommandGroup(replacing: .newItem) { }
 
             CommandGroup(after: .newItem) {
@@ -38,6 +44,12 @@ struct Q_s_FactoryApp: App {
                 }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
                 .disabled(!store.canPerform(.extractSelected))
+
+                Button(BHEWorkspaceAction.export3DAsset.label) {
+                    store.performAction(.export3DAsset)
+                }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
+                .disabled(!store.canPerform(.export3DAsset))
 
                 Button(BHEWorkspaceAction.extractContainer.label) {
                     store.performAction(.extractContainer)
@@ -79,6 +91,18 @@ struct Q_s_FactoryApp: App {
 
                 Divider()
 
+                Button("Open in Theatre View") {
+                    store.performAction(.openTheatre)
+                }
+                .keyboardShortcut("y", modifiers: [.command, .shift])
+                .disabled(!store.canPerform(.openTheatre))
+
+                Button("Quick Look Preview") {
+                    store.performAction(.quickLookPreview)
+                }
+                .keyboardShortcut("y")
+                .disabled(!store.canPerform(.quickLookPreview))
+
                 Picker("Preview Background", selection: $store.previewBackground) {
                     ForEach(BHEPreviewBackground.allCases) { background in
                         Text(background.displayName).tag(background)
@@ -94,6 +118,14 @@ struct Q_s_FactoryApp: App {
             }
 
             CommandMenu("Operations") {
+                Button(BHEWorkspaceAction.generatePreview.label) {
+                    store.performAction(.generatePreview)
+                }
+                .keyboardShortcut("r", modifiers: [.command])
+                .disabled(!store.canPerform(.generatePreview))
+
+                Divider()
+
                 Button(BHEWorkspaceAction.validateReplacement.label) {
                     store.performAction(.validateReplacement)
                 }
@@ -117,6 +149,13 @@ struct Q_s_FactoryApp: App {
                     store.performAction(.exportOperationLog)
                 }
                 .disabled(!store.canPerform(.exportOperationLog))
+
+                Divider()
+
+                Button("Show Verbose Console") {
+                    store.showVerboseConsole()
+                }
+                .disabled(store.selectedEntry == nil && store.operationLog.isEmpty)
             }
 
             CommandGroup(after: .help) {

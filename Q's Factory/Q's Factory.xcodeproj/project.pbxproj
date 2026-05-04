@@ -249,6 +249,8 @@
 				"$(SRCROOT)/../extractor_ui/main.py",
 				"$(SRCROOT)/../choroq_ui/main.py",
 				"$(SRCROOT)/../egame_converter.py",
+				"$(SRCROOT)/../backend_requirements.txt",
+				"$(SRCROOT)/../script/build_backend_vendor.sh",
 			);
 			name = "Copy Python Backend";
 			outputFileListPaths = (
@@ -256,10 +258,11 @@
 			outputPaths = (
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/backend/",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/backend/choroq/",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/backend/vendor/",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -euo pipefail\n\nBACKEND_DIR=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/backend\"\nmkdir -p \"$BACKEND_DIR\"\n\n/usr/bin/rsync -a --delete --delete-excluded --exclude '__pycache__' --exclude '*.pyc' --exclude '.DS_Store' \"$SRCROOT/../choroq/\" \"$BACKEND_DIR/choroq/\"\n\nfor file in choroq_extractor.py car_extractor.py bhe_extractor.py extractor_ui/main.py choroq_ui/main.py egame_converter.py; do\n  source_file=\"$SRCROOT/../$file\"\n  if [ -f \"$source_file\" ]; then\n    mkdir -p \"$BACKEND_DIR/$(dirname \"$file\")\"\n    /bin/cp \"$source_file\" \"$BACKEND_DIR/$file\"\n  fi\ndone\n\n/usr/bin/xattr -cr \"$BACKEND_DIR\" || true\n";
+			shellScript = "set -euo pipefail\n\nBACKEND_DIR=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/backend\"\nmkdir -p \"$BACKEND_DIR\"\n\n/usr/bin/rsync -a --delete --delete-excluded --exclude '__pycache__' --exclude '*.pyc' --exclude '.DS_Store' \"$SRCROOT/../choroq/\" \"$BACKEND_DIR/choroq/\"\n/bin/sh \"$SRCROOT/../script/build_backend_vendor.sh\" \"$SRCROOT/../backend_requirements.txt\" \"$BACKEND_DIR/vendor\"\n\nfor file in choroq_extractor.py car_extractor.py bhe_extractor.py extractor_ui/main.py choroq_ui/main.py egame_converter.py; do\n  source_file=\"$SRCROOT/../$file\"\n  if [ -f \"$source_file\" ]; then\n    mkdir -p \"$BACKEND_DIR/$(dirname \"$file\")\"\n    /bin/cp \"$source_file\" \"$BACKEND_DIR/$file\"\n  fi\ndone\n\n/usr/bin/xattr -cr \"$BACKEND_DIR\" || true\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

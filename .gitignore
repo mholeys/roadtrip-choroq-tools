@@ -8,6 +8,9 @@ create_unity_list.py
 dist/
 __pycache__/
 *.pyc
+xcuserdata/
+*.xcuserstate
+Road Trip Files/
 
 # Local disc images are development fixtures only. Do not commit game media.
 *.iso
