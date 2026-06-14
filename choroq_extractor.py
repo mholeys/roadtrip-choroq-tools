@@ -427,7 +427,7 @@ def process_course_type(course_file, dest_folder, file_number, out_type, file_pr
                 # If you come across this, this is a custom file format I have made, expect this to change over time
                 # you will have to modify this file to get this to output
                 if out_type == "comb":
-                    with open(f"{dest_folder}/colliders/{file_prefix}{file_number}-{collider_mat_index}.{out_type}",
+                    with open(f"{dest_folder}/colliders/{file_prefix}{file_number}-{collider_mat_index}.collider.{out_type}",
                               "w") as fout:
                         fout.write("comb - mesh data format\n")
                         fout.write(f"meshes {len(colliders)}\n")
@@ -438,7 +438,7 @@ def process_course_type(course_file, dest_folder, file_number, out_type, file_pr
                             fout.write(f"e {i}\n")  # End of a mesh
 
                 elif out_type == "obj" or out_type == "obj+colour":
-                    with open(f"{dest_folder}/colliders/{file_prefix}{file_number}-{collider_mat_index}.{extension}", "w") as fout:
+                    with open(f"{dest_folder}/colliders/{file_prefix}{file_number}-{collider_mat_index}.collider.{extension}", "w") as fout:
                         vert_count = 0
                         for i, collider in enumerate(colliders):
                             if OUTPUT_GROUPED_OBJS:
@@ -461,7 +461,7 @@ def process_course_type(course_file, dest_folder, file_number, out_type, file_pr
             # Handle post colliders (thinks like fence posts, and tree centres)
             if len(course.post_colliders) > 0:
                 if out_type == "comb":
-                    with open(f"{dest_folder}/colliders/{file_prefix}{file_number}-posts.{out_type}",
+                    with open(f"{dest_folder}/colliders/{file_prefix}{file_number}-posts.collider.{out_type}",
                               "w") as fout:
                         fout.write("comb - mesh data format\n")
                         fout.write(f"meshes {len(course.post_colliders)}\n")
@@ -471,7 +471,7 @@ def process_course_type(course_file, dest_folder, file_number, out_type, file_pr
                             post.write_mesh_to_type(out_type, fout)
                             fout.write(f"e {p}\n")  # End of a mesh
                 elif out_type == "obj" or out_type == "obj+colour":
-                    with open(f"{dest_folder}/colliders/{file_prefix}{file_number}-posts.{extension}",
+                    with open(f"{dest_folder}/colliders/{file_prefix}{file_number}-posts.collider.{extension}",
                               "w") as fout:
                         for p, post in enumerate(course.post_colliders):
                             if OUTPUT_GROUPED_OBJS:
@@ -499,7 +499,7 @@ def process_course_type(course_file, dest_folder, file_number, out_type, file_pr
                             # expect this to change over time you will have to modify this file
                             # to get this to output
                             if out_type == "comb":
-                                with open(f"{dest_folder}/extras/colliders/{file_prefix}{file_number}-{ci}-{collider_mat_index}.{out_type}",
+                                with open(f"{dest_folder}/extras/colliders/{file_prefix}{file_number}-{ci}-{collider_mat_index}.collider.{out_type}",
                                           "w") as fout:
                                     fout.write("comb - mesh data format\n")
                                     fout.write(f"meshes {len(colliders)}\n")
