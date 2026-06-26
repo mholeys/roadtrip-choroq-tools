@@ -2,12 +2,16 @@ import bpy
 import bmesh
 import struct
 
+from pyffi.utils.trianglemesh import Mesh
+from pyffi.utils.trianglestripifier import TriangleStrip
+
+
 def dump(obj):
    for attr in dir(obj):
        if hasattr( obj, attr ):
            print( "obj.%s = %s" % (attr, getattr(obj, attr)))
 
-def triangulate_object(obj):
+def triangulate_object(obj):    
     me = obj.data
     # Get a BMesh representation
     bm = bmesh.new()
@@ -22,13 +26,10 @@ def triangulate_object(obj):
 
 def write_some_data(context, filepath, export_format):
     #export format: OPT_EXPORT_WHOLE or OPT_EXPORT_SUBPART
-    #print("running write_some_data...")
-    
-
-    
-    
+    #print("running write_some_data...")   
     
     if export_format == "OPT_EXPORT_SUBPART":
+        converted_meshes = []
         if len(bpy.context.selected_objects) > 3:
             raise Exception("Cannot export, subsection must have at max 3 parts")
         f = open(filepath, "wb")
@@ -48,7 +49,67 @@ def write_some_data(context, filepath, export_format):
                 print("Skipping obj as not mesh")
                 continue
             mesh = obj.data
-            triangulate_object(obj)    
+            triangulate_object(obj)
+            
+            # Convert mesh into tristrips
+            print(f"[{obj.name}] as Section: {section_index} Part: {part_index}")
+            # dump(obj)
+            # print(".data:")
+            # dump(obj.data)
+
+            if obj.id_type != 'OBJECT' or obj.data.id_type != 'MESH':
+                print("Skipping obj as not mesh")
+                continue
+            mesh = obj.data
+
+            # Check if the mesh has valid color and uv arrays
+            # if not create them, and populate with 0s
+
+            # bpy.ops.uv.unwrap()
+            # uv_layer = mesh1.uv_layers.new()
+            # mesh1.uv_layers.active = uv_layer
+
+            # Check for colour attibutes
+            if not mesh.color_attributes or len(mesh.color_attributes) == 0:
+                mesh.color_attributes.new("Color", 'BYTE_COLOR', 'CORNER')
+            # dump(mesh.attributes.active_color)
+
+            print(mesh.uv_layers)
+            if not mesh.uv_layers or len(mesh.uv_layers) == 0:
+                mesh.uv_layers.active = mesh.uv_layers.new()
+            # dump(mesh.uv_layers.active)
+
+            # Create pyffi mesh to convert to tristrips
+            pyffi_mesh = Mesh()
+
+            old_verts = []
+
+            # We know they are triangles, as it's been force converted
+            for face in mesh.polygons:
+                #print('face')
+                #print(face.vertices)
+                #dump(face.vertices)
+                pyffi_mesh.add_face(face.vertices[0], face.vertices[1], face.vertices[2])
+                old_verts.append(face.vertices[0])
+                old_verts.append(face.vertices[1])
+                old_verts.append(face.vertices[2])
+
+            # Calculate tristrips
+            pyffi_mesh.lock()
+            pyffi_stripper = TriangleStrip()
+            pyffi_stripper.build(0, pyffi_mesh.faces[1])
+            print("Stripped:")
+            print(pyffi_stripper.stripped_faces)
+            print("Faces:")
+            print(pyffi_stripper.faces)
+            print("Vertices:")
+            print(pyffi_stripper.vertices)
+
+            print("Vertices Before:")
+            print(old_verts)
+
+            return
+            
             
             # Estimate size of object
             # Each subsection will have parts
@@ -106,40 +167,13 @@ def write_some_data(context, filepath, export_format):
         part_index = 0
         section_index = 0
         positions[0] = 16
+        
          # For checking position
         for obj in bpy.context.selected_objects:
-            
-            print(f"[{obj.name}] as Section: {section_index} Part: {part_index}")
-            #dump(obj)
-            #print(".data:")
-            #dump(obj.data)
-
-            if obj.id_type != 'OBJECT' or obj.data.id_type != 'MESH':
-                print("Skipping obj as not mesh")
-                continue
-            mesh = obj.data
-            
             # Check position in file, we should know where we are at all points
             if f.tell() != positions[part_index]:
                 print(f"File position incorrect {f.tell()} vs positions[{part_index}] = {positions[part_index]}")
                 break
-            
-            # Check if the mesh has valid color and uv arrays
-            # if not create them, and populate with 0s
-
-            #bpy.ops.uv.unwrap()
-            #uv_layer = mesh1.uv_layers.new()        
-            #mesh1.uv_layers.active = uv_layer
-            
-            # Check for colour attibutes
-            if not mesh.color_attributes or len(mesh.color_attributes) == 0:
-                mesh.color_attributes.new("Color", 'BYTE_COLOR', 'CORNER')
-            #dump(mesh.attributes.active_color)
-            
-            print(mesh.uv_layers)
-            if not mesh.uv_layers or len(mesh.uv_layers) == 0:
-                mesh.uv_layers.active = mesh.uv_layers.new()
-            #dump(mesh.uv_layers.active)
             
             # Now we know the mesh has x/y/z nx/ny/nz r/g/b/a and uv
 

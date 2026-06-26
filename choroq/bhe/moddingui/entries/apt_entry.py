@@ -20,6 +20,12 @@ class AptEntry(GameEntry):
 
     def descriptor(self) -> str:
         text = "AP texture\n"
+        if self.ap_texture.extension is not None:
+            text = f"Name: {self.ap_texture.name}{self.ap_texture.extension}\n"
+        else:
+            text = f"Name: {self.ap_texture.name}\n"
+
+
         text += f"Format {self.ap_texture.colour_format}\n"
         text += f"Dimensions (W x H) {self.ap_texture.width}x{self.ap_texture.height}\n"
         text += f"Size (bytes) {self.ap_texture.total_size}\n"

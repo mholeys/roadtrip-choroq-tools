@@ -19,6 +19,7 @@ from choroq.bhe.moddingui.common import UiConfig, GameVersion, PS2Cnf
 from choroq.bhe.moddingui.entries.apt_entry import AptEntry
 from choroq.bhe.moddingui.entries.cpk_subfile_entry import CpkSubfileEntry
 from choroq.bhe.moddingui.entries.game_entry import GameEntry
+from choroq.bhe.moddingui.entries.mpc_entry import MpcEntry
 from choroq.bhe.moddingui.entries.pbl_entry import PblEntry
 from choroq.bhe.moddingui.modules.apt_option_handler import AptOptionHandler
 from choroq.bhe.moddingui.modules.pbl_option_handler import PblOptionHandler
@@ -332,6 +333,9 @@ class ModdingUi(customtkinter.CTk):
                     entry_size = len(cpk_data.read()) - entry_position
                 subfile = CpkSubfileEntry(dirname, path, self.game_version, self.game_variant, record, sub_type, index, entry_position, entry_size)
 
+                if sub_type not in [b"MPC\0", b"APT\0"]:
+                    continue
+
                 if sub_type == b"APT\0":
                     # Has multiple textures
                     # needs to be read/parsed first so do that
@@ -367,9 +371,26 @@ class ModdingUi(customtkinter.CTk):
                         image_count += 1
                     subfile.children = texture_entries
 
+                if sub_type == b"MPC\0":
+                    # needs to be read/parsed first so do that
+                    cpk.read_subfile(cpk_data, index)
+                    mpcs = cpk.subfiles[index][1]
+                    mpc_entries = []
+                    for mpc_index, mpc in enumerate(mpcs):
+                        mpc_entries.append(MpcEntry(mpc, dirname, path, self.game_version, self.game_variant, record, sub_type, mpc_index, mpc.offset))
+                    subfile.children = mpc_entries
+                if sub_type == b"MPD\0":
+                    # needs to be read/parsed first so do that
+                    cpk.read_subfile(cpk_data, index)
+                    mpds = cpk.subfiles[index][1]
+                    mpd_entries = []
+                    for mpd_index, mpd in enumerate(mpds):
+                        mpd_entries.append(MpcEntry(mpd, dirname, path, self.game_version, self.game_variant, record, sub_type, mpd_index, mpd.offset))
+                    subfile.children = mpd_entries
+
                 # TODO: proper filter, and refresh?
-                if sub_type not in [b"PBL\0", b"APT\0", b"LZS\0"]:
-                    continue
+                # if sub_type not in [b"PBL\0", b"APT\0", b"LZS\0"]:
+                #     continue
 
                 subfiles.append(subfile)
 

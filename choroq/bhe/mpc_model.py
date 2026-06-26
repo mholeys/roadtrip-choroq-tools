@@ -9,9 +9,10 @@ from choroq.bhe.bhe_mesh import BHEMesh
 
 
 class MPCModel(BHEMesh):
+
     PRINT_DEBUG = False
 
-    def __init__(self, name, texture_references, vert_count, vertices, normal_count, normals, uv_count, uvs, colour_count, colours, faces):
+    def __init__(self, name, texture_references, vert_count, vertices, normal_count, normals, uv_count, uvs, colour_count, colours, faces, offset, size):
         super().__init__()
         self.name = name
         self.texture_references = texture_references
@@ -29,6 +30,8 @@ class MPCModel(BHEMesh):
         self.max_normal = len(normals)
         self.max_uv = len(uvs)
         self.max_colour = len(colours)
+        self.offset = offset
+        self.size = size
 
     @staticmethod
     def read_mpc(file, offset, next_offset):
@@ -71,13 +74,14 @@ class MPCModel(BHEMesh):
             if ".pb" in name:
                 valid = True
         except Exception as e:
-            print("Failed to decode MPC part name")
-            name = f"mpc-{offset}"
+            print(f"Failed to decode MPC part name {name}")
+            name = f"broken_name-{offset}"
 
         if not valid:
             return None, False
 
         if file.tell() > next_offset:
+            print(f"Failed to decode MPC part name {name}, but we are past this file")
             return None, False
 
         size_textures = U.readLong(file)
@@ -98,12 +102,16 @@ class MPCModel(BHEMesh):
             U.BreadLong(file)
             U.BreadLong(file)
             t_name = file.read(16)
+            decoded_name = False
             try:
                 first_0 = t_name.index(0)
                 t_name = t_name[0:first_0].decode("ascii").rstrip('\00')
+                decoded_name = True
             except Exception as e:
                 print("Failed to decode MPC texture name")
             if file.tell() > next_offset:
+                if not decoded_name:
+                    print("Failed to decode MPC texture name, probably miss read as past offset")
                 return None, False
 
             texture_references.append((t_name, (t_width, t_height, t_format, t_unknown)))
@@ -149,7 +157,9 @@ class MPCModel(BHEMesh):
 
         faces, other_faces = BHEMesh.read_faces(file, texture_references)
 
-        mpc = MPCModel(name, texture_references, size_verts, verts, size_normals, normals, size_uvs, uvs, size_colours, colours, [faces, other_faces])
+        size = file.tell() - offset
+
+        mpc = MPCModel(name, texture_references, size_verts, verts, size_normals, normals, size_uvs, uvs, size_colours, colours, [faces, other_faces], offset, size)
         return mpc, valid
 
     def write_mesh_to_comb(self, fout, start_index=0, material=None):

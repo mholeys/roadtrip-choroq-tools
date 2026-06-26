@@ -18,6 +18,7 @@ class APTPreviewFrame(CTkFrame):
         self.canvas.grid(row=0, column=0, sticky="nsew")
         self.texture = None
         self.imageTk = None
+        self.background_drawn = False
 
     def set_image(self, texture: APTexture):
         self.texture = texture
@@ -28,26 +29,31 @@ class APTPreviewFrame(CTkFrame):
                 self.canvas.width = image.size[0] + 20
                 self.canvas.height = image.size[1] + 20
 
-                draw_checker_board(self.canvas, self.winfo_width(), self.winfo_height(), (10, 10))
+                # Remove image before drawing again
+                self.canvas.delete("texture")
+
+                if not self.background_drawn:
+                    draw_checker_board(self.canvas, 768, 768, (10, 10))
+                    self.background_drawn = True
                 # Draw white border around image, to make it clearer
-                self.canvas.create_rectangle(9, 9, image.size[0] + 10, image.size[1] + 10, outline='white')
-                self.canvas.create_image(10, 10, anchor="nw", image=self.imageTk)
+                self.canvas.create_rectangle(9, 9, image.size[0] + 10, image.size[1] + 10, outline='white', tags=["texture"])
+                self.canvas.create_image(10, 10, anchor="nw", image=self.imageTk, tags=["texture"])
             else:
                 self.canvas.delete("all")
         else:
             self.canvas.delete("all")
 
-def draw_checker_board(canvas, width, height, offset=(10, 10), primary_colour='magenta3', secondary_colour='magenta4'):
+def draw_checker_board(canvas, width, height, offset=(10, 10), primary_colour='magenta3', secondary_colour='magenta4', tags=None):
+    if tags is None:
+        tags = ["background"]
     size = 16 # width/height of cell
 
     color = primary_colour
-    for y in range(50):
-        for x in range(50):
+    for y in range(int(height/size)):
+        for x in range(int(width/size)):
             x1 = offset[0] + x * size
             y1 = offset[1] + y * size
-            x2 = offset[0] + x1 + size
-            y2 = offset[1] + y1 + size
-            canvas.create_rectangle((x1, y1, x2, y2), fill=color)
+            canvas.create_rectangle((x1, y1, x1 + size, y1 + size), fill=color, tags=tags)
             if color == primary_colour:
                 color = secondary_colour
             else:

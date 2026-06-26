@@ -128,7 +128,7 @@ class PBLModel(BHEMesh):
 
             faces, other_faces = BHEMesh.read_faces(file, texture_references)
 
-            size = file.tell() - 0
+            size = file.tell() - o
 
             pbls.append(PBLModel(texture_references, floats_first_section, sizes[1], verts, sizes[2], normals, sizes[3], uvs, sizes[4], colours, [faces, other_faces], o, size))
 

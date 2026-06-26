@@ -22,6 +22,8 @@ class CpkSubfileEntry(GameEntry):
             return "PBL"
         elif self.subtype == b"MPD\0":
             return "MPD"
+        elif self.subtype == b"MPC\0":
+            return "MPC"
         elif self.subtype == b"HPD\0":
             return "HitPoly"
         elif self.subtype == b"FONT":

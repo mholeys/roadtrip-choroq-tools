@@ -20,13 +20,13 @@ class BHEMesh(AMesh):
         self.max_uv = 65536
         self.max_colour = 65536
 
-    # Creates OBJ file, of the meshes
-    # The format includes Vertices, Vertex Normals,
-    # Texture coordinates and Faces
-    @abstractmethod
-    def write_mesh_to_obj(self, fout, start_index=0, material=None, with_colours=False):
-        # See below
-        pass
+    # # Creates OBJ file, of the meshes
+    # # The format includes Vertices, Vertex Normals,
+    # # Texture coordinates and Faces
+    # @abstractmethod
+    # def write_mesh_to_obj(self, fout, start_index=0, material=None, with_colours=False):
+    #     # See below
+    #     pass
 
     # Custom file format for use in importing into unity
     # Based on the ply format, but without any compatibility, and no header.

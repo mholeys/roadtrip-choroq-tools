@@ -8,7 +8,7 @@ class APTexture:
     STOP_ON_NEW = True
     PRINT_DEBUG = False
 
-    def __init__(self, name, val_a, val_b, total_size, offset):
+    def __init__(self, name, val_a, val_b, total_size, offset, extension=None):
         # Position of the definition (header under APT)
         self.offset = offset
         self.name = name
@@ -23,6 +23,8 @@ class APTexture:
 
         self.palette_size = 0
         self.palette = None
+
+        self.extension = extension
 
         # Position where texture data starts
         self.data_offset = 0
@@ -246,12 +248,14 @@ class APTexture:
                 rct_4 = U.readShort(file)
                 rct_5 = U.readShort(file)
                 print(f"RCT texture: start: {rct_start_x}, {rct_start_y}; size: {rct_width}, {rct_height}, unknown: 4:{rct_4} 6:{rct_5}")
+            extension = None
             if "." in texture_name:
-                # Remove extension
+                # Remove extension, this is done as the mpc/mpd/pbls do not use the extension for referencing textures
                 print(f"Found APT with name extension: {texture_name}")
                 ext_start = texture_name.index(".")
-                ext = texture_name[ext_start:]
-                #texture_name = texture_name[:ext_start]
+                extension = texture_name[ext_start:]
+                texture_name = texture_name[:ext_start]
+
 
             if APTexture.PRINT_DEBUG:
                 print(f"Texture header: {texture_name}, {val_a}, {val_b}, {size}, {zeros:x}")
@@ -260,7 +264,7 @@ class APTexture:
             #        print("Found non zero value in texture table data")
             #    if APTexture.STOP_ON_NEW:
             #        exit()
-            new_texture = APTexture(texture_name, val_a, val_b, size, texture_offset)
+            new_texture = APTexture(texture_name, val_a, val_b, size, texture_offset, extension)
 
             if texture_name == "RCT":
                 new_texture.rct_start_x = rct_start_x
